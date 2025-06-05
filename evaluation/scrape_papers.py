@@ -57,13 +57,13 @@ def scrape(start_url: str, year: int):
                 results.append({
                     "title": title,
                     "paper_url": link,
+                    "artifact_url": '',
                     "conf": conf,
                     "year": year,
                     "authors": authors,
                     "badges": badges,
                     "details": details,
                     # Placeholder values
-                    "artifact_url": '',
                     "use_docker": False,
                     "use_gpu": False,
                     "use_api": False,

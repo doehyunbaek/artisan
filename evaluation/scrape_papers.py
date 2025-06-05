@@ -76,6 +76,7 @@ def scrape(start_url: str, year: int):
             next_links.first.click()
             page.wait_for_load_state("networkidle")
 
+        page.pause()
         browser.close()
     return results
 
@@ -88,13 +89,27 @@ def scrape_dlacm():
     START_ASE = f"https://dl.acm.org/action/doSearch?fillQuickSearch=false&target=advanced&expand=dl&field1=ContentGroupTitle&text1=ASE&ArtifactAnd=118213&startPage=0&pageSize=200&AfterYear={year}&BeforeYear={year}"
     START_ISSTA = f"https://dl.acm.org/action/doSearch?fillQuickSearch=false&target=advanced&expand=dl&field1=ContentGroupTitle&text1=ISSTA&ArtifactAnd=118213&startPage=0&pageSize=200&AfterYear={year}&BeforeYear={year}"
 
-    for url in [START_ICSE, START_FSE, START_ASE, START_ISSTA]:
+    for url in [START_FSE]:
         all_data.extend(scrape(url, year))
 
     print(f"Scraped total {len(all_data)} papers")
     with open("results.json", "w", encoding="utf-8") as f:
         json.dump(all_data, f, indent=2)
 
+def filter_papers():
+    with open("results.json", "r", encoding="utf-8") as f:
+        papers = json.load(f)
+
+    filtered = [
+        p for p in papers
+        if p.get("use_docker") is True
+        and p.get("use_gpu") is False
+        and p.get("use_api") is False
+    ]
+
+    with open("filtered.json", "w", encoding="utf-8") as f:
+        json.dump(filtered, f, indent=2)
 
 if __name__ == "__main__":
-    scrape_dlacm()
+    # scrape_dlacm()
+    filter_papers()

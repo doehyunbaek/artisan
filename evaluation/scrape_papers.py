@@ -6,6 +6,9 @@ from pydantic import BaseModel, HttpUrl
 from typing import List
 
 BASE = "https://dl.acm.org"
+# Running the following url in dl.acm.org gives reusable count:
+# document.querySelectorAll('a[data-title="Artifacts Evaluated & Reusable / v1.1"]')
+# ISSTA 2024 results: https://2024.issta.org/track/issta-2024-artifact-evaluation#event-overview
 
 CONF_NAME = ['ICSE', 'FSE', 'ASE', 'ISSTA']
 NON_MAIN = ['SEIS', 'NIER', 'SEET', 'Companion']

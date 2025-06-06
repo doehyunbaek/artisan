@@ -10,6 +10,9 @@ BASE = "https://dl.acm.org"
 # document.querySelectorAll('a[data-title="Artifacts Evaluated & Reusable / v1.1"]')
 # ISSTA 2024 results: https://2024.issta.org/track/issta-2024-artifact-evaluation#event-overview
 
+# NOTE: it's possible that artifact has reusable but not available badge:
+# e.g.: https://dl.acm.org/doi/10.1145/3597503.3639229
+
 CONF_NAME = ['ICSE', 'FSE', 'ASE', 'ISSTA']
 NON_MAIN = ['SEIS', 'NIER', 'SEET', 'Companion']
 class Paper(BaseModel):

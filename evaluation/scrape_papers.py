@@ -1,3 +1,4 @@
+# %%
 from playwright.sync_api import sync_playwright
 import json
 from urllib.parse import urljoin
@@ -116,6 +117,40 @@ def filter_papers():
     with open("filtered.json", "w", encoding="utf-8") as f:
         json.dump(filtered, f, indent=2)
 
+# %%
+def count_filtered_papers():
+    # Load filtered.json, count number of keys in array
+    # For each value, get value of table_count, figure_count, table_filtered, figure_filtered and accumulate them.
+    # Display tables and figures as filtered_count / total_count (percentage)
+
+    with open("filtered.json", "r", encoding="utf-8") as f:
+        filtered_papers = json.load(f)
+
+    print(f"Number of filtered papers: {len(filtered_papers)}")
+
+    # Accumulate counts
+    total_table_count = 0
+    total_figure_count = 0
+    total_table_filtered = 0
+    total_figure_filtered = 0
+
+    for paper in filtered_papers:
+        total_table_count += paper.get("table_count", 0)
+        total_figure_count += paper.get("figure_count", 0)
+        total_table_filtered += len(paper.get("table_filtered", []))
+        total_figure_filtered += len(paper.get("figure_filtered", []))
+
+    table_percentage = (total_table_filtered / total_table_count) * 100
+    print(f"Tables: {total_table_filtered}/{total_table_count} ({table_percentage:.1f}%)")
+    figure_percentage = (total_figure_filtered / total_figure_count) * 100
+    print(f"Figures: {total_figure_filtered}/{total_figure_count} ({figure_percentage:.1f}%)")
+
+    return len(filtered_papers)
+
+# count_filtered_papers()
+
 if __name__ == "__main__":
+    pass
     # scrape_dlacm()
-    filter_papers()
+    # filter_papers()
+    # count_filtered_papers()

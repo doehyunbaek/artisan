@@ -117,7 +117,6 @@ def filter_papers():
     with open("filtered.json", "w", encoding="utf-8") as f:
         json.dump(filtered, f, indent=2)
 
-# %%
 def count_filtered_papers():
     # Load filtered.json, count number of keys in array
     # For each value, get value of table_count, figure_count, table_filtered, figure_filtered and accumulate them.
@@ -147,10 +146,19 @@ def count_filtered_papers():
 
     return len(filtered_papers)
 
-# count_filtered_papers()
+# Write a function sort_ascending_filtered that outputs papers sorted in increasing number of sum of length of table_filtered and figure_filtered
+def sort_ascending_filtered():
+    with open("filtered.json", "r", encoding="utf-8") as f:
+        filtered_papers = json.load(f)
 
-if __name__ == "__main__":
-    pass
-    # scrape_dlacm()
-    # filter_papers()
-    # count_filtered_papers()
+    sorted_papers = sorted(
+        filtered_papers,
+        key=lambda p: len(p.get("table_filtered", [])) + len(p.get("figure_filtered", []))
+    )
+    for paper in sorted_papers:
+        count = len(paper.get("table_filtered", [])) + len(paper.get("figure_filtered", []))
+        print(paper["title"][:10], count)
+    
+
+# count_filtered_papers()
+sort_ascending_filtered()

@@ -1,0 +1,9 @@
+| ⊖ | RawBal | NetBal | AccBal | T-Supply | Fee | Debt | Dividend |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| RawBal | RawBal | ✗ | ✗ | T-Supply | ✗ | Debt | ✗ |
+| NetBal | ✗ | NetBal | ✗ | T-Supply | ✗ | Debt | ✗ |
+| AccBal | ✗ | ✗ | AccBal | T-Supply | ✗ | Debt | ✗ |
+| T-Supply | ✗ | ✗ | ✗ | T-Supply | ✗ | ✗ | ✗ |
+| Fee | NetBal | ✗ | AccBal | ✗ | Fee | ✗ | Dividend |
+| Debt | RawBal | NetBal | AccBal | ✗ | ✗ | Debt | ✗ |
+| Dividend | ✗ | ✗ | ✗ | T-Supply | Fee | Debt | Dividend |

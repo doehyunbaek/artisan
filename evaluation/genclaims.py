@@ -3,6 +3,7 @@ import json
 from pylatex import Table, Document, Tabular, MultiColumn
 from pylatex import Package, Command
 from pdf2image import convert_from_path
+import os
 
 def format_value(value):
     if isinstance(value, bool):
@@ -12,6 +13,13 @@ def format_value(value):
 # Load the JSON data
 with open("/home/doehyunbaek/artisan/evaluation/filtered.json", "r") as f:
     papers = json.load(f)
+
+papers_dir = "/home/doehyunbaek/artisan/evaluation/papers"
+for paper in papers:
+    pdf_path = os.path.join(papers_dir, f"{paper['id']}.pdf")
+    assert os.path.isfile(pdf_path), pdf_path
+
+# %%
 
 # Prepare the data for tabulation
 table_data = []

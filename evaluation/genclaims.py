@@ -14,10 +14,19 @@ def format_value(value):
 with open("/home/doehyunbaek/artisan/evaluation/filtered.json", "r") as f:
     papers = json.load(f)
 
+# Step 1: Check all paper pdfs exist
 papers_dir = "/home/doehyunbaek/artisan/evaluation/papers"
 for paper in papers:
     pdf_path = os.path.join(papers_dir, f"{paper['id']}.pdf")
     assert os.path.isfile(pdf_path), pdf_path
+
+# Step 2: Check all docker images exist
+
+# Step 3: Check all tables exist
+
+# Step 4: Check all figures exist
+
+# Step 5: Check all ground truth scripts exist
 
 # %%
 

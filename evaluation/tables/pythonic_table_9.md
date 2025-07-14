@@ -1,0 +1,12 @@
+| Lambda (90 data points) |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- |
+|  | OR | Estimate | StdError | t-value | p-value |
+| Usage Freq. | 2.29 | 0.83 | 0.31 | 2.65 | 0.02 |
+| Compl. | 0.88 | -0.13 | 0.18 | -0.73 | 0.47 |
+| Comprehension (120 data points) |  |  |  |  |  |
+|  | OR | Estimate | StdError | t-value | p-value |
+| Usage Freq. | 1.49 | 0.40 | 0.22 | 1.84 | 0.07 |
+| Compl. | 0.77 | -0.26 | 0.11 | -2.27 | 0.04 |
+| MRF (103 data points) |  |  |  |  |  |
+|  | OR | Estimate | StdError | t-value | p-value |
+| Usage Freq. | 1.79 | 0.58 | 0.25 | 2.31 | 0.02 |

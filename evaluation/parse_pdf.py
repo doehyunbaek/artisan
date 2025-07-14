@@ -16,7 +16,7 @@ paper_path = args.paper_path
 # prepare cache
 cache = dc.Cache("my_agentic_cache")
 
-@cache.memoize(expire=3600)
+# @cache.memoize(expire=3600)
 def cached_parse(pdf_path: str):
     return parse_documents([pdf_path], grounding_save_dir="tmp_outputs")
 
@@ -37,9 +37,6 @@ def extract_figures(results, paper_path, fig_dir="figures"):
                     print(f"Copied figure to: {dst}")
                     counter += 1
 
-from pathlib import Path
-import re
-from agentic_doc.common import ChunkType
 
 from pathlib import Path
 import re

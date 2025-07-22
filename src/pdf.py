@@ -25,8 +25,8 @@ def convert_pdf_to_markdown(input_pdf_path, output_md_path):
     pathlib.Path(output_md_path).write_bytes(md_text.encode())
 
 # Example usage
-# input_pdf_path = '/home/doehyunbaek/artifex/evaluation/papers/Unimocg.pdf'
-# output_md_path = '/home/doehyunbaek/artifex/evaluation/output.md'
+# input_pdf_path = '~/artifex/evaluation/papers/Unimocg.pdf'
+# output_md_path = '~/artifex/evaluation/output.md'
 # convert_pdf_to_markdown(input_pdf_path, output_md_path)
 
 
@@ -159,8 +159,8 @@ def draw_tables_from_json(input_json_path: str | Path, output_table_path: str | 
             output_file.write("\n")
 
 # Example usage
-input_md_path = '/home/doehyunbaek/artifex/evaluation/output.md'
-json_path = '/home/doehyunbaek/artifex/evaluation/output.json'
-table_path = "/home/doehyunbaek/artifex/evaluation/output.tables"
+input_md_path = '~/artifex/evaluation/output.md'
+json_path = '~/artifex/evaluation/output.json'
+table_path = "~/artifex/evaluation/output.tables"
 extract_tables_from_markdown(input_md_path, json_path)
 draw_tables_from_json(json_path, table_path)

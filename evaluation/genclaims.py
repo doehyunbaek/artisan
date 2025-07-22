@@ -11,11 +11,11 @@ def format_value(value):
     return str(value)
 
 # Load the JSON data
-with open("/home/doehyunbaek/artisan/evaluation/filtered.json", "r") as f:
+with open("~/artisan/evaluation/filtered.json", "r") as f:
     papers = json.load(f)
 
 # Step 1: Check all paper pdfs exist
-papers_dir = "/home/doehyunbaek/artisan/evaluation/papers"
+papers_dir = "~/artisan/evaluation/papers"
 for paper in papers:
     pdf_path = os.path.join(papers_dir, f"{paper['id']}.pdf")
     assert os.path.isfile(pdf_path), pdf_path

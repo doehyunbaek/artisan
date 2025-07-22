@@ -6,8 +6,18 @@ from datetime import datetime, timezone
 from jinja2 import Environment, FileSystemLoader
 import shutil
 
+# Print artisan git version
+git_version = subprocess.check_output(["git", "describe", "--always", "--dirty"]).strip().decode()
+print(f"Artisan Git Version: {git_version}")
+# Print OpenHands git version
+openhands_git_version = subprocess.check_output(
+    ["git", "describe", "--always", "--dirty"],
+    cwd=os.path.expanduser("~/artisan/third_party/OpenHands")
+).strip().decode()
+print(f"OpenHands Git Version: {openhands_git_version}")
+
 REPEAT_COUNT = 1
-TEMPLATE_DIR = '/home/doehyunbaek/artisan/prompts'
+TEMPLATE_DIR = os.path.expanduser('~/artisan/prompts')
 TEMPLATE_NAME = 'task_table.j2'
 env = Environment(loader=FileSystemLoader(TEMPLATE_DIR), trim_blocks=True, lstrip_blocks=True)
 template = env.get_template(TEMPLATE_NAME)
@@ -70,10 +80,12 @@ for paper, kind, index in filtered_experiments:
         # Prepare logging
         log_dir = os.path.join(cwd, "logs", f"{datestamp}/{paper}_{kind}_{index}")
         os.makedirs(log_dir, exist_ok=True)
+        workspace_dir = os.path.join(log_dir, "workspace")
+        os.makedirs(workspace_dir, exist_ok=True)
         log_file = os.path.join(log_dir, f"{timestamp}.log")
         print(f"[Run {run_idx}] log → {log_file}")
         cmd = [
-            "poetry", "run", "python", "-m", "openhands.core.main", "-b", "0.5",
+            "poetry", "run", "python", "-m", "openhands.core.main", "-b", "1", "-d", workspace_dir,
             "-t", rendered_prompt
         ]
         env = os.environ.copy()

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from jinja2 import Environment, FileSystemLoader
 import shutil
 
-REPEAT_COUNT = 10
+REPEAT_COUNT = 1
 TEMPLATE_DIR = '/home/doehyunbaek/artisan/prompts'
 TEMPLATE_NAME = 'task_table.j2'
 env = Environment(loader=FileSystemLoader(TEMPLATE_DIR), trim_blocks=True, lstrip_blocks=True)

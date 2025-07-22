@@ -7,6 +7,9 @@ from datetime import datetime, timezone
 from jinja2 import Environment, FileSystemLoader
 import shutil
 
+REPEAT_COUNT = int(os.getenv('REPEAT_COUNT', '1'))
+MODEL_NAME = os.getenv('MODEL_NAME', 'openai/gpt-4o-mini')
+API_KEY = os.environ.get('OPENAI_API_KEY', '')
 # Print artisan git version
 git_version = subprocess.check_output(["git", "describe", "--always", "--dirty"]).strip().decode()
 print(f"Artisan Git Version: {git_version}")
@@ -16,8 +19,9 @@ openhands_git_version = subprocess.check_output(
     cwd=os.path.expanduser("~/artisan/third_party/OpenHands")
 ).strip().decode()
 print(f"OpenHands Git Version: {openhands_git_version}")
+print(f"Model name: {MODEL_NAME}")
+print(f"Repeat count: {REPEAT_COUNT}")
 
-REPEAT_COUNT = 1
 TEMPLATE_DIR = os.path.expanduser('~/artisan/prompts')
 TEMPLATE_NAME = 'task_table.j2'
 env = Environment(loader=FileSystemLoader(TEMPLATE_DIR), trim_blocks=True, lstrip_blocks=True)
@@ -26,22 +30,39 @@ template = env.get_template(TEMPLATE_NAME)
 evaluation_dir = os.path.expanduser("~/artisan/evaluation")
 scripts_dir = os.path.join(evaluation_dir, "scripts")
 tables_dir = os.path.join(evaluation_dir, "tables")
-openhands_toml = os.path.join(evaluation_dir, "openhands_config.toml")
-# Create a temporary file for openhands_config.toml
-temp_toml_file = tempfile.NamedTemporaryFile(mode='w', delete=False)
-with open(openhands_toml, 'r') as f:
-    content = f.read()
-# Substitute $OPENAI_API_KEY with the actual environment variable value
-substituted_content = content.replace('$OPENAI_API_KEY', os.environ.get('OPENAI_API_KEY', ''))
-temp_toml_file.write(substituted_content)
-temp_toml_file.close()
-openhands_toml = temp_toml_file.name
+
+artisan_dir = os.path.expanduser("~/artisan")
+openhands_dir = os.path.expanduser("~/artisan/third_party/OpenHands")
 
 parser = argparse.ArgumentParser(description="Run a subset of experiments.")
 parser.add_argument('paper', nargs='?', help='Paper name')
 parser.add_argument('kind', nargs='?', help='Experiment kind')
 parser.add_argument('index', nargs='?', help='Experiment index')
 args = parser.parse_args()
+
+def prepare_openhands_config(workspace_path):
+    openhands_template_file = os.path.join(evaluation_dir, "openhands_config.j2")
+
+    # 3. Set up the Jinja2 environment to find the template
+    template_dir = os.path.dirname(openhands_template_file)
+    template_filename = os.path.basename(openhands_template_file)
+    env = Environment(loader=FileSystemLoader(template_dir), autoescape=False)
+    template = env.get_template(template_filename)
+
+    # 4. Render the template with your variables
+    rendered_content = template.render(
+        model_name=MODEL_NAME,
+        openai_api_key=API_KEY,
+        workspace_volume=workspace_path
+    )
+
+    # 5. Write the rendered content to a temporary TOML file
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".toml") as temp_toml_file:
+        temp_toml_file.write(rendered_content)
+        # The final configuration file is now at this path
+        openhands_toml = temp_toml_file.name 
+
+    return openhands_toml    
 
 experiments = []
 for fname in os.listdir(scripts_dir):
@@ -71,7 +92,6 @@ if ids:
 
 for paper, kind, index in filtered_experiments:
     for run_idx in range(1, REPEAT_COUNT + 1):
-        cwd = os.path.expanduser("~/artisan/third_party/OpenHands")
         datestamp = datetime.now(timezone.utc).strftime("%y%m%d")
         timestamp = datetime.now(timezone.utc).strftime("%H%M")
         # path to your generated table
@@ -84,12 +104,14 @@ for paper, kind, index in filtered_experiments:
             docker_image=f"artisan25/{paper}",
             expected_table=table_content
         ).strip().replace('\n', '\\n').replace('"', '\\"')
+        # rendered_prompt = "write a bash script that prints hi"
         # Prepare logging
-        log_dir = os.path.join(cwd, "logs", f"{datestamp}/{paper}_{kind}_{index}")
+        log_dir = os.path.join(artisan_dir, "logs", f"{datestamp}/{paper}_{kind}_{index}")
         os.makedirs(log_dir, exist_ok=True)
-        workspace_dir = os.path.join(log_dir, "workspace")
+        workspace_dir = os.path.join(log_dir, f"{timestamp}_workspace")
         os.makedirs(workspace_dir, exist_ok=True)
         log_file = os.path.join(log_dir, f"{timestamp}.log")
+        openhands_toml = prepare_openhands_config(workspace_dir)
         print(f"[Run {run_idx}] log → {log_file}")
         cmd = [
             "poetry", "run", "python", "-m", "openhands.core.main", "-b", "1", "-d", workspace_dir, "--config-file", openhands_toml,
@@ -100,9 +122,12 @@ for paper, kind, index in filtered_experiments:
         with open(log_file, "w") as lf:
             subprocess.run(
                 cmd,
-                cwd=cwd,
+                cwd=openhands_dir,
                 check=True,
                 stdout=lf,
                 stderr=subprocess.STDOUT,
                 env=env
             )
+        # Run docker container prune
+        subprocess.run(["docker", "container", "prune", "-f"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        

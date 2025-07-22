@@ -2,6 +2,7 @@
 import os
 import subprocess
 import argparse
+import tempfile
 from datetime import datetime, timezone
 from jinja2 import Environment, FileSystemLoader
 import shutil
@@ -26,9 +27,15 @@ evaluation_dir = os.path.expanduser("~/artisan/evaluation")
 scripts_dir = os.path.join(evaluation_dir, "scripts")
 tables_dir = os.path.join(evaluation_dir, "tables")
 openhands_toml = os.path.join(evaluation_dir, "openhands_config.toml")
-openhands_dest = os.path.expanduser("~/artisan/third_party/OpenHands/config.toml")
-
-shutil.copyfile(openhands_toml, openhands_dest)
+# Create a temporary file for openhands_config.toml
+temp_toml_file = tempfile.NamedTemporaryFile(mode='w', delete=False)
+with open(openhands_toml, 'r') as f:
+    content = f.read()
+# Substitute $OPENAI_API_KEY with the actual environment variable value
+substituted_content = content.replace('$OPENAI_API_KEY', os.environ.get('OPENAI_API_KEY', ''))
+temp_toml_file.write(substituted_content)
+temp_toml_file.close()
+openhands_toml = temp_toml_file.name
 
 parser = argparse.ArgumentParser(description="Run a subset of experiments.")
 parser.add_argument('paper', nargs='?', help='Paper name')
@@ -85,7 +92,7 @@ for paper, kind, index in filtered_experiments:
         log_file = os.path.join(log_dir, f"{timestamp}.log")
         print(f"[Run {run_idx}] log → {log_file}")
         cmd = [
-            "poetry", "run", "python", "-m", "openhands.core.main", "-b", "1", "-d", workspace_dir,
+            "poetry", "run", "python", "-m", "openhands.core.main", "-b", "1", "-d", workspace_dir, "--config-file", openhands_toml,
             "-t", rendered_prompt
         ]
         env = os.environ.copy()

@@ -1,133 +1,120 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+import argparse
+import json
 import os
 import subprocess
-import argparse
-import tempfile
 from datetime import datetime, timezone
-from jinja2 import Environment, FileSystemLoader
-import shutil
+from pathlib import Path
+from typing import Iterable, List, Tuple
+import util
 
-REPEAT_COUNT = int(os.getenv('REPEAT_COUNT', '1'))
-MODEL_NAME = os.getenv('MODEL_NAME', 'openai/gpt-4o-mini')
-API_KEY = os.environ.get('OPENAI_API_KEY', '')
-# Print artisan git version
-git_version = subprocess.check_output(["git", "describe", "--always", "--dirty"]).strip().decode()
-print(f"Artisan Git Version: {git_version}")
-# Print OpenHands git version
-openhands_git_version = subprocess.check_output(
-    ["git", "describe", "--always", "--dirty"],
-    cwd=os.path.expanduser("~/artisan/third_party/OpenHands")
-).strip().decode()
-print(f"OpenHands Git Version: {openhands_git_version}")
-print(f"Model name: {MODEL_NAME}")
-print(f"Repeat count: {REPEAT_COUNT}")
+REPEAT_COUNT = int(os.getenv("REPEAT_COUNT", "1"))
+MODEL_NAME = os.getenv("MODEL_NAME", "openai/gpt-4o-mini")
+API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
-TEMPLATE_DIR = os.path.expanduser('~/artisan/prompts')
-TEMPLATE_NAME = 'task_table.j2'
-env = Environment(loader=FileSystemLoader(TEMPLATE_DIR), trim_blocks=True, lstrip_blocks=True)
-template = env.get_template(TEMPLATE_NAME)
+def list_experiments(scripts_dir: Path) -> List[Tuple[str, str, str]]:
+    """Return list of (paper, kind, index) from script filenames: paper_kind_index.py"""
+    exps = []
+    for file in scripts_dir.iterdir():
+        if file.is_file():
+            base = file.stem  # filename without suffix
+            parts = base.split("_")
+            if len(parts) == 3:
+                exps.append(tuple(parts))  # type: ignore[arg-type]
+    return exps
 
-evaluation_dir = os.path.expanduser("~/artisan/evaluation")
-scripts_dir = os.path.join(evaluation_dir, "scripts")
-tables_dir = os.path.join(evaluation_dir, "tables")
+def filter_experiments(
+    experiments: Iterable[Tuple[str, str, str]],
+    paper: str | None,
+    kind: str | None,
+    index: str | None,
+) -> List[Tuple[str, str, str]]:
+    exps = list(experiments)
+    if paper:
+        exps = [e for e in exps if e[0] == paper]
+        if kind:
+            exps = [e for e in exps if e[1] == kind]
+            if index:
+                exps = [e for e in exps if e[2] == index]
+    return exps
 
-artisan_dir = os.path.expanduser("~/artisan")
-openhands_dir = os.path.expanduser("~/artisan/third_party/OpenHands")
+def run_experiment(paper: str, kind: str, index: str, run_idx: int) -> None:
+    datestamp = datetime.now(timezone.utc).strftime("%y%m%d")
+    timestamp = datetime.now(timezone.utc).strftime("%H%M")
 
-parser = argparse.ArgumentParser(description="Run a subset of experiments.")
-parser.add_argument('paper', nargs='?', help='Paper name')
-parser.add_argument('kind', nargs='?', help='Experiment kind')
-parser.add_argument('index', nargs='?', help='Experiment index')
-args = parser.parse_args()
+    # Read expected table
+    table_path = util.TABLES_DIR / f"{paper}_table_{index}.md"
+    table_content = table_path.read_text()
 
-def prepare_openhands_config(workspace_path):
-    openhands_template_file = os.path.join(evaluation_dir, "openhands_config.j2")
+    # Render task prompt, escaping safely
+    template = util.PROMPT_ENV.get_template(util.TEMPLATE_NAME)
+    rendered_prompt = template.render(
+        docker_image=f"artisan25/{paper}",
+        expected_table=table_content,
+    ).strip()
 
-    # 3. Set up the Jinja2 environment to find the template
-    template_dir = os.path.dirname(openhands_template_file)
-    template_filename = os.path.basename(openhands_template_file)
-    env = Environment(loader=FileSystemLoader(template_dir), autoescape=False)
-    template = env.get_template(template_filename)
+    # Use JSON to guarantee proper escaping for downstream tools
+    rendered_prompt_json_escaped = json.dumps(rendered_prompt)[1:-1]
 
-    # 4. Render the template with your variables
-    rendered_content = template.render(
-        model_name=MODEL_NAME,
-        openai_api_key=API_KEY,
-        workspace_volume=workspace_path
-    )
+    # Logging dirs
+    log_dir = util.ARTISAN_DIR / "logs" / datestamp / f"{paper}_{kind}_{index}"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    workspace_dir = log_dir / f"{timestamp}_workspace"
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / f"{timestamp}.log"
 
-    # 5. Write the rendered content to a temporary TOML file
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".toml") as temp_toml_file:
-        temp_toml_file.write(rendered_content)
-        # The final configuration file is now at this path
-        openhands_toml = temp_toml_file.name 
+    # OpenHands config
+    openhands_toml = util.render_openhands_config(workspace_dir, MODEL_NAME, API_KEY)
 
-    return openhands_toml    
+    print(f"[Run {run_idx}] log → {log_file}")
+    cmd = [
+        "poetry", "run", "python", "-m", "openhands.core.main",
+        "-b", "1",
+        "-d", str(workspace_dir),
+        "--config-file", str(openhands_toml),
+        "-t", rendered_prompt_json_escaped,
+    ]
+    env = os.environ.copy()
+    env["LOG_ALL_EVENTS"] = "true"
 
-experiments = []
-for fname in os.listdir(scripts_dir):
-    fullpath = os.path.join(scripts_dir, fname)
-    if os.path.isfile(fullpath):
-        base, _ = os.path.splitext(fname)
-        experiments.append(tuple(base.split('_')))
+    with log_file.open("w") as lf:
+        lf.write(f"Artisan Git Version: {util.git_describe(util.ARTISAN_DIR)}\n")
+        lf.write(f"OpenHands Git Version: {util.git_describe(util.OPENHANDS_DIR)}\n")
+        lf.write(f"Model name: {MODEL_NAME}\n")
+        lf.write(f"Repeat count: {REPEAT_COUNT}\n")
 
-# Filter experiments based on command-line arguments
-filtered_experiments = []
-if args.paper:
-    filtered_experiments = [exp for exp in experiments if exp[0] == args.paper]
-    if args.kind:
-        filtered_experiments = [exp for exp in filtered_experiments if exp[1] == args.kind]
-        if args.index:
-            filtered_experiments = [exp for exp in filtered_experiments if exp[2] == args.index]
-else:
-    filtered_experiments = experiments
+    # Append subprocess output to the log_file
+    with log_file.open("a") as lf:
+        subprocess.run(
+            cmd,
+            cwd=str(util.OPENHANDS_DIR),
+            check=True,
+            stdout=lf,
+            stderr=subprocess.STDOUT,
+            env=env,
+        )
 
-# Kill all docker openhands-related docker containers:
-ids = subprocess.check_output(
-    ["docker", "ps", "-q", "--filter", "ancestor=ghcr.io/all-hands-ai/runtime"],
-    stderr=subprocess.DEVNULL
-).split()
-if ids:
-    subprocess.run(["docker", "kill", *ids], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    util.docker_prune_containers()
 
-for paper, kind, index in filtered_experiments:
-    for run_idx in range(1, REPEAT_COUNT + 1):
-        datestamp = datetime.now(timezone.utc).strftime("%y%m%d")
-        timestamp = datetime.now(timezone.utc).strftime("%H%M")
-        # path to your generated table
-        table_path = f'{tables_dir}/{paper}_table_{index}.md'
-        # read its contents
-        with open(table_path, 'r') as tf:
-            table_content = tf.read()
-        # --- Render prompt template, inlining the table content ---
-        rendered_prompt = template.render(
-            docker_image=f"artisan25/{paper}",
-            expected_table=table_content
-        ).strip().replace('\n', '\\n').replace('"', '\\"')
-        # rendered_prompt = "write a bash script that prints hi"
-        # Prepare logging
-        log_dir = os.path.join(artisan_dir, "logs", f"{datestamp}/{paper}_{kind}_{index}")
-        os.makedirs(log_dir, exist_ok=True)
-        workspace_dir = os.path.join(log_dir, f"{timestamp}_workspace")
-        os.makedirs(workspace_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, f"{timestamp}.log")
-        openhands_toml = prepare_openhands_config(workspace_dir)
-        print(f"[Run {run_idx}] log → {log_file}")
-        cmd = [
-            "poetry", "run", "python", "-m", "openhands.core.main", "-b", "1", "-d", workspace_dir, "--config-file", openhands_toml,
-            "-t", rendered_prompt
-        ]
-        env = os.environ.copy()
-        env["LOG_ALL_EVENTS"] = "true"
-        with open(log_file, "w") as lf:
-            subprocess.run(
-                cmd,
-                cwd=openhands_dir,
-                check=True,
-                stdout=lf,
-                stderr=subprocess.STDOUT,
-                env=env
-            )
-        # Run docker container prune
-        subprocess.run(["docker", "container", "prune", "-f"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run a subset of experiments.")
+    parser.add_argument("paper", nargs="?", help="Paper name")
+    parser.add_argument("kind", nargs="?", help="Experiment kind")
+    parser.add_argument("index", nargs="?", help="Experiment index")
+    args = parser.parse_args()
+
+    experiments = list_experiments(util.SCRIPTS_DIR)
+    filtered = filter_experiments(experiments, args.paper, args.kind, args.index)
+
+    if not filtered:
+        print("No experiments match your filter.")
+        return
+
+    util.kill_openhands_containers()
+    for paper, kind, index in filtered:
+        for run_idx in range(1, REPEAT_COUNT + 1):
+            run_experiment(paper, kind, index, run_idx)
+
+if __name__ == "__main__":
+    main()

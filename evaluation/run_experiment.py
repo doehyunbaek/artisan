@@ -10,6 +10,8 @@ from typing import Iterable, List, Tuple
 import util
 
 REPEAT_COUNT = int(os.getenv("REPEAT_COUNT", "1"))
+MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "50"))
+BUDGET = float(os.getenv("BUDGET", "1.0"))
 MODEL_NAME = os.getenv("MODEL_NAME", "openai/gpt-4o-mini")
 API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
@@ -43,46 +45,34 @@ def run_experiment(paper: str, kind: str, index: str, run_idx: int) -> None:
     datestamp = datetime.now(timezone.utc).strftime("%y%m%d")
     timestamp = datetime.now(timezone.utc).strftime("%H%M")
 
-    # Read expected table
-    table_path = util.TABLES_DIR / f"{paper}_table_{index}.md"
-    table_content = table_path.read_text()
-
-    # Render task prompt, escaping safely
-    template = util.PROMPT_ENV.get_template(util.TEMPLATE_NAME)
-    rendered_prompt = template.render(
-        docker_image=f"artisan25/{paper}",
-        expected_table=table_content,
-    ).strip()
-
-    # Use JSON to guarantee proper escaping for downstream tools
-    rendered_prompt_json_escaped = json.dumps(rendered_prompt)[1:-1]
-
-    # Logging dirs
     log_dir = util.ARTISAN_DIR / "logs" / datestamp / f"{paper}_{kind}_{index}"
     log_dir.mkdir(parents=True, exist_ok=True)
     workspace_dir = log_dir / f"{timestamp}_workspace"
     workspace_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / f"{timestamp}.log"
 
-    # OpenHands config
+    rendered_prompt_json_escaped = util.render_prompt(paper, index)
     openhands_toml = util.render_openhands_config(workspace_dir, MODEL_NAME, API_KEY)
 
     print(f"[Run {run_idx}] log → {log_file}")
     cmd = [
         "poetry", "run", "python", "-m", "openhands.core.main",
-        "-b", "1",
-        "-d", str(workspace_dir),
         "--config-file", str(openhands_toml),
         "-t", rendered_prompt_json_escaped,
+        "-i", str(MAX_ITERATIONS),
+        "-b", str(BUDGET),
     ]
     env = os.environ.copy()
     env["LOG_ALL_EVENTS"] = "true"
+    env["DEBUG"] = "true"
 
     with log_file.open("w") as lf:
         lf.write(f"Artisan Git Version: {util.git_describe(util.ARTISAN_DIR)}\n")
         lf.write(f"OpenHands Git Version: {util.git_describe(util.OPENHANDS_DIR)}\n")
         lf.write(f"Model name: {MODEL_NAME}\n")
         lf.write(f"Repeat count: {REPEAT_COUNT}\n")
+        lf.write(f"Max Iterations: {MAX_ITERATIONS}\n")
+        lf.write(f"Budget: {BUDGET}\n")
 
     # Append subprocess output to the log_file
     with log_file.open("a") as lf:

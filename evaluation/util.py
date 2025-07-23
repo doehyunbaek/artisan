@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
 import subprocess
 import tempfile
 from functools import lru_cache
@@ -39,6 +40,21 @@ PROMPT_ENV = Environment(
     trim_blocks=True,
     lstrip_blocks=True,
 )
+
+def render_prompt(paper: str, index: str) -> str:
+        # Read expected table
+        table_path = TABLES_DIR / f"{paper}_table_{index}.md"
+        table_content = table_path.read_text()
+
+        # Render task prompt, escaping safely
+        template = PROMPT_ENV.get_template(TEMPLATE_NAME)
+        rendered_prompt = template.render(
+            docker_image=f"artisan25/{paper}",
+            expected_table=table_content,
+        ).strip()
+
+        # Use JSON to guarantee proper escaping for downstream tools
+        return json.dumps(rendered_prompt)[1:-1]
 
 def render_openhands_config(workspace_path: Path, model_name, api_key) -> Path:
     """Render the OpenHands TOML from a Jinja template into a temp file."""

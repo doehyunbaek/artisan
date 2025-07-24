@@ -1,0 +1,1 @@
+| Construct | Functional | % Corr. | Procedural | % Corr |  |  |\n| --- | --- | --- | --- | --- | --- | --- |\n| Corr. | Wrong | Corr. | Wrong |  |  |  |\n| Lambda | 227 | 193 | 54.05 | 0 | 0 | 0 |\n| Compr. | 213 | 207 | 50.71 | 0 | 0 | 0 |\n| MRF | 0 | 0 | 0.00 | 0 | 0 | 0 |

@@ -32,5 +32,5 @@ python evaluation/run_experiment.py
 - (Optional) Update OpenHands config
 
 ```sh
-code evaluation/openhands_config.toml
+code evaluation/openhands_config.j2
 ```

@@ -8,12 +8,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, List, Tuple
 import util
+import sys
 
 REPEAT_COUNT = int(os.getenv("REPEAT_COUNT", "1"))
 MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "50"))
 BUDGET = float(os.getenv("BUDGET", "1.0"))
-MODEL_NAME = os.getenv("MODEL_NAME", "openai/gpt-4o-mini")
-API_KEY = os.environ.get("OPENAI_API_KEY", "")
+MODEL_NAME = os.getenv("MODEL_NAME", "openhands/devstral-small-2507")
+API_KEY = os.environ.get("API_KEY", "")
+
+if API_KEY == "":
+    print("Error: API_KEY environment variable is not set.")
+    sys.exit(1)
 
 def list_experiments(scripts_dir: Path) -> List[Tuple[str, str, str]]:
     """Return list of (paper, kind, index) from script filenames: paper_kind_index.py"""

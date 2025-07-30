@@ -25,7 +25,7 @@ SCRIPTS_DIR = EVALUATION_DIR / "scripts"
 TABLES_DIR = EVALUATION_DIR / "tables"
 PROMPTS_DIR = ARTISAN_DIR / "prompts"
 
-OPENHANDS_DIR = ARTISAN_DIR / "third_party" / "OpenHands"
+OPENHANDS_DIR = ARTISAN_DIR / "agents" / "OpenHands"
 
 def git_describe(dir_: Path) -> str:
     return subprocess.check_output(

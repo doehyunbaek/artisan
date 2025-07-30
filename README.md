@@ -1,36 +1,34 @@
 # Artisan: An Agentic Approach for Artifact Evaluation
 
-## Setup
+## Installation
 
-- Clone the repository and submodules
+Artisan uses three kinds of Docker containers:
 
-```sh
-git clone --recursive https://github.com/doehyunbaek/artisan
-# or git clone https://github.com/doehyunbaek/artisan; git submodule update --init
-```
+* A Visual Studio Code Dev Container for running Testora itself. See [devcontainer.json](.devcontainer/devcontainer.json).
 
-- Install dependencies
+* Docker-outside-docker containers for running OpenHands docker runtime.
 
-```sh
-pip install -r requirements.txt
-# consult third_party/OpenHands/Development.md to install the required dependencies.
-```
+* Docker containers for running the docker images for research artifacts.
 
-- Build OpenHands
+To install and run Testora, follow these steps:
 
-```sh
-cd third_party/OpenHands/
-make build
-```
+1) Install [Visual Studio Code](https://code.visualstudio.com/download) and its ["Dev Containers" extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers).
 
-- Run experiments
+2) Open artisan in Visual Studio Code:
+   
+   ```code .```
 
-```sh
-python evaluation/run_experiment.py
-```
+3) In Visual Studio Code, build the Dev Container and reopen the project in the container:
 
-- (Optional) Update OpenHands config
+    ```Ctrl + Shift + P```
+
+    ```Dev Containers: Rebuild and Reopen in Container```
+
+4) Set up the api key for LLMS by setting API_KEY environment variable to the api provider of your choice.
+
+## Running Artisan
 
 ```sh
-code evaluation/openhands_config.j2
+python evaluation/run_experiment.py pythonic
 ```
+

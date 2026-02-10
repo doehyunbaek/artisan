@@ -1,0 +1,6 @@
+**Table 2: Statistics of inferring ping-pong server with different n as parameter, with n_reach dominant reachable states, number of glitches and different statistics of frequencies (fr.) for glitched δ_g and dominant δ transitions.**
+
+| (n) | (n_{reach}) | # Glitches | Mean (\delta_g) fr. | Max (\delta_g) fr. | Min (\delta) fr. |
+| --: | ----------: | ---------: | ------------------: | -----------------: | ---------------: |
+|   3 |           ? |         ?? |                ?.?? |                 ?? |               ?? |
+|   4 |           ? |          ? |                ?.?? |                  ? |               ?? |

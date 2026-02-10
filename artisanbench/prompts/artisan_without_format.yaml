@@ -1,0 +1,161 @@
+agent:
+  system_template: |-
+    You are a helpful assistant that can interact with a computer.
+
+    Your response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).
+    Include a THOUGHT section before your command where you explain your reasoning process.
+    Format your response as shown in <format_example>.
+
+    <format_example>
+    THOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.
+
+    <mini_swe_agent_bash>
+    your_command_here
+    </mini_swe_agent_bash>
+    </format_example>
+
+    Failure to follow these rules will cause your response to be rejected.
+  instance_template: |-
+    Please reproduce the results reported in Table {{ table_index }} of the target paper.
+
+    <expected_table>
+    {{ expected_table }}
+    </expected_table>
+
+    The same table is available at `/workspace/expected.md`.
+    The paper that the table is from is available at `/workspace/paper.md`.
+
+    ### Available tools
+    - `artisan get`: Download and extract the artifact from the official URL.
+    - `artisan submit`: Submit your reproduction script for evaluation.
+    - `uvx --from csvkit in2csv`: Inspect spreadsheet contents.
+    - `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.
+
+    #### Example actions
+    THOUGHT: List the sheets inside the artifact workbook.
+
+    <mini_swe_agent_bash>
+    uvx --from csvkit in2csv -n result.xlsx
+    </mini_swe_agent_bash>
+
+    THOUGHT: Convert the "lambda" worksheet to CSV to analyze it.
+
+    <mini_swe_agent_bash>
+    uvx --from csvkit in2csv -s "lambda" result.xlsx
+    </mini_swe_agent_bash>
+
+    THOUGHT: Read the PDF as Markdown to look for reproduction steps.
+
+    <mini_swe_agent_bash>
+    uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf
+    </mini_swe_agent_bash>
+
+    ---
+    ## Workflow overview
+
+    This workflows MUST be done step-by-step.
+    IMPORTANT: You MUST NOT run multiple steps in a single bash code block.
+
+    1. **Download the artifact** from {{ artifact_url }}.
+       - You MUST use`artisan get {{ artifact_url }}`.
+    2. **Read the README** to understand reproduction steps.
+    3. **Locate relevant commands** for Table {{ table_index }}:
+       - `grep -in docker README.md`
+       - `grep -in "Table {{ table_index }}" README.md`
+    4. **Execute the required commands** step-by-step:
+       - Prefer Docker instructions from the README. Acquire images in the order `docker pull` → `docker load` → `docker import` → `docker build`.
+       - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.
+       - Use `docker exec <container> /bin/bash --noprofile --norc -c "<your_command>"` for shell access.
+       - Run `docker-compose` exactly as documented if present.
+    5. **Author the submission script** `repro_{{ artifact_name }}_table_{{ table_index }}.sh` using the template below.
+
+    ---
+    ## Submission script template
+    <mini_swe_agent_bash>
+    cat > /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh <<'EOF'
+    #!/usr/bin/bash
+    # Section 1: Expected table
+    cat > /workspace/expected.md <<'EOTABLE'
+    {{ expected_table }}
+    EOTABLE
+    # Section 2: Artifact download
+    <Commands to download the artifact>
+    artisan get {{ artifact_url }}
+    # Section 3: Reproduction commands (populate from reviewed steps)
+    <Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>
+    # Section 4: Formatting and submission block
+    echo '<artisan_submit>'
+    <Commands to format the output table>
+    echo '</artisan_submit>'
+    EOF
+    chmod +x /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh
+    artisan submit /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh
+    </mini_swe_agent_bash>
+
+    ---
+    ## Important rules
+    - Perform only one logical step per command; avoid batching multiple workflow stages.
+    - Each command has an eight-hour timeout—plan accordingly.
+    - After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward.
+  action_observation_template: |
+    <returncode>{{output.returncode}}</returncode>
+    {% if output.output | length < 100000 -%}
+    <output>
+    {{ output.output -}}
+    </output>
+    {%- else -%}
+    <warning>
+    The output of your last command was too long.
+    Please try a different command that produces less output.
+    If you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.
+    If you're using grep or find and it produced too much output, you can use a more selective search pattern.
+    If you really need to see something from the full command's output, you can redirect output to a file and then search in that file.
+    </warning>
+    {%- set elided_chars = output.output | length - 100000 -%}
+    <output_head>
+    {{ output.output[:5000] }}
+    </output_head>
+    <elided_chars>
+    {{ elided_chars }} characters elided
+    </elided_chars>
+    <output_tail>
+    {{ output.output[-5000:] }}
+    </output_tail>
+    {%- endif -%}
+  format_error_template: |
+    Please always provide EXACTLY ONE action in <mini_swe_agent_bash>, found {{actions|length}} actions.
+    If you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`
+    without any other command.
+    Else, please format your response exactly as follows:
+
+    <response_example>
+    Here are some thoughts about why you want to perform the action.
+
+    <mini_swe_agent_bash>
+    <action>
+    </mini_swe_agent_bash>
+    </response_example>
+  timeout_template: |
+    The last command <command>{{action['action']}}</command> timed out and has been killed.
+    The output of the command was:
+    <output>
+    {{output}}
+    </output>
+    Please try another command and make sure to avoid those requiring interactive input.
+  step_limit: 30.
+  cost_limit: 1.
+environment:
+  timeout: 28800 # 8 hours
+  container_timeout: "8h"
+  env:
+    PAGER: cat
+    MANPAGER: cat
+    LESS: -R
+    PIP_PROGRESS_BAR: 'off'
+    TQDM_DISABLE: '1'
+    MSWEA_SILENT_STARTUP: '1'
+model:
+  model_name: "gpt-5-mini-2025-08-07"
+  model_kwargs:
+    drop_params: true
+    reasoning_effort: "medium"

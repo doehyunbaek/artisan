@@ -1,0 +1,51 @@
+Full
+- "axa-t2-r1": OK
+- "axa-t3-r1": OK
+- "bazel-t5-r1": OK
+- "bcia-t3-r1": LASTMILE_REPRO, skips raw data generation
+- "goblinupdater-t2-r1": LASTMILE_REPRO, skips raw data generation
+- "lasapp-t1-r1": OK
+- "lasapp-t2-r1": OK
+- "llm-t3-r1": OK
+- "mutation-t2-r1": LASTMILE_REPRO, skips raw data generation
+- "neurojit-t3-r1": OK
+- "pmsat-t2-r1": OK
+- "pmsat-t4-r1": OK
+- "pmsat-t5-r1": OK
+- "pmsat-t6-r1": OK
+- "ppt4j-t2-r1": OK
+- "provenfix-t2-r1": OK
+- "provenfix-t3-r1": OK
+- "pythonic-t3-r1": OK
+- "pythonic-t4-r1": OK
+- "pythonic-t5-r1": OK
+- "pythonic-t6-r1": OK
+- "pythonic-t7-r1": OK
+- "pythonic-t8-r1": OK
+- "pythonic-t9-r1": OK
+
+Lastmile
+- "action-t1-r1": OK
+- "action-t3-r1": OK
+- "action-t6-r1": COPY_REPRO, extracts notebook outputs
+- "bloat-t1-r1": OK
+- "bloat-t2-r1": OK
+- "bloat-t3-r1": OK
+- "crossover-t2-r1": OK
+- "crossover-t3-r1": OK
+- "crossover-t4-r1": OK
+- "llm-t1-r1": FULL_REPRO, no more complete repro possible due to human study
+- "pmsat-t3-r1": OK
+- "pythonic-t10-r1": FULL_REPRO, no more complete repro possible due to human study 
+- "pythonic-t2-r1": FULL_REPRO, no more complete repro possible due to human study
+- "roam-t2-r1": OK
+- "roam-t3-r1": OK
+- "roam-t4-r1": OK
+- "roam-t5-r1": OK
+- "rust-t3-r1": OK
+- "rust-t5-r1": OK
+- "unimocg-t1-r1": OK
+- "unimocg-t4-r1": OK
+- "urcrat-t1-r1": COPY_REPRO, copy checked-in file
+
+Copy

@@ -1,0 +1,1089 @@
+{
+  "info": {
+    "exit_status": "Submitted",
+    "submission": "",
+    "model_stats": {
+      "instance_cost": 0.16302375,
+      "api_calls": 18,
+      "llm_time": 195.12770628929138
+    },
+    "mini_version": "1.14.4",
+    "config": {
+      "agent": {
+        "system_template": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected.",
+        "instance_template": "Please reproduce the results reported in Table {{ table_index }} of the target paper.\n\n<expected_table>\n{{ expected_table }}\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `artisan get`: Download and extract the artifact from the official URL.\n- `artisan format --expected /workspace/expected.md --repro /workspace/repro.txt`: Render final tables.\n- `artisan submit`: Submit your reproduction script for evaluation.\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from {{ artifact_url }}.\n   - You MUST use`artisan get {{ artifact_url }}`.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table {{ table_index }}:\n   - `grep -in docker README.md`\n   - `grep -in \"Table {{ table_index }}\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_{{ artifact_name }}_table_{{ table_index }}.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n{{ expected_table }}\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\nartisan get {{ artifact_url }}\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh\nartisan submit /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward.",
+        "timeout_template": "The last command <command>{{action['action']}}</command> timed out and has been killed.\nThe output of the command was:\n<output>\n{{output}}\n</output>\nPlease try another command and make sure to avoid those requiring interactive input.\n",
+        "format_error_template": "Please always provide EXACTLY ONE action in <mini_swe_agent_bash>, found {{actions|length}} actions.\nIf you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\nwithout any other command.\nElse, please format your response exactly as follows:\n\n<response_example>\nHere are some thoughts about why you want to perform the action.\n\n<mini_swe_agent_bash>\n<action>\n</mini_swe_agent_bash>\n</response_example>\n",
+        "action_observation_template": "<returncode>{{output.returncode}}</returncode>\n{% if output.output | length < 100000 -%}\n<output>\n{{ output.output -}}\n</output>\n{%- else -%}\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning>\n{%- set elided_chars = output.output | length - 100000 -%}\n<output_head>\n{{ output.output[:5000] }}\n</output_head>\n<elided_chars>\n{{ elided_chars }} characters elided\n</elided_chars>\n<output_tail>\n{{ output.output[-5000:] }}\n</output_tail>\n{%- endif -%}\n",
+        "step_limit": 30.0,
+        "cost_limit": 1.0
+      },
+      "model": {
+        "model_name": "gpt-5.1-2025-11-13",
+        "model_kwargs": {
+          "drop_params": true,
+          "reasoning_effort": "medium"
+        },
+        "litellm_model_registry": null,
+        "set_cache_control": null
+      },
+      "environment": {
+        "image": "doehyunbaek1/artisan:c268b22",
+        "container_name": "agent-action-t3-8169",
+        "cwd": "/workspace",
+        "env": {
+          "PAGER": "cat",
+          "MANPAGER": "cat",
+          "LESS": "-R",
+          "PIP_PROGRESS_BAR": "off",
+          "TQDM_DISABLE": "1",
+          "MSWEA_SILENT_STARTUP": "1"
+        },
+        "forward_env": [],
+        "timeout": 28800,
+        "executable": "docker",
+        "run_args": [
+          "--rm",
+          "--privileged",
+          "-e",
+          "OPENAI_API_KEY",
+          "-e",
+          "MSWEA_SILENT_STARTUP",
+          "-v",
+          "/home/doehyunbaek/artisan/logs/artisan-gpt5.1-3ee0-without_output/action/table_3/181951-166810:/workspace:rw",
+          "-e",
+          "ARTISAN_JUDGE_URL=http://129.69.217.153:8000/submit",
+          "-e",
+          "ARTISAN_MITM_URL=http://129.69.217.153:8082",
+          "-e",
+          "ARTISAN_CACHE_DIR=/root/.cache/artisan",
+          "-v",
+          "/home/doehyunbaek/.cache:/root/.cache/artisan",
+          "--group-add",
+          "999"
+        ],
+        "container_timeout": "8h",
+        "pull_timeout": 3000
+      },
+      "agent_type": "evaluation.agents.artisan.DefaultAgentWithLogs",
+      "model_type": "minisweagent.models.litellm_model.LitellmModel",
+      "environment_type": "minisweagent.environments.docker.DockerEnvironment"
+    },
+    "format": [],
+    "speedometer": [
+      {
+        "timestamp": "2026-01-21T18:30:28Z",
+        "model": "gpt-5-mini-2025-08-07",
+        "input": [
+          {
+            "role": "system",
+            "content": "\nYou are an expert research engineer specializing in reproducing scientific papers.\nAnalyze the provided Bash script to estimate the completeness of the reproduction process.\n\nCLASSIFICATION RULES:\n- \"copy\": The script just copies the results without actually reproducing. Examples:\n    - The result is hard-coded without any process to generate it.\n    - The result is copied from checked-in files as-is. NOTE: commands like `cp`.\n- \"lastmile\": The script performs lightweight reproduction and skips heavy computations. Examples:\n    - The result is generated using baked-in raw data.\n    - The script performs statistical analysis on precomputed outputs.\n- \"full\": The script performs complete reproduction. Examples:\n    - Raw data is generated from scratch from the input dataset.\n    - NOTE: Even if the script downloads artifact from repositories like Zenodo, FigShare, GitHub Releases, etc., if it performs the full computation to generate the final results, classify as \"full\".\n    - NOTE: Even if the script uses Docker images or prebuilt environments, if it performs the full computation to generate the final results, classify as \"full\".\n\nIMPORTANT POINTS:\n- The script should be classified with a fastest path it can possibly take. If a script contains both \"copy\" and \"lastmile\" reproduction, you should classify it as \"copy\"\n\nFILES TO EXCLUDE:\nIdentify file paths or names referenced in the script (e.g., in `wget`, `curl`, `tar`, `python` args) that are checked-in results or raw data and should be excluded to make reproduction more complete. Look for extensions like .pth, .ckpt, .bin, .tar.gz, .zip, .h5.\n- NOTE: FILES TO EXCLUDE should be output only when speed is classified as \"copy\" or \"lastmile\". If these files are excluded the script should be more likely to be judged as \"full\".\n\nOUTPUT FORMAT:\nReturn ONLY a valid JSON object. No markdown formatting, no code fences.\n{\n    \"speed\": \"copy\" | \"lastmile\" | \"full\",\n    \"reason\": \"A concise justification for the classification.\",\n    \"files_to_exclude\": [\"list\", \"of\", \"filenames\", \"or\", \"paths\"]\n}\n"
+          },
+          {
+            "role": "user",
+            "content": "You will see reference speedometer examples (script -> JSON output). Use them for calibration before evaluating the new script.\n\n<example name=\"hypertesting_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/10451088\n    (\n      printf \"### Table 1: Correlation results\\n\\n| Sample (UnsecureOnlyDataset) | R | p-value |\\n| :--- | :--- | :--- |\\n\"\n      tar -xOf ReplicationPackage/submission-results.tar.xz RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json       | sed -n '/\"csvTable\": [/,/]/p'       | sed -E 's/^([^;]+);([^;]+);([^;]+)$/| \\1 | \\2 | \\3 |/'\n    ) > /workspace/repro.txt\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Streams the ready-made RQ1 CSV rows out of submission-results.tar.xz instead of rerunning HyperTesting.\",\n  \"files_to_exclude\": [\n    \"ReplicationPackage/submission-results.tar.xz\",\n    \"RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json\"\n  ]\n}\n</example>\n\n<example name=\"baro_t2\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/11094092\n    cat > /workspace/repro.txt <<'EOREPRO'\n    Method: N-Sigma\n    Dataset: Online Boutique\n    Precision: 0.54\n    Recall   : 1\n    F1       : 0.70\n\n    Method: BARO (Ours)\n    Dataset: Online Boutique\n    Precision: 0.69\n    Recall   : 1\n    F1       : 0.82\n    EOREPRO\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Hard-codes every BARO metric via heredoc instead of running any detectors.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<example name=\"sja_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/12670597\n    python3 - << 'PY' > /workspace/repro.txt\n    import math\n    gt = 662208\n    fns = {\"sja\":1451, \"dyninst\":60463}\n    fps = {\"sja\":17347, \"dyninst\":3143}\n    def prec(fp, gt): return 100.0/(1.0 + (fp/gt))\n    def rec(fn, gt):  return 100.0/(1.0 + (fn/gt))\n    def f1(p, r): return 0.0 if (p+r)==0 else 2.0*p*r/(p+r)\n    print(f\"| **Precision** | {prec(fps['dyninst'], gt):.1f} | {prec(fps['sja'], gt):.1f} |\")\n    print(f\"| **Recall** | {rec(fns['dyninst'], gt):.1f} | {rec(fns['sja'], gt):.1f} |\")\n    print(f\"| **F?-score** | {f1(prec(fps['dyninst'], gt), rec(fns['dyninst'], gt)):.1f} | {f1(prec(fps['sja'], gt), rec(fns['sja'], gt)):.1f} |\")\n    PY\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Computes percentages from hard-coded FP/FN counts, so no binaries or datasets ever run.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<task>\n[script]\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: Termination status: comparison between free tier and paid tier.**\n\n| Status          | Runs proportion % (Paid) | Runs proportion % (Free) | VM time proportion % (Paid) | VM time proportion % (Free) |\n| --------------- | -----------------------: | -----------------------: | --------------------------: | --------------------------: |\n| Success         |                     ??.? |                     ??.? |                        ??.? |                        ??.? |\n| Failure         |                     ??.? |                     ??.? |                        ??.? |                        ??.? |\n| Skipped         |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Canceled        |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Startup failure |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Action required |                    < ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Stale           |                    < ?.? |                      ?.? |                         ?.? |                         ?.? |\n\nEOTABLE\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/10529665\n# Section 3: Reproduction commands (populate from reviewed steps)\ndocker pull islemdockerdev/github-workflow-resource-study:v1.1\ndocker run -d --init --entrypoint bash --name github-study islemdockerdev/github-workflow-resource-study:v1.1 -c 'sleep infinity'\ndocker exec github-study /bin/bash --noprofile --norc -c \"/workdir/.venv2/bin/python - << 'PY'\nfrom runs_collector.dataset import RunsDataSet\nfrom runs_analysis.resource_usage import get_tiers\n\nworkdir = \\\"/workdir/\\\"\ndata_set = RunsDataSet(None, None, from_checkpoint=True, checkpoint_dir=workdir)\n\n# Split repositories into paid and free tiers\nrepos_list_1, repos_list_2 = get_tiers(data_set)\n\n# Load runs and jobs\nall_runs = data_set.get_all_runs()\nall_jobs = data_set.get_all_jobs()\n\n# Filter runs and jobs per tier (excluding the specific job ID as in the notebook)\nall_runs_1 = all_runs[all_runs.repo_id.isin(repos_list_1)]\nall_jobs_1 = all_jobs[(all_jobs.run_id.isin(all_runs_1.id)) & (all_jobs.id != 3253494537)]\n\nall_runs_2 = all_runs[all_runs.repo_id.isin(repos_list_2)]\nall_jobs_2 = all_jobs[(all_jobs.run_id.isin(all_runs_2.id)) & (all_jobs.id != 3253494537)]\n\n# Proportion of runs per conclusion\nconclusion_1 = all_runs_1.groupby(\\\"conclusion\\\").agg({\\\"id\\\": \\\"count\\\"}).reset_index()\nconclusion_2 = all_runs_2.groupby(\\\"conclusion\\\").agg({\\\"id\\\": \\\"count\\\"}).reset_index()\nconclusion_1[\\\"prop\\\"] = conclusion_1[\\\"id\\\"] * 100 / conclusion_1[\\\"id\\\"].sum()\nconclusion_2[\\\"prop\\\"] = conclusion_2[\\\"id\\\"] * 100 / conclusion_2[\\\"id\\\"].sum()\n\n# VM time proportions per conclusion\nruns_with_time_1 = all_runs_1.merge(all_jobs_1[[\\\"run_id\\\", \\\"up_time\\\"]], left_on=\\\"id\\\", right_on=\\\"run_id\\\")\nruns_with_time_2 = all_runs_2.merge(all_jobs_2[[\\\"run_id\\\", \\\"up_time\\\"]], left_on=\\\"id\\\", right_on=\\\"run_id\\\")\n\ntime_per_conclusion_1 = runs_with_time_1.groupby(\\\"conclusion\\\").agg({\\\"up_time\\\": \\\"sum\\\"}).reset_index()\ntime_per_conclusion_1[\\\"prop\\\"] = time_per_conclusion_1[\\\"up_time\\\"] * 100 / time_per_conclusion_1.up_time.sum()\n\ntime_per_conclusion_2 = runs_with_time_2.groupby(\\\"conclusion\\\").agg({\\\"up_time\\\": \\\"sum\\\"}).reset_index()\ntime_per_conclusion_2[\\\"prop\\\"] = time_per_conclusion_2[\\\"up_time\\\"] * 100 / time_per_conclusion_2.up_time.sum()\n\ndef get_prop(df, key):\n    row = df[df.conclusion == key]\n    if row.empty:\n        return 0.0\n    return round(float(row.prop.iloc[0]), 1)\n\nstatuses = [\n    (\\\"Success\\\", \\\"success\\\"),\n    (\\\"Failure\\\", \\\"failure\\\"),\n    (\\\"Skipped\\\", \\\"skipped\\\"),\n    (\\\"Canceled\\\", \\\"cancelled\\\"),  # GitHub uses \\\"cancelled\\\" internally\n    (\\\"Startup failure\\\", \\\"startup_failure\\\"),\n    (\\\"Action required\\\", \\\"action_required\\\"),\n    (\\\"Stale\\\", \\\"stale\\\"),\n]\n\nprint(\\\"**Table 3: Termination status: comparison between free tier and paid tier.**\\\\n\\\")\nprint(\\\"| Status          | Runs proportion % (Paid) | Runs proportion % (Free) | VM time proportion % (Paid) | VM time proportion % (Free) |\\\")\nprint(\\\"| --------------- | -----------------------: | -----------------------: | --------------------------: | --------------------------: |\\\")\n\nfor label, key in statuses:\n    rp1 = get_prop(conclusion_1, key)\n    rp2 = get_prop(conclusion_2, key)\n    tp1 = get_prop(time_per_conclusion_1, key)\n    tp2 = get_prop(time_per_conclusion_2, key)\n    print(f\\\"| {label:14} | {rp1:23.1f} | {rp2:23.1f} | {tp1:26.1f} | {tp2:26.1f} |\\\")\nPY\" > /workspace/repro.txt\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n</task>\nReturn only the JSON object described above."
+          }
+        ],
+        "output": {
+          "speed": "lastmile",
+          "reason": "The script runs analysis inside a prebuilt Docker image and explicitly loads precomputed checkpoints (from_checkpoint=True, checkpoint_dir=/workdir) instead of regenerating raw/run-level data from scratch. It performs only the final aggregation/printing steps (last-mile analysis) rather than full data collection/processing.",
+          "files_to_exclude": [
+            "/workdir/",
+            "/workdir/.venv2/bin/python",
+            "islemdockerdev/github-workflow-resource-study:v1.1",
+            "https://zenodo.org/records/10529665"
+          ]
+        },
+        "duration_seconds": 17.748956441879272,
+        "cost_usd": 0.0031125,
+        "tokens": {
+          "input": 2730,
+          "cached_input": 0,
+          "output": 1215,
+          "reasoning_output": 1088,
+          "total": 3945
+        },
+        "reason": "submit_validation"
+      },
+      {
+        "timestamp": "2026-01-21T18:30:55Z",
+        "model": "gpt-5-mini-2025-08-07",
+        "input": [
+          {
+            "role": "system",
+            "content": "\nYou are an expert research engineer specializing in reproducing scientific papers.\nAnalyze the provided Bash script to estimate the completeness of the reproduction process.\n\nCLASSIFICATION RULES:\n- \"copy\": The script just copies the results without actually reproducing. Examples:\n    - The result is hard-coded without any process to generate it.\n    - The result is copied from checked-in files as-is. NOTE: commands like `cp`.\n- \"lastmile\": The script performs lightweight reproduction and skips heavy computations. Examples:\n    - The result is generated using baked-in raw data.\n    - The script performs statistical analysis on precomputed outputs.\n- \"full\": The script performs complete reproduction. Examples:\n    - Raw data is generated from scratch from the input dataset.\n    - NOTE: Even if the script downloads artifact from repositories like Zenodo, FigShare, GitHub Releases, etc., if it performs the full computation to generate the final results, classify as \"full\".\n    - NOTE: Even if the script uses Docker images or prebuilt environments, if it performs the full computation to generate the final results, classify as \"full\".\n\nIMPORTANT POINTS:\n- The script should be classified with a fastest path it can possibly take. If a script contains both \"copy\" and \"lastmile\" reproduction, you should classify it as \"copy\"\n\nFILES TO EXCLUDE:\nIdentify file paths or names referenced in the script (e.g., in `wget`, `curl`, `tar`, `python` args) that are checked-in results or raw data and should be excluded to make reproduction more complete. Look for extensions like .pth, .ckpt, .bin, .tar.gz, .zip, .h5.\n- NOTE: FILES TO EXCLUDE should be output only when speed is classified as \"copy\" or \"lastmile\". If these files are excluded the script should be more likely to be judged as \"full\".\n\nOUTPUT FORMAT:\nReturn ONLY a valid JSON object. No markdown formatting, no code fences.\n{\n    \"speed\": \"copy\" | \"lastmile\" | \"full\",\n    \"reason\": \"A concise justification for the classification.\",\n    \"files_to_exclude\": [\"list\", \"of\", \"filenames\", \"or\", \"paths\"]\n}\n"
+          },
+          {
+            "role": "user",
+            "content": "You will see reference speedometer examples (script -> JSON output). Use them for calibration before evaluating the new script.\n\n<example name=\"hypertesting_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/10451088\n    (\n      printf \"### Table 1: Correlation results\\n\\n| Sample (UnsecureOnlyDataset) | R | p-value |\\n| :--- | :--- | :--- |\\n\"\n      tar -xOf ReplicationPackage/submission-results.tar.xz RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json       | sed -n '/\"csvTable\": [/,/]/p'       | sed -E 's/^([^;]+);([^;]+);([^;]+)$/| \\1 | \\2 | \\3 |/'\n    ) > /workspace/repro.txt\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Streams the ready-made RQ1 CSV rows out of submission-results.tar.xz instead of rerunning HyperTesting.\",\n  \"files_to_exclude\": [\n    \"ReplicationPackage/submission-results.tar.xz\",\n    \"RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json\"\n  ]\n}\n</example>\n\n<example name=\"baro_t2\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/11094092\n    cat > /workspace/repro.txt <<'EOREPRO'\n    Method: N-Sigma\n    Dataset: Online Boutique\n    Precision: 0.54\n    Recall   : 1\n    F1       : 0.70\n\n    Method: BARO (Ours)\n    Dataset: Online Boutique\n    Precision: 0.69\n    Recall   : 1\n    F1       : 0.82\n    EOREPRO\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Hard-codes every BARO metric via heredoc instead of running any detectors.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<example name=\"sja_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/12670597\n    python3 - << 'PY' > /workspace/repro.txt\n    import math\n    gt = 662208\n    fns = {\"sja\":1451, \"dyninst\":60463}\n    fps = {\"sja\":17347, \"dyninst\":3143}\n    def prec(fp, gt): return 100.0/(1.0 + (fp/gt))\n    def rec(fn, gt):  return 100.0/(1.0 + (fn/gt))\n    def f1(p, r): return 0.0 if (p+r)==0 else 2.0*p*r/(p+r)\n    print(f\"| **Precision** | {prec(fps['dyninst'], gt):.1f} | {prec(fps['sja'], gt):.1f} |\")\n    print(f\"| **Recall** | {rec(fns['dyninst'], gt):.1f} | {rec(fns['sja'], gt):.1f} |\")\n    print(f\"| **F?-score** | {f1(prec(fps['dyninst'], gt), rec(fns['dyninst'], gt)):.1f} | {f1(prec(fps['sja'], gt), rec(fns['sja'], gt)):.1f} |\")\n    PY\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Computes percentages from hard-coded FP/FN counts, so no binaries or datasets ever run.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<task>\n[script]\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: Termination status: comparison between free tier and paid tier.**\n\n| Status          | Runs proportion % (Paid) | Runs proportion % (Free) | VM time proportion % (Paid) | VM time proportion % (Free) |\n| --------------- | -----------------------: | -----------------------: | --------------------------: | --------------------------: |\n| Success         |                     ??.? |                     ??.? |                        ??.? |                        ??.? |\n| Failure         |                     ??.? |                     ??.? |                        ??.? |                        ??.? |\n| Skipped         |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Canceled        |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Startup failure |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Action required |                    < ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Stale           |                    < ?.? |                      ?.? |                         ?.? |                         ?.? |\n\nEOTABLE\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/10529665\n# Section 3: Reproduction commands (populate from reviewed steps)\ndocker pull islemdockerdev/github-workflow-resource-study:v1.1\ndocker run -d --init --entrypoint bash --name github-study islemdockerdev/github-workflow-resource-study:v1.1 -c 'sleep infinity'\ndocker exec github-study /bin/bash --noprofile --norc -c \"/workdir/.venv2/bin/python - << 'PY'\nfrom runs_collector.dataset import RunsDataSet\nfrom runs_analysis.resource_usage import get_tiers\n\nworkdir = \\\"/workdir/\\\"\ndata_set = RunsDataSet(None, None, from_checkpoint=True, checkpoint_dir=workdir)\n\n# Split repositories into paid and free tiers\nrepos_list_1, repos_list_2 = get_tiers(data_set)\n\n# Load runs and jobs\nall_runs = data_set.get_all_runs()\nall_jobs = data_set.get_all_jobs()\n\n# Filter runs and jobs per tier (excluding the specific job ID as in the notebook)\nall_runs_1 = all_runs[all_runs.repo_id.isin(repos_list_1)]\nall_jobs_1 = all_jobs[(all_jobs.run_id.isin(all_runs_1.id)) & (all_jobs.id != 3253494537)]\n\nall_runs_2 = all_runs[all_runs.repo_id.isin(repos_list_2)]\nall_jobs_2 = all_jobs[(all_jobs.run_id.isin(all_runs_2.id)) & (all_jobs.id != 3253494537)]\n\n# Proportion of runs per conclusion\nconclusion_1 = all_runs_1.groupby(\\\"conclusion\\\").agg({\\\"id\\\": \\\"count\\\"}).reset_index()\nconclusion_2 = all_runs_2.groupby(\\\"conclusion\\\").agg({\\\"id\\\": \\\"count\\\"}).reset_index()\nconclusion_1[\\\"prop\\\"] = conclusion_1[\\\"id\\\"] * 100 / conclusion_1[\\\"id\\\"].sum()\nconclusion_2[\\\"prop\\\"] = conclusion_2[\\\"id\\\"] * 100 / conclusion_2[\\\"id\\\"].sum()\n\n# VM time proportions per conclusion\nruns_with_time_1 = all_runs_1.merge(all_jobs_1[[\\\"run_id\\\", \\\"up_time\\\"]], left_on=\\\"id\\\", right_on=\\\"run_id\\\")\nruns_with_time_2 = all_runs_2.merge(all_jobs_2[[\\\"run_id\\\", \\\"up_time\\\"]], left_on=\\\"id\\\", right_on=\\\"run_id\\\")\n\ntime_per_conclusion_1 = runs_with_time_1.groupby(\\\"conclusion\\\").agg({\\\"up_time\\\": \\\"sum\\\"}).reset_index()\ntime_per_conclusion_1[\\\"prop\\\"] = time_per_conclusion_1[\\\"up_time\\\"] * 100 / time_per_conclusion_1.up_time.sum()\n\ntime_per_conclusion_2 = runs_with_time_2.groupby(\\\"conclusion\\\").agg({\\\"up_time\\\": \\\"sum\\\"}).reset_index()\ntime_per_conclusion_2[\\\"prop\\\"] = time_per_conclusion_2[\\\"up_time\\\"] * 100 / time_per_conclusion_2.up_time.sum()\n\ndef get_prop(df, key):\n    row = df[df.conclusion == key]\n    if row.empty:\n        return 0.0\n    return round(float(row.prop.iloc[0]), 1)\n\nstatuses = [\n    (\\\"Success\\\", \\\"success\\\"),\n    (\\\"Failure\\\", \\\"failure\\\"),\n    (\\\"Skipped\\\", \\\"skipped\\\"),\n    (\\\"Canceled\\\", \\\"cancelled\\\"),  # GitHub uses \\\"cancelled\\\" internally\n    (\\\"Startup failure\\\", \\\"startup_failure\\\"),\n    (\\\"Action required\\\", \\\"action_required\\\"),\n    (\\\"Stale\\\", \\\"stale\\\"),\n]\n\nprint(\\\"**Table 3: Termination status: comparison between free tier and paid tier.**\\\\n\\\")\nprint(\\\"| Status          | Runs proportion % (Paid) | Runs proportion % (Free) | VM time proportion % (Paid) | VM time proportion % (Free) |\\\")\nprint(\\\"| --------------- | -----------------------: | -----------------------: | --------------------------: | --------------------------: |\\\")\n\nfor label, key in statuses:\n    rp1 = get_prop(conclusion_1, key)\n    rp2 = get_prop(conclusion_2, key)\n    tp1 = get_prop(time_per_conclusion_1, key)\n    tp2 = get_prop(time_per_conclusion_2, key)\n    print(f\\\"| {label:14} | {rp1:23.1f} | {rp2:23.1f} | {tp1:26.1f} | {tp2:26.1f} |\\\")\nPY\" > /workspace/repro.txt\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n</task>\nReturn only the JSON object described above."
+          }
+        ],
+        "output": {
+          "speed": "lastmile",
+          "reason": "The script loads a precomputed checkpoint (RunsDataSet(from_checkpoint=True, checkpoint_dir=/workdir)) inside a provided Docker image and performs aggregation/printing \u2014 it analyzes baked-in data rather than generating raw data or re-running the full collection pipeline.",
+          "files_to_exclude": [
+            "islemdockerdev/github-workflow-resource-study:v1.1",
+            "/workdir/ (checkpoint files used by RunsDataSet)",
+            "Zenodo record 10529665 replication package (downloaded by artisan get)"
+          ]
+        },
+        "duration_seconds": 16.57244348526001,
+        "cost_usd": 0.0026973,
+        "tokens": {
+          "input": 2730,
+          "cached_input": 1792,
+          "output": 1209,
+          "reasoning_output": 1088,
+          "total": 3939
+        },
+        "reason": "exit_validation"
+      }
+    ]
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected."
+    },
+    {
+      "role": "user",
+      "content": "Please reproduce the results reported in Table 3 of the target paper.\n\n<expected_table>\n**Table 3: Termination status: comparison between free tier and paid tier.**\n\n| Status          | Runs proportion % (Paid) | Runs proportion % (Free) | VM time proportion % (Paid) | VM time proportion % (Free) |\n| --------------- | -----------------------: | -----------------------: | --------------------------: | --------------------------: |\n| Success         |                     ??.? |                     ??.? |                        ??.? |                        ??.? |\n| Failure         |                     ??.? |                     ??.? |                        ??.? |                        ??.? |\n| Skipped         |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Canceled        |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Startup failure |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Action required |                    < ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Stale           |                    < ?.? |                      ?.? |                         ?.? |                         ?.? |\n\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `artisan get`: Download and extract the artifact from the official URL.\n- `artisan format --expected /workspace/expected.md --repro /workspace/repro.txt`: Render final tables.\n- `artisan submit`: Submit your reproduction script for evaluation.\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from https://zenodo.org/records/10529665.\n   - You MUST use`artisan get https://zenodo.org/records/10529665`.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table 3:\n   - `grep -in docker README.md`\n   - `grep -in \"Table 3\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_action_table_3.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_action_table_3.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: Termination status: comparison between free tier and paid tier.**\n\n| Status          | Runs proportion % (Paid) | Runs proportion % (Free) | VM time proportion % (Paid) | VM time proportion % (Free) |\n| --------------- | -----------------------: | -----------------------: | --------------------------: | --------------------------: |\n| Success         |                     ??.? |                     ??.? |                        ??.? |                        ??.? |\n| Failure         |                     ??.? |                     ??.? |                        ??.? |                        ??.? |\n| Skipped         |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Canceled        |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Startup failure |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Action required |                    < ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Stale           |                    < ?.? |                      ?.? |                         ?.? |                         ?.? |\n\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\nartisan get https://zenodo.org/records/10529665\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_action_table_3.sh\nartisan submit /workspace/repro_action_table_3.sh\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward."
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Begin with step 1 of the workflow: download and extract the artifact from the given Zenodo record using `artisan get`. Further steps (reading README, locating Table 3 commands, constructing the repro script) will follow in subsequent commands.\n\n<mini_swe_agent_bash>\nartisan get https://zenodo.org/records/10529665\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.7107508182525635,
+        "response": {
+          "id": "chatcmpl-D0X62gZ53rH2hLgujNaYUaIJydG2o",
+          "created": 1769019594,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Begin with step 1 of the workflow: download and extract the artifact from the given Zenodo record using `artisan get`. Further steps (reading README, locating Table 3 commands, constructing the repro script) will follow in subsequent commands.\n\n<mini_swe_agent_bash>\nartisan get https://zenodo.org/records/10529665\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 286,
+            "prompt_tokens": 1441,
+            "total_tokens": 1727,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 195,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning><output_head>\n\nDownloading gh_resource_study_artifact_patched.zip 0% (65536/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (131072/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (196608/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (262144/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (327680/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (393216/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (458752/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (524288/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (589824/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (655360/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (720896/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (786432/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (851968/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (917504/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (983040/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (1048576/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (1114112/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (1179648/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (1245184/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (1310720/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (1376256/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (1441792/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (1507328/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (1572864/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (1638400/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (1703936/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (1769472/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (1835008/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (1900544/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (1966080/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (2031616/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (2097152/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (2162688/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (2228224/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (2293760/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (2359296/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (2424832/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (2490368/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (2555904/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (2621440/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (2686976/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (2752512/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (2818048/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (2883584/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (2949120/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3014656/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3080192/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3145728/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3211264/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3276800/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3342336/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3407872/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3473408/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3538944/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3604480/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3670016/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3735552/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3801088/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3866624/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3932160/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (3997696/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 0% (4063232/2831518880 \n</output_head>\n<elided_chars>\n3551406 characters elided\n</elided_chars>\n<output_tail>\n gh_resource_study_artifact_patched.zip 99% (2827878400/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2827943936/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828009472/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828075008/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828140544/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828206080/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828271616/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828337152/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828402688/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828468224/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828533760/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828599296/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828664832/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828730368/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828795904/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828861440/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828926976/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2828992512/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2829058048/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2829123584/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2829189120/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2829254656/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2829320192/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2829385728/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2829451264/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2829516800/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2829582336/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2829647872/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2829713408/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2829778944/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2829844480/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2829910016/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2829975552/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2830041088/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2830106624/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2830172160/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2830237696/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2830303232/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2830368768/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2830434304/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2830499840/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2830565376/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2830630912/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2830696448/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2830761984/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2830827520/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2830893056/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2830958592/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2831024128/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2831089664/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2831155200/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2831220736/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2831286272/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2831351808/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2831417344/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 99% (2831482880/2831518880 bytes)\nDownloading gh_resource_study_artifact_patched.zip 100% (2831518880/2831518880 bytes)\nSaved to gh_resource_study_artifact_patched.zip (2831518880 bytes)\n\nREADME PATH: gh_resource_study_artifact_patched/github-workflow-resource-optimization/README.md\n\n\n</output_tail>",
+      "exec_time": 157.70570349693298
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Continue with step 2 of the workflow by briefly inspecting the README to understand the artifact structure and reproduction steps, while limiting output size using `head`.\n\n<mini_swe_agent_bash>\nhead -n 80 gh_resource_study_artifact_patched/github-workflow-resource-optimization/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.1881022453308105,
+        "response": {
+          "id": "chatcmpl-D0X8fmfwd3xAjKEJUShI2v03p1IWb",
+          "created": 1769019757,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Continue with step 2 of the workflow by briefly inspecting the README to understand the artifact structure and reproduction steps, while limiting output size using `head`.\n\n<mini_swe_agent_bash>\nhead -n 80 gh_resource_study_artifact_patched/github-workflow-resource-optimization/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 138,
+            "prompt_tokens": 4609,
+            "total_tokens": 4747,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 56,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 1408
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n# Resource Usage and Optimization Opportunities in Workflows of GitHub Actions\n\n\n\n[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8344575.svg)](https://doi.org/10.5281/zenodo.8344575) [<img src=\"https://img.shields.io/badge/dockerhub-GH_workflows_study-blue.svg?logo=Docker\">](https://hub.docker.com/r/islemdockerdev/github-workflow-resource-study)\n\nThis artifact submission includes the code and data utilized in our empirical study described in the [ICSE'24 paper \"Resource Usage and Optimization Opportunities in Workflows of GitHub Actions\"](https://software-lab.org/publications/icse2024_workflows.pdf). The study produces two primary outputs:\n\n1. **Dataset:** We collected a dataset comprising 1.3 million runs with 3.7 million jobs.\n\n2. **Analysis Code and Results:** The code and results of our analysis conducted on the collected dataset.\n\nBoth components can be accessed and explored using the instructions provided below.\n\n## Badges to claim\nTo acknowledge our artifact, we seek to claim two badges:\n1. **Available badge**\n2. **Reusable badge**\n\n## Requirements\nThe following sections outline the requirements for importing, installing, and using our artifact.\n### User Requirements\n1. **Familiarity with Python Virtual Environment**: Ability to create a Python virtual environment and install our tool within it. Step-by-step instructions are provided in this README file, but prior knowledge of this task is advantageous.\n\n2. **Working with Jupyter Notebooks**: Capability to install and launch JupyterLab notebooks. Detailed instructions will be provided.\n\n3. **Working with VScode**: Capability to install and launch VScode. Detailed instructions will be provided.\n\n### Hardware Requirements\n1. **Disk Space**: A minimum of 8GB disk space is required for our collected data, external data files, and our portable Python environment.\n\t\n2. **RAM free space**: Some data preprocessing requires substantial RAM space. In our experiments, usage can extend up to 9GB of RAM for a single analysis notebook (on top of the overhead of other software such as VScode, Docker or JupyerLab when needed).\n\n3. **CPU cores**: None of our scripts use multiprocessing. However, for reference, we conducted our experiments on a machine with 48 CPU cores. The time taken by our machine is specified within each code notebook.\n\n### Software Requirements\n1. **Operating System and Docker**: Our scripts are designed to run on a Linux machine (Ubuntu 20.04). For optimal compatibility, it is recommended to rerun them on an Ubuntu machine with a version close to 20.04. We also recommend the usage of Docker v20.x or higher.\n\n2. **Python Version**: The implementation and used packages are compatible with Python 3.8 (recommended) and above.\n\n3. **Jupyter-Lab or VScode**: Since we use notebooks to present our analysis, you will need a notebook runner. It is preferable to have JupyterLab or VSCode installed for running notebooks.\n\n4. **GitHub Username and Token**: To execute the collection process using the GitHub API, you need to add at least one token to the file tokens.txt (see data collection part below).\n\n## How to setup the artifact?\nYou can setup the artifact following one of the three options below:\n\n### Option 1: Docker image from DockerHub:\nThe perhaps most straightforward way to utilize our artifact is by pulling our Docker image from DockerHub. Follow these steps:\n1. Execute the following commands in your terminal to retrieve and start our docker image\n    ```bash\n    # Pull image\n    docker pull islemdockerdev/github-workflow-resource-study:v1.1\n    # Run the image inside a container\n    docker run -itd --name github-study islemdockerdev/github-workflow-resource-study:v1.1\n    # Start the container\n    docker start -i github-study\n    ```\n\n2. After starting the container, open VSCode and navigate to the containers icon on the left panel (Ensure that you have the Remote Explorer extension installed on your VScode).\n\n3. Under the Dev Containers tab, locate the name of the container you just started (e.g., github-study).\n\n4. Finally, attach the container **github-study** to a new window by clicking the '+' sign located on the right of the container's name. Navigate to **workdir** folder in vscode window (all the files of the artifact are located there).\n\n**Tutorial reference:** For detailed steps on how to attach a docker container in VScode, please refer to this short video tutorial (1min 38 sec): https://www.youtube.com/watch?v=8gUtN5j4QnY&t\n\n### Option 2: Get our Zenodo image\n1. Download our shared Zip from: https://doi.org/10.5281/zenodo.8344575\n\n2. After unzipping the file, load our Docker image using the command:\n    ```bash\n    # load the container\n    docker image load -i ./github_study_container.tar\n    # run and attach (careful with the name)\n    docker run -it islemdockerdev/github-workflow-resource-study:v1.1\n    ```\n3. Attach the docker container to a vscode window as demonstrated in here: https://www.youtube.com/watch?v=8gUtN5j4QnY&t\n4. Navigate to the folder **workdir** in vscode window (all the files of the artifact are located there).\n\n</output>",
+      "exec_time": 0.08964085578918457
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Follow workflow step 3 to locate the reproduction instructions specifically related to Table 3 within the README, using a targeted grep to keep output small.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 3\" gh_resource_study_artifact_patched/github-workflow-resource-optimization/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.840629816055298,
+        "response": {
+          "id": "chatcmpl-D0X8iFJ8isUr5SVWaxWB9v8cVkngJ",
+          "created": 1769019760,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Follow workflow step 3 to locate the reproduction instructions specifically related to Table 3 within the README, using a targeted grep to keep output small.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 3\" gh_resource_study_artifact_patched/github-workflow-resource-optimization/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 165,
+            "prompt_tokens": 5883,
+            "total_tokens": 6048,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 81,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 4608
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>1</returncode>\n<output>\n</output>",
+      "exec_time": 0.08591437339782715
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Continue step 3 of the workflow by locating all Docker-related instructions in the README, which will guide how to run the artifact for reproducing Table 3.\n\n<mini_swe_agent_bash>\ngrep -in \"docker\" gh_resource_study_artifact_patched/github-workflow-resource-optimization/README.md | head -n 40\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 2.42018985748291,
+        "response": {
+          "id": "chatcmpl-D0X8mUAimyq8h5QSqFYHT8y8Ej7eB",
+          "created": 1769019764,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Continue step 3 of the workflow by locating all Docker-related instructions in the README, which will guide how to run the artifact for reproducing Table 3.\n\n<mini_swe_agent_bash>\ngrep -in \"docker\" gh_resource_study_artifact_patched/github-workflow-resource-optimization/README.md | head -n 40\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 115,
+            "prompt_tokens": 5983,
+            "total_tokens": 6098,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 24,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 5760
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n5:[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8344575.svg)](https://doi.org/10.5281/zenodo.8344575) [<img src=\"https://img.shields.io/badge/dockerhub-GH_workflows_study-blue.svg?logo=Docker\">](https://hub.docker.com/r/islemdockerdev/github-workflow-resource-study)\n32:2. **RAM free space**: Some data preprocessing requires substantial RAM space. In our experiments, usage can extend up to 9GB of RAM for a single analysis notebook (on top of the overhead of other software such as VScode, Docker or JupyerLab when needed).\n37:1. **Operating System and Docker**: Our scripts are designed to run on a Linux machine (Ubuntu 20.04). For optimal compatibility, it is recommended to rerun them on an Ubuntu machine with a version close to 20.04. We also recommend the usage of Docker v20.x or higher.\n48:### Option 1: Docker image from DockerHub:\n49:The perhaps most straightforward way to utilize our artifact is by pulling our Docker image from DockerHub. Follow these steps:\n50:1. Execute the following commands in your terminal to retrieve and start our docker image\n53:    docker pull islemdockerdev/github-workflow-resource-study:v1.1\n55:    docker run -itd --name github-study islemdockerdev/github-workflow-resource-study:v1.1\n57:    docker start -i github-study\n66:**Tutorial reference:** For detailed steps on how to attach a docker container in VScode, please refer to this short video tutorial (1min 38 sec): https://www.youtube.com/watch?v=8gUtN5j4QnY&t\n71:2. After unzipping the file, load our Docker image using the command:\n74:    docker image load -i ./github_study_container.tar\n76:    docker run -it islemdockerdev/github-workflow-resource-study:v1.1\n78:3. Attach the docker container to a vscode window as demonstrated in here: https://www.youtube.com/watch?v=8gUtN5j4QnY&t\n</output>",
+      "exec_time": 0.08673715591430664
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Set up the Docker environment per README Option 1, starting with pulling the published Docker image from DockerHub so it\u2019s available locally for later container runs.\n\n<mini_swe_agent_bash>\ndocker pull islemdockerdev/github-workflow-resource-study:v1.1\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 6.3038952350616455,
+        "response": {
+          "id": "chatcmpl-D0X8peu9ZBBtne6aW6ecm2efHjNor",
+          "created": 1769019767,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Set up the Docker environment per README Option 1, starting with pulling the published Docker image from DockerHub so it\u2019s available locally for later container runs.\n\n<mini_swe_agent_bash>\ndocker pull islemdockerdev/github-workflow-resource-study:v1.1\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 346,
+            "prompt_tokens": 6569,
+            "total_tokens": 6915,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 270,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nv1.1: Pulling from islemdockerdev/github-workflow-resource-study\naf107e978371: Pulling fs layer\n8ce3f2b601cc: Pulling fs layer\n7f4f85c41831: Pulling fs layer\n61e3cec0af2b: Pulling fs layer\n8244879b209c: Pulling fs layer\n3ea25b49ca45: Pulling fs layer\n52fd3112b48f: Pulling fs layer\nce55bf22116a: Pulling fs layer\n6849dd573d24: Pulling fs layer\n78e95023d535: Pulling fs layer\n82dfb39c7a58: Pulling fs layer\nb703e0f44baa: Pulling fs layer\n52fd3112b48f: Waiting\n61e3cec0af2b: Waiting\nce55bf22116a: Waiting\n8244879b209c: Waiting\n82dfb39c7a58: Waiting\n78e95023d535: Waiting\n6849dd573d24: Waiting\nb703e0f44baa: Waiting\n8ce3f2b601cc: Verifying Checksum\n8ce3f2b601cc: Download complete\n7f4f85c41831: Verifying Checksum\n7f4f85c41831: Download complete\naf107e978371: Verifying Checksum\naf107e978371: Download complete\n61e3cec0af2b: Verifying Checksum\n61e3cec0af2b: Download complete\n8244879b209c: Verifying Checksum\n8244879b209c: Download complete\n3ea25b49ca45: Verifying Checksum\n3ea25b49ca45: Download complete\nce55bf22116a: Verifying Checksum\nce55bf22116a: Download complete\n6849dd573d24: Verifying Checksum\n6849dd573d24: Download complete\n78e95023d535: Verifying Checksum\n78e95023d535: Download complete\naf107e978371: Pull complete\n8ce3f2b601cc: Pull complete\nb703e0f44baa: Verifying Checksum\nb703e0f44baa: Download complete\n7f4f85c41831: Pull complete\n61e3cec0af2b: Pull complete\n8244879b209c: Pull complete\n3ea25b49ca45: Pull complete\n82dfb39c7a58: Download complete\n52fd3112b48f: Verifying Checksum\n52fd3112b48f: Download complete\n52fd3112b48f: Pull complete\nce55bf22116a: Pull complete\n6849dd573d24: Pull complete\n78e95023d535: Pull complete\n82dfb39c7a58: Pull complete\nb703e0f44baa: Pull complete\nDigest: sha256:90cd3e29279797c9609d1175a7db4eda41ca509d411a6f30b735554c7140c084\nStatus: Downloaded newer image for islemdockerdev/github-workflow-resource-study:v1.1\ndocker.io/islemdockerdev/github-workflow-resource-study:v1.1\n</output>",
+      "exec_time": 193.9514672756195
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Start a long-running container from the pulled image following the prescribed modification (use `docker run -d --init --entrypoint bash ... -c 'sleep infinity'`) so that later we can exec into it to run the reproduction commands.\n\n<mini_swe_agent_bash>\ndocker run -d --init --entrypoint bash --name github-study islemdockerdev/github-workflow-resource-study:v1.1 -c 'sleep infinity'\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.197996377944946,
+        "response": {
+          "id": "chatcmpl-D0XC366Bk84rhdUfiNnnhC86SYhgx",
+          "created": 1769019967,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Start a long-running container from the pulled image following the prescribed modification (use `docker run -d --init --entrypoint bash ... -c 'sleep infinity'`) so that later we can exec into it to run the reproduction commands.\n\n<mini_swe_agent_bash>\ndocker run -d --init --entrypoint bash --name github-study islemdockerdev/github-workflow-resource-study:v1.1 -c 'sleep infinity'\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 255,
+            "prompt_tokens": 7390,
+            "total_tokens": 7645,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 145,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 5888
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\ne547d60b4352a50a518341e37fa238320b3cefe1ded014e87c6de07d686fcc01\n</output>",
+      "exec_time": 3.839057207107544
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Inspect the directory structure inside the running container (especially `/workdir`) to locate analysis scripts or notebooks that might correspond to Table 3\u2019s termination status analysis.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"ls -R /workdir | head -n 80\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 4.8495612144470215,
+        "response": {
+          "id": "chatcmpl-D0XCCj0NVhGzXR7ZgWj3o97VFeqE4",
+          "created": 1769019976,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Inspect the directory structure inside the running container (especially `/workdir`) to locate analysis scripts or notebooks that might correspond to Table 3\u2019s termination status analysis.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"ls -R /workdir | head -n 80\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 176,
+            "prompt_tokens": 7551,
+            "total_tokens": 7727,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 85,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 6528
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n/workdir:\nDockerfile\nLICENSE\nREADME.md\nall_actors.csv\nall_commits.csv\nall_jobs.csv\nall_pull_requests.csv\nall_repositories.csv\nall_runs.csv\nall_steps.csv\ncollect.ipynb\ncollected_commits_messages_part3.json\ncollected_commits_save_poins.json\ncollected_commits_save_point_part2.json\ncollected_commits_save_point_part3.json\ncollected_commits_save_point_part4.json\ncommits_messages_by_repo.json\ncommits_part1.json\npaper_analysis_RQ1.ipynb\npaper_analysis_RQ2.ipynb\npaper_analysis_RQ3.ipynb\npure_hashes.json\npyproject.toml\nrepositories-2021-03-08.csv\nrepositories.csv\nrepositories_runs\nrequirements.txt\nscraped_commits_messages_part2.json\nsetup.cfg\nsetup.py\nsrc\ntables\ntokens.json\ntox.ini\n\n/workdir/repositories_runs:\nbiopython#####biopython.json\nnoflo#####noflo.json\n\n/workdir/src:\ngha_resource_study.egg-info\noptimization\nruns_analysis\nruns_collector\nruns_collector.egg-info\n\n/workdir/src/gha_resource_study.egg-info:\nPKG-INFO\nSOURCES.txt\ndependency_links.txt\nnot-zip-safe\nrequires.txt\ntop_level.txt\n\n/workdir/src/optimization:\n__init__.py\n__pycache__\ngithub_optimization.py\noptimization_heuristics.py\n\n/workdir/src/optimization/__pycache__:\n__init__.cpython-38.pyc\ngithub_optimization.cpython-38.pyc\noptimization_heuristics.cpython-38.pyc\n\n/workdir/src/runs_analysis:\n__pycache__\nname_based_analysis.py\nresource_usage.py\n\n/workdir/src/runs_analysis/__pycache__:\nname_based_analysis.cpython-310.pyc\nname_based_analysis.cpython-38.pyc\nresource_usage.cpython-310.pyc\nresource_usage.cpython-38.pyc\n\n/workdir/src/runs_collector:\n__init__.py\n__pycache__\n</output>",
+      "exec_time": 0.17726421356201172
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Read the artifact\u2019s internal README in `/workdir` to find specific instructions for reproducing the paper\u2019s tables, including any mention of Table 3 or termination status analysis.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"head -n 120 /workdir/README.md\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.1230123043060303,
+        "response": {
+          "id": "chatcmpl-D0XCHyaHM72yPtVcyUcLvXsjBSFjy",
+          "created": 1769019981,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Read the artifact\u2019s internal README in `/workdir` to find specific instructions for reproducing the paper\u2019s tables, including any mention of Table 3 or termination status analysis.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"head -n 120 /workdir/README.md\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 134,
+            "prompt_tokens": 8089,
+            "total_tokens": 8223,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 41,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 7552
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n# Resource Usage and Optimization Opportunities in Workflows of GitHub Actions\n\n\n\n[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8344575.svg)](https://doi.org/10.5281/zenodo.8344575) [<img src=\"https://img.shields.io/badge/dockerhub-GH_workflows_study-blue.svg?logo=Docker\">](https://hub.docker.com/r/islemdockerdev/github-workflow-resource-study)\n\nThis artifact submission includes the code and data utilized in our empirical study described in the [ICSE'24 paper \"Resource Usage and Optimization Opportunities in Workflows of GitHub Actions\"](https://software-lab.org/publications/icse2024_workflows.pdf). The study produces two primary outputs:\n\n1. **Dataset:** We collected a dataset comprising 1.3 million runs with 3.7 million jobs.\n\n2. **Analysis Code and Results:** The code and results of our analysis conducted on the collected dataset.\n\nBoth components can be accessed and explored using the instructions provided below.\n\n## Badges to claim\nTo acknowledge our artifact, we seek to claim two badges:\n1. **Available badge**\n2. **Reusable badge**\n\n## Requirements\nThe following sections outline the requirements for importing, installing, and using our artifact.\n### User Requirements\n1. **Familiarity with Python Virtual Environment**: Ability to create a Python virtual environment and install our tool within it. Step-by-step instructions are provided in this README file, but prior knowledge of this task is advantageous.\n\n2. **Working with Jupyter Notebooks**: Capability to install and launch JupyterLab notebooks. Detailed instructions will be provided.\n\n3. **Working with VScode**: Capability to install and launch VScode. Detailed instructions will be provided.\n\n### Hardware Requirements\n1. **Disk Space**: A minimum of 8GB disk space is required for our collected data, external data files, and our portable Python environment.\n\t\n2. **RAM free space**: Some data preprocessing requires substantial RAM space. In our experiments, usage can extend up to 9GB of RAM for a single analysis notebook (on top of the overhead of other software such as VScode, Docker or JupyerLab when needed).\n\n3. **CPU cores**: None of our scripts use multiprocessing. However, for reference, we conducted our experiments on a machine with 48 CPU cores. The time taken by our machine is specified within each code notebook.\n\n### Software Requirements\n1. **Operating System and Docker**: Our scripts are designed to run on a Linux machine (Ubuntu 20.04). For optimal compatibility, it is recommended to rerun them on an Ubuntu machine with a version close to 20.04. We also recommend the usage of Docker v20.x or higher.\n\n2. **Python Version**: The implementation and used packages are compatible with Python 3.8 (recommended) and above.\n\n3. **Jupyter-Lab or VScode**: Since we use notebooks to present our analysis, you will need a notebook runner. It is preferable to have JupyterLab or VSCode installed for running notebooks.\n\n4. **GitHub Username and Token**: To execute the collection process using the GitHub API, you need to add at least one token to the file tokens.txt (see data collection part below).\n\n## How to setup the artifact?\nYou can setup the artifact following one of the three options below:\n\n### Option 1: Docker image from DockerHub:\nThe perhaps most straightforward way to utilize our artifact is by pulling our Docker image from DockerHub. Follow these steps:\n1. Execute the following commands in your terminal to retrieve and start our docker image\n    ```bash\n    # Pull image\n    docker pull islemdockerdev/github-workflow-resource-study:v1.0\n    # Run the image inside a container\n    docker run -itd --name github-study islemdockerdev/github-workflow-resource-study:v1.0\n    # Start the container\n    docker start -i github-study\n    ```\n\n2. After starting the container, open VSCode and navigate to the containers icon on the left panel (Ensure that you have the Remote Explorer extension installed on your VScode).\n\n3. Under the Dev Containers tab, locate the name of the container you just started (e.g., github-study).\n\n4. Finally, attach the container **github-study** to a new window by clicking the '+' sign located on the right of the container's name. Navigate to **workdir** folder in vscode window (all the files of the artifact are located there).\n\n**Tutorial reference:** For detailed steps on how to attach a docker container in VScode, please refer to this short video tutorial (1min 38 sec): https://www.youtube.com/watch?v=8gUtN5j4QnY&t\n\n### Option 2: Get our Zenodo image\n1. Download our shared Zip from: https://doi.org/10.5281/zenodo.8344575\n\n2. After unzipping the file, load our Docker image using the command:\n    ```bash\n    # load the container\n    docker image load -i ./github_study_container.tar\n    # run and attach (careful with the name)\n    docker run -it islemdockerdev/github-workflow-resource-study:v1.0 \n    ```\n3. Attach the docker container to a vscode window as demonstrated in here: https://www.youtube.com/watch?v=8gUtN5j4QnY&t\n4. Navigate to the folder **workdir** in vscode window (all the files of the artifact are located there).\n\n### Option 3: Manually prepare the environement\n\nIf you prefer a manual setup, follow these steps. \n\n1. Ensure you have Python 3.8 or higher installed. In your terminal, in the same folder as this README file, execute the following commands:\n\n```bash\n# create a python environement, preferably use Python 3.8 or higher\npython3.8 -m venv .venv\n# activate the environement\nsource .venv/bin/activate\n# install requirements\npip install -r requirements.txt\n# install the current folder as a Python package\npip install .\n# create necessary folders\nmkdir tables\nmkdir repositories_runs\n# install jupyterlab\npip install jupyterlab\n# launch jupyterlab\njupyter-lab\n```\n\n2. Following that, download our dataset release from: https://github.com/sola-st/github-workflow-resource-optimization/releases/tag/v1.0.0\n3. Unzip the dataset in the same folder as this README file.\n\n## Running the Artifact\n\n### Data Collection\nIn this part, we present the necessary resources and instructions to replicate our data collection process (or collect more data).\n\n#### Collection resources\n* [repositories.csv](./repositories.csv): This is the list of popular repositories ([reference to this work](https://decan.lexpage.net/files/ICSME-2022.pdf)) from which we randomly sampled 600 repositories to use them in our study.\n\n* [repositories-2021-03-08.zip](./repositories-2021-03-08.csv): The list containing unpopular repositories ([reference to this work](https://arxiv.org/abs/2103.04682)) from which we randomly sampled 74K candidates to collect workflows data. We ended up with 352 repositories having such data.\n\n* [Collection notebook](./collect.ipynb): This is the code (in notebook format) used to collect our data using the two repositories lists as input.\n\n\n</output>",
+      "exec_time": 0.19111061096191406
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Search within the in-container README for any reference to \u201cTable 3\u201d or specific instructions for reproducing it, which will guide which scripts or notebooks to run.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"grep -in 'Table 3' /workdir/README.md || sed -n '200,320p' /workdir/README.md\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.9833011627197266,
+        "response": {
+          "id": "chatcmpl-D0XCKygqCZrqWpN6TpJbBl5jJYckm",
+          "created": 1769019984,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Search within the in-container README for any reference to \u201cTable 3\u201d or specific instructions for reproducing it, which will guide which scripts or notebooks to run.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"grep -in 'Table 3' /workdir/README.md || sed -n '200,320p' /workdir/README.md\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 190,
+            "prompt_tokens": 9782,
+            "total_tokens": 9972,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 80,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 8064
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n</output>",
+      "exec_time": 0.19102120399475098
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Continue scanning the in-container README further down to find any section describing how to reproduce the paper\u2019s tables (including termination status / Table 3), using `sed` with a constrained range to avoid excessive output.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"sed -n '320,520p' /workdir/README.md\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 6.854676246643066,
+        "response": {
+          "id": "chatcmpl-D0XCP5S5dfz5jKsf01mpbwVUtRmAf",
+          "created": 1769019989,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Continue scanning the in-container README further down to find any section describing how to reproduce the paper\u2019s tables (including termination status / Table 3), using `sed` with a constrained range to avoid excessive output.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"sed -n '320,520p' /workdir/README.md\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 213,
+            "prompt_tokens": 9908,
+            "total_tokens": 10121,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 109,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 9728
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n</output>",
+      "exec_time": 0.1529994010925293
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Inspect the precomputed results in `/workdir/tables` to find files corresponding to the paper\u2019s tables (especially Table 3), which we can then either reuse directly or replicate via associated scripts.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"ls -R /workdir/tables && head -n 40 /workdir/tables/README.md 2>/dev/null || ls /workdir/tables\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.470974445343018,
+        "response": {
+          "id": "chatcmpl-D0XCWGbXCtouekrJ43OT4buwSi4nQ",
+          "created": 1769019996,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Inspect the precomputed results in `/workdir/tables` to find files corresponding to the paper\u2019s tables (especially Table 3), which we can then either reuse directly or replicate via associated scripts.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"ls -R /workdir/tables && head -n 40 /workdir/tables/README.md 2>/dev/null || ls /workdir/tables\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 208,
+            "prompt_tokens": 10028,
+            "total_tokens": 10236,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 87,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 9856
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n/workdir/tables:\nnoflo#####noflo\n\n/workdir/tables/noflo#####noflo:\nnoflo#####noflo_actors_table.json\nnoflo#####noflo_commits_table.json\nnoflo#####noflo_data_tables.json\nnoflo#####noflo_jobs_table.json\nnoflo#####noflo_pull_requests_table.json\nnoflo#####noflo_repositories_table.json\nnoflo#####noflo_runs_table.json\nnoflo#####noflo_steps_table.json\nnoflo#####noflo\n</output>",
+      "exec_time": 0.25730252265930176
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Locate the exact analysis code/notebook that generates the termination-status results (Table 3) by searching within the container\u2019s `/workdir` for mentions of \u201cTable 3\u201d or \u201ctermination status\u201d.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"grep -Rin 'Table 3\\\\|termination status' /workdir 2>/dev/null | head -n 40\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.904316663742065,
+        "response": {
+          "id": "chatcmpl-D0XCb0as3mciHzlFGhA4oJC5qUwBf",
+          "created": 1769020001,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Locate the exact analysis code/notebook that generates the termination-status results (Table 3) by searching within the container\u2019s `/workdir` for mentions of \u201cTable 3\u201d or \u201ctermination status\u201d.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"grep -Rin 'Table 3\\\\|termination status' /workdir 2>/dev/null | head -n 40\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 296,
+            "prompt_tokens": 10270,
+            "total_tokens": 10566,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 181,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 7296
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n/workdir/paper_analysis_RQ1.ipynb:475:    \"## Termination status (Table 3 in PDF)\"\n/workdir/.venv2/lib/python3.8/site-packages/statsmodels/sandbox/infotheo.py:439:    print(\"Table 3.1\")\n/workdir/.venv2/lib/python3.8/site-packages/statsmodels/sandbox/infotheo.py:469:    # from Golan (2008) table 3.3\n/workdir/.venv2/lib/python3.8/site-packages/statsmodels/sandbox/infotheo.py:471:    # table 3.4\n/workdir/.venv2/lib/python3.8/site-packages/statsmodels/sandbox/infotheo.py:483:    print(\"Table 3.3\")\n/workdir/.venv2/lib/python3.8/site-packages/statsmodels/sandbox/infotheo.py:495:    print(\"Example in section 3.6 of Golan, using table 3.3\")\n/workdir/.venv2/lib/python3.8/site-packages/statsmodels/sandbox/infotheo.py:510:    print(\"Consider now, table 3.5, where there is additional information\")\n/workdir/.venv2/lib/python3.8/site-packages/statsmodels/sandbox/distributions/extras.py:977:*     INFORM INTEGER, termination status parameter:\n/workdir/.venv2/lib/python3.8/site-packages/scipy/stats/tests/test_distributions.py:5800:    # Q values are taken from table 3:\n/workdir/.venv2/lib/python3.8/site-packages/scipy/sparse/linalg/_expm_multiply.py:340:        # The rest are from table 3.1 of\n/workdir/.venv2/lib/python3.8/site-packages/scipy/optimize/_trustregion_constr/minimize_trustregion_constr.py:294:        Termination status:\n/workdir/.venv2/lib/python3.8/site-packages/scipy/optimize/_optimize.py:144:        Termination status of the optimizer. Its value depends on the\n/workdir/.venv2/lib/python3.8/site-packages/pandas/tests/io/pytables/test_keys.py:43:        h5file.create_table(group, \"table3\", Table3, \"Table 3\")\n/workdir/.venv2/lib64/python3.8/site-packages/statsmodels/sandbox/infotheo.py:439:    print(\"Table 3.1\")\n/workdir/.venv2/lib64/python3.8/site-packages/statsmodels/sandbox/infotheo.py:469:    # from Golan (2008) table 3.3\n/workdir/.venv2/lib64/python3.8/site-packages/statsmodels/sandbox/infotheo.py:471:    # table 3.4\n/workdir/.venv2/lib64/python3.8/site-packages/statsmodels/sandbox/infotheo.py:483:    print(\"Table 3.3\")\n/workdir/.venv2/lib64/python3.8/site-packages/statsmodels/sandbox/infotheo.py:495:    print(\"Example in section 3.6 of Golan, using table 3.3\")\n/workdir/.venv2/lib64/python3.8/site-packages/statsmodels/sandbox/infotheo.py:510:    print(\"Consider now, table 3.5, where there is additional information\")\n/workdir/.venv2/lib64/python3.8/site-packages/statsmodels/sandbox/distributions/extras.py:977:*     INFORM INTEGER, termination status parameter:\n/workdir/.venv2/lib64/python3.8/site-packages/scipy/stats/tests/test_distributions.py:5800:    # Q values are taken from table 3:\n/workdir/.venv2/lib64/python3.8/site-packages/scipy/sparse/linalg/_expm_multiply.py:340:        # The rest are from table 3.1 of\n/workdir/.venv2/lib64/python3.8/site-packages/scipy/optimize/_trustregion_constr/minimize_trustregion_constr.py:294:        Termination status:\n/workdir/.venv2/lib64/python3.8/site-packages/scipy/optimize/_optimize.py:144:        Termination status of the optimizer. Its value depends on the\n/workdir/.venv2/lib64/python3.8/site-packages/pandas/tests/io/pytables/test_keys.py:43:        h5file.create_table(group, \"table3\", Table3, \"Table 3\")\n</output>",
+      "exec_time": 67.95439076423645
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Inspect the specific cells around the \u201cTermination status (Table 3 in PDF)\u201d section in `paper_analysis_RQ1.ipynb` by parsing the notebook with Python inside the container. This will reveal the exact code used to compute Table 3 so we can later script it in the reproduction.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"python - << 'PY'\nimport nbformat\nfrom pathlib import Path\n\nnb_path = Path('/workdir/paper_analysis_RQ1.ipynb')\nnb = nbformat.read(nb_path, as_version=4)\n\ntarget = 'Termination status (Table 3 in PDF)'\nfor i, cell in enumerate(nb.cells):\n    src = ''.join(cell.get('source', ''))\n    if target in src:\n        start = max(0, i-2)\n        end = min(len(nb.cells), i+10)\n        for j in range(start, end):\n            c = nb.cells[j]\n            print('CELL', j, 'TYPE:', c['cell_type'])\n            print('-----')\n            print(''.join(c.get('source', '')))\n            print('\\\\n====\\\\n')\n        break\nPY\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 14.146693229675293,
+        "response": {
+          "id": "chatcmpl-D0XDnbQpJ9tVwY2ZFuxuYuA6YB0eR",
+          "created": 1769020075,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Inspect the specific cells around the \u201cTermination status (Table 3 in PDF)\u201d section in `paper_analysis_RQ1.ipynb` by parsing the notebook with Python inside the container. This will reveal the exact code used to compute Table 3 so we can later script it in the reproduction.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"python - << 'PY'\nimport nbformat\nfrom pathlib import Path\n\nnb_path = Path('/workdir/paper_analysis_RQ1.ipynb')\nnb = nbformat.read(nb_path, as_version=4)\n\ntarget = 'Termination status (Table 3 in PDF)'\nfor i, cell in enumerate(nb.cells):\n    src = ''.join(cell.get('source', ''))\n    if target in src:\n        start = max(0, i-2)\n        end = min(len(nb.cells), i+10)\n        for j in range(start, end):\n            c = nb.cells[j]\n            print('CELL', j, 'TYPE:', c['cell_type'])\n            print('-----')\n            print(''.join(c.get('source', '')))\n            print('\\\\n====\\\\n')\n        break\nPY\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 781,
+            "prompt_tokens": 11419,
+            "total_tokens": 12200,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 507,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 10240
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>1</returncode>\n<output>\nTraceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\nModuleNotFoundError: No module named 'nbformat'\n</output>",
+      "exec_time": 1.4830172061920166
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Use the artifact\u2019s bundled virtual environment (`.venv2`) to load and inspect `paper_analysis_RQ1.ipynb`, extracting the cells around the \u201cTermination status (Table 3 in PDF)\u201d section so we can see the exact code that generates Table 3.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"/workdir/.venv2/bin/python - << 'PY'\nimport nbformat\nfrom pathlib import Path\n\nnb_path = Path('/workdir/paper_analysis_RQ1.ipynb')\nnb = nbformat.read(nb_path, as_version=4)\n\ntarget = 'Termination status (Table 3 in PDF)'\nfor i, cell in enumerate(nb.cells):\n    src = ''.join(cell.get('source', ''))\n    if target in src:\n        start = max(0, i-2)\n        end = min(len(nb.cells), i+10)\n        for j in range(start, end):\n            c = nb.cells[j]\n            print('CELL', j, 'TYPE:', c['cell_type'])\n            print('-----')\n            print(''.join(c.get('source', '')))\n            print('\\\\n====\\\\n')\n        break\nPY\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 7.781440019607544,
+        "response": {
+          "id": "chatcmpl-D0XE3b8YqA8cAEdT4wc9ThDdtIhcG",
+          "created": 1769020091,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Use the artifact\u2019s bundled virtual environment (`.venv2`) to load and inspect `paper_analysis_RQ1.ipynb`, extracting the cells around the \u201cTermination status (Table 3 in PDF)\u201d section so we can see the exact code that generates Table 3.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"/workdir/.venv2/bin/python - << 'PY'\nimport nbformat\nfrom pathlib import Path\n\nnb_path = Path('/workdir/paper_analysis_RQ1.ipynb')\nnb = nbformat.read(nb_path, as_version=4)\n\ntarget = 'Termination status (Table 3 in PDF)'\nfor i, cell in enumerate(nb.cells):\n    src = ''.join(cell.get('source', ''))\n    if target in src:\n        start = max(0, i-2)\n        end = min(len(nb.cells), i+10)\n        for j in range(start, end):\n            c = nb.cells[j]\n            print('CELL', j, 'TYPE:', c['cell_type'])\n            print('-----')\n            print(''.join(c.get('source', '')))\n            print('\\\\n====\\\\n')\n        break\nPY\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 463,
+            "prompt_tokens": 11742,
+            "total_tokens": 12205,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 186,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 9984
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nCELL 23 TYPE: code\n-----\ntotal_runs_1 = all_jobs_1[all_jobs_1.sub_names.isin(tasks)].shape[0]\ntotal_runs_2 = all_jobs_2[all_jobs_2.sub_names.isin(tasks)].shape[0]\n\n====\n\nCELL 24 TYPE: code\n-----\nprint(\"{:<30} {:<48} {:<48}\".format(\n        \"\",\n        \"       Overall(%)\",\n        \"Avg. per run\",\n         ))\nprint(\" \"*30 + \"-\"*80)\nprint(\"{:<30} {:<15} {:<12} {:<36} {:<12}\".format(\n        \"\",\n        \"  VM time\",\n        \" Runs\",\n        \"  VM time (min)\",\n        \"VM cost ($)\",\n         ))\nprint(\" \"*30 + \"-\"*80)\nprint(\"{:<30} {:<6} {:<6} {:<6} {:<6} {:<18} {:<18} {:<6} {:<6}\".format(\n        \"Task\",\n        \"Paid\",\n        \"Free\",\n        \"Paid\",\n        \"Free\",\n        \"Paid\",\n        \"Free\",\n        \"Paid\",\n        \"Free\"\n         ))\nprint(\"-\"*110)\nfor t in tasks:\n        print(\"{:<30} {:<6} {:<6} {:<6} {:<6} {:<6} (iqr={:<6}) {:<6} (iqr={:<6}) {:<6} {:<6}\".format(\n                t,\n                round(all_jobs_1[all_jobs_1.sub_names==t].up_time.sum()/sum_t1*100, 1),\n                round(all_jobs_2[all_jobs_2.sub_names==t].up_time.sum()/sum_t2*100, 1),\n                round(all_jobs_1[all_jobs_1.sub_names==t].shape[0]/total_runs_1*100, 1),\n                round(all_jobs_2[all_jobs_2.sub_names==t].shape[0]/total_runs_2*100, 1),\n                round(all_jobs_1[all_jobs_1.sub_names==t].up_time_min.sum()/all_jobs_1[all_jobs_1.sub_names==t].shape[0], 1),\n                round(all_jobs_1[all_jobs_1.sub_names==t].up_time_min.quantile(0.75) - all_jobs_1[all_jobs_1.sub_names==t].up_time_min.quantile(0.25), 1),\n                round(all_jobs_2[all_jobs_2.sub_names==t].up_time_min.sum()/all_jobs_2[all_jobs_2.sub_names==t].shape[0], 1),\n                round(all_jobs_2[all_jobs_2.sub_names==t].up_time_min.quantile(0.75) - all_jobs_2[all_jobs_2.sub_names==t].up_time_min.quantile(0.25), 1),\n                round(calc_costs_by_task(round(all_jobs_1[all_jobs_1.sub_names==t].up_time_min.sum()/all_jobs_1[all_jobs_1.sub_names==t].shape[0], 1), t), 2),\n                round(calc_costs_by_task(round(all_jobs_2[all_jobs_2.sub_names==t].up_time_min.sum()/all_jobs_2[all_jobs_2.sub_names==t].shape[0], 1), t), 2)\n        ))\n\n====\n\nCELL 25 TYPE: markdown\n-----\n## Termination status (Table 3 in PDF)\n\n====\n\nCELL 26 TYPE: code\n-----\nall_runs = data_set.get_all_runs()\nall_jobs = data_set.get_all_jobs()\n\nall_runs_1 = all_runs[all_runs.repo_id.isin(repos_list_1)]\nall_jobs_1 = all_jobs[(all_jobs.run_id.isin(all_runs_1.id)) & (all_jobs.id!=3253494537)]\n\n\nall_runs_2 = all_runs[all_runs.repo_id.isin(repos_list_2)]\nall_jobs_2 = all_jobs[(all_jobs.run_id.isin(all_runs_2.id)) & (all_jobs.id!=3253494537)]\n\nconclusion_1 = all_runs_1.groupby(\"conclusion\").agg({\"id\": \"count\"}).reset_index()\nconclusion_2 = all_runs_2.groupby(\"conclusion\").agg({\"id\": \"count\"}).reset_index()\nconclusion_1[\"prop\"] = conclusion_1[\"id\"] * 100/conclusion_1[\"id\"].sum()\nconclusion_2[\"prop\"] = conclusion_2[\"id\"] * 100/conclusion_2[\"id\"].sum()\n\n====\n\nCELL 27 TYPE: code\n-----\nruns_with_time_1 = all_runs_1.merge(all_jobs_1[[\"run_id\", \"up_time\"]], left_on=\"id\", right_on=\"run_id\")\nruns_with_time_2 = all_runs_2.merge(all_jobs_2[[\"run_id\", \"up_time\"]], left_on=\"id\", right_on=\"run_id\")\n\ntime_per_conclusion_1 = runs_with_time_1.groupby(\"conclusion\").agg({\"up_time\": \"sum\"}).reset_index()\ntime_per_conclusion_1[\"prop\"] = time_per_conclusion_1[\"up_time\"]*100/time_per_conclusion_1.up_time.sum()\n\ntime_per_conclusion_2 = runs_with_time_2.groupby(\"conclusion\").agg({\"up_time\": \"sum\"}).reset_index()\ntime_per_conclusion_2[\"prop\"] = time_per_conclusion_2[\"up_time\"]*100/time_per_conclusion_2.up_time.sum()\n\n====\n\nCELL 28 TYPE: code\n-----\nprint(\"{:<30} {:<24} {:<20}\".format(\n        \"\",\n        \"Runs proportion %\",\n        \"VM time proportion %\",\n         ))\nprint(\" \"*30 + \"-\"*50)\nprint(\"{:<30} {:<12} {:<12} {:<12} {:<12}\".format(\n        \"Conclusion\",\n        \"Paid\",\n        \"Free\",\n        \"Paid\",\n        \"Free\"\n         ))\nprint(\"-\"*80)\nfor c in [\"success\", \"failure\", \"skipped\", \"cancelled\", \"startup_failure\", \"action_required\", \"stale\"]:\n    print(\"{:<30} {:<12} {:<12} {:<12} {:<12}\".format(\n        c,\n        round(conclusion_1[conclusion_1.conclusion==c].prop.to_list()[0], 1),\n        round(conclusion_2[conclusion_2.conclusion==c].prop.to_list()[0], 1),\n        round(time_per_conclusion_1[time_per_conclusion_1.conclusion==c].prop.to_list()[0], 1),\n        round(time_per_conclusion_2[time_per_conclusion_2.conclusion==c].prop.to_list()[0], 1)\n         ))\n\n====\n\n</output>",
+      "exec_time": 0.7890360355377197
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Identify how `data_set`, `repos_list_1`, and `repos_list_2` are initialized in `paper_analysis_RQ1.ipynb` so we can replicate that logic in a standalone script that computes the Table 3 values and writes them to `/workspace/repro.txt`.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"/workdir/.venv2/bin/python - << 'PY'\nimport nbformat\nfrom pathlib import Path\n\nnb_path = Path('/workdir/paper_analysis_RQ1.ipynb')\nnb = nbformat.read(nb_path, as_version=4)\n\nfor i, cell in enumerate(nb.cells):\n    src = ''.join(cell.get('source', ''))\n    if 'data_set =' in src or 'repos_list_1' in src or 'repos_list_2' in src:\n        print('CELL', i, 'TYPE:', cell['cell_type'])\n        print('-----')\n        print(src)\n        print('\\\\n====\\\\n')\nPY\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 14.798672914505005,
+        "response": {
+          "id": "chatcmpl-D0XEB7eIZwyOkBGtb01yvMBdcT1NJ",
+          "created": 1769020099,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Identify how `data_set`, `repos_list_1`, and `repos_list_2` are initialized in `paper_analysis_RQ1.ipynb` so we can replicate that logic in a standalone script that computes the Table 3 values and writes them to `/workspace/repro.txt`.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"/workdir/.venv2/bin/python - << 'PY'\nimport nbformat\nfrom pathlib import Path\n\nnb_path = Path('/workdir/paper_analysis_RQ1.ipynb')\nnb = nbformat.read(nb_path, as_version=4)\n\nfor i, cell in enumerate(nb.cells):\n    src = ''.join(cell.get('source', ''))\n    if 'data_set =' in src or 'repos_list_1' in src or 'repos_list_2' in src:\n        print('CELL', i, 'TYPE:', cell['cell_type'])\n        print('-----')\n        print(src)\n        print('\\\\n====\\\\n')\nPY\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 742,
+            "prompt_tokens": 13490,
+            "total_tokens": 14232,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 503,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 11648
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nCELL 4 TYPE: code\n-----\nstart = time.time()\n\n## OUTSIDE OF DOCKER, SET THE WORKDIR TO \"./\"\nworkdir = \"/workdir/\"\ndata_set = RunsDataSet(None, None, from_checkpoint=True, checkpoint_dir=workdir)\n\nend = time.time()\n\nprint(\"Time taken to load the dataset:\", round(end - start, 0), \"seconds\")\n\n====\n\nCELL 7 TYPE: code\n-----\nrepos_list_1, repos_list_2 = get_tiers(data_set)\nruns_prop_1 = triggering_events_proportion(data_set, repos_list_1)\nruns_prop_2 = triggering_events_proportion(data_set, repos_list_2)\ntime_prop_1 = triggering_events_time_proportion(data_set, repos_list_1)\ntime_prop_2 = triggering_events_time_proportion(data_set, repos_list_2)\navg_time_1 = get_avg_runtime_by_event(data_set, repos_list_1)\navg_time_2 = get_avg_runtime_by_event(data_set, repos_list_2)\n\n====\n\nCELL 9 TYPE: code\n-----\ndef calc_others():\n    c1 = 0\n    c2 = 0\n    c3 = 0\n    c4 = 0\n    c5 = 0\n    c6 = 0\n    c7 = 0\n    c8 = 0\n    for event in [\"pull_request\", \"push\", \"schedule\", \"pull_request_target\", \"workflow_dispatch\", \"workflow_run\", \"release\"]:\n        c1 += round(time_prop_1[event], 1)\n        c2 += round(time_prop_2[event], 1)\n        c3 += round(runs_prop_1[event], 1)\n        c4 += round(runs_prop_2[event], 1)\n        \n    rest_2 = get_avg_runtime_rest(data_set, repos_list_2, \n                              [\"push\", \"pull_request\", \"target_pull_request\", \"schedule\", \"workflow_dispatch\", \"release\", \"workflow_run\"])\n    rest_1 = get_avg_runtime_rest(data_set, repos_list_1, \n                              [\"push\", \"pull_request\", \"target_pull_request\", \"schedule\", \"workflow_dispatch\", \"release\", \"workflow_run\"])\n    c5 = rest_1[0]\n    c6 = rest_1[-1]\n    c7 = rest_2[0]\n    c8 = rest_2[-1]\n    return 100- c1, 100 -c2, 100 - c3, 100 - c4, c5, c6, c7, c8   \n\n====\n\nCELL 12 TYPE: code\n-----\ntop_k_jobs_1 = get_topk_jobs_names(data_set, repos_list_1, k=10).reset_index()\ntop_k_jobs_2 = get_topk_jobs_names(data_set, repos_list_2, k=100).reset_index()\n\n====\n\nCELL 13 TYPE: code\n-----\nall_runs = data_set.get_all_runs()\nall_runs_1 = all_runs[all_runs.repo_id.isin(repos_list_1)]\nall_runs_2 = all_runs[all_runs.repo_id.isin(repos_list_2)]\nall_jobs = data_set.get_all_jobs()\n\nall_jobs_1 = all_jobs[all_jobs.run_id.isin(all_runs_1.id)]\nall_jobs_2 = all_jobs[all_jobs.run_id.isin(all_runs_2.id)]\n\ntop_k_jobs_1[\"prop\"] = top_k_jobs_1[\"count\"]/top_k_jobs_1[\"count\"].sum()\ntop_k_jobs_2[\"prop\"] = top_k_jobs_2[\"count\"]/top_k_jobs_2[\"count\"].sum()\n\ntop_k_jobs_names = top_k_jobs_1.job_name\nassert set(top_k_jobs_names) & set(top_k_jobs_2.job_name) == set(top_k_jobs_names)\n\n====\n\nCELL 18 TYPE: code\n-----\ntopk_jobs_time = get_topk_jobs_time(data_set, repos_list_1)\n\n====\n\nCELL 20 TYPE: code\n-----\ntasks = [\"test\", \"build\", \"release\", \"analyze\", \"lint\", \"linux\", \"update\", \"integration\", \"deploy\", \"sync\"]\nall_jobs_1 = simplify_and_map(data_set, repos_list_1)\nall_jobs_2 = simplify_and_map(data_set, repos_list_2)\n\nall_jobs_1[\"up_time_min\"] = all_jobs_1.up_time / 60\nall_jobs_2[\"up_time_min\"] = all_jobs_2.up_time / 60\n\n====\n\nCELL 26 TYPE: code\n-----\nall_runs = data_set.get_all_runs()\nall_jobs = data_set.get_all_jobs()\n\nall_runs_1 = all_runs[all_runs.repo_id.isin(repos_list_1)]\nall_jobs_1 = all_jobs[(all_jobs.run_id.isin(all_runs_1.id)) & (all_jobs.id!=3253494537)]\n\n\nall_runs_2 = all_runs[all_runs.repo_id.isin(repos_list_2)]\nall_jobs_2 = all_jobs[(all_jobs.run_id.isin(all_runs_2.id)) & (all_jobs.id!=3253494537)]\n\nconclusion_1 = all_runs_1.groupby(\"conclusion\").agg({\"id\": \"count\"}).reset_index()\nconclusion_2 = all_runs_2.groupby(\"conclusion\").agg({\"id\": \"count\"}).reset_index()\nconclusion_1[\"prop\"] = conclusion_1[\"id\"] * 100/conclusion_1[\"id\"].sum()\nconclusion_2[\"prop\"] = conclusion_2[\"id\"] * 100/conclusion_2[\"id\"].sum()\n\n====\n\n</output>",
+      "exec_time": 0.5176920890808105
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Inspect the first several cells of `paper_analysis_RQ1.ipynb` to discover the necessary imports (e.g., where `RunsDataSet`, `get_tiers` come from), which we\u2019ll later reuse in a standalone Python snippet within the reproduction script.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"/workdir/.venv2/bin/python - << 'PY'\nimport nbformat\nfrom pathlib import Path\n\nnb_path = Path('/workdir/paper_analysis_RQ1.ipynb')\nnb = nbformat.read(nb_path, as_version=4)\n\nfor i, cell in enumerate(nb.cells[:10]):\n    print('CELL', i, 'TYPE:', cell['cell_type'])\n    print('-----')\n    print(''.join(cell.get('source', '')))\n    print('\\\\n====\\\\n')\nPY\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 40.11005473136902,
+        "response": {
+          "id": "chatcmpl-D0XERvHGvsCIB4caMnVhCjDXHdjes",
+          "created": 1769020115,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Inspect the first several cells of `paper_analysis_RQ1.ipynb` to discover the necessary imports (e.g., where `RunsDataSet`, `get_tiers` come from), which we\u2019ll later reuse in a standalone Python snippet within the reproduction script.\n\n<mini_swe_agent_bash>\ndocker exec github-study /bin/bash --noprofile --norc -c \"/workdir/.venv2/bin/python - << 'PY'\nimport nbformat\nfrom pathlib import Path\n\nnb_path = Path('/workdir/paper_analysis_RQ1.ipynb')\nnb = nbformat.read(nb_path, as_version=4)\n\nfor i, cell in enumerate(nb.cells[:10]):\n    print('CELL', i, 'TYPE:', cell['cell_type'])\n    print('-----')\n    print(''.join(cell.get('source', '')))\n    print('\\\\n====\\\\n')\nPY\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 1778,
+            "prompt_tokens": 14923,
+            "total_tokens": 16701,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 1573,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 13440
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nCELL 0 TYPE: code\n-----\nimport time\nimport os\n\nfrom runs_collector.dataset import RunsDataSet\nfrom runs_analysis.resource_usage import (get_resource_usage_summary, \n                                          triggering_events_proportion, \n                                          triggering_events_time_proportion, \n                                          get_avg_runtime_by_event,\n                                          get_tiers,\n                                          calc_costs_by_event as calc_costs,\n                                          get_avg_runtime_rest)\nfrom runs_analysis.name_based_analysis import get_topk_jobs_names,  get_topk_jobs_time, simplify_and_map\n\n====\n\nCELL 1 TYPE: code\n-----\nimport warnings\nwarnings.filterwarnings('ignore')\n\n====\n\nCELL 2 TYPE: markdown\n-----\n## Loading the data\n\n====\n\nCELL 3 TYPE: markdown\n-----\n* Loading the dataset takes around 1 minutes\n* The data size in RAM is around 9GB\n\n====\n\nCELL 4 TYPE: code\n-----\nstart = time.time()\n\n## OUTSIDE OF DOCKER, SET THE WORKDIR TO \"./\"\nworkdir = \"/workdir/\"\ndata_set = RunsDataSet(None, None, from_checkpoint=True, checkpoint_dir=workdir)\n\nend = time.time()\n\nprint(\"Time taken to load the dataset:\", round(end - start, 0), \"seconds\")\n\n====\n\nCELL 5 TYPE: markdown\n-----\n## Important Note:\n**Due to floats rounding inconsistencies in the previous version of our code, some of the below numbers are slightly different from the ones presented in the paper.**\n**However, the difference is less than 0.03 in absolute values and less than 0.5% in percentages.**\n**This does not change the conclusions and results of our study (the rounding fractions are insignificant).**\n\n====\n\nCELL 6 TYPE: markdown\n-----\n## Resource usage by event name (Table 1 in PDF)\n\n====\n\nCELL 7 TYPE: code\n-----\nrepos_list_1, repos_list_2 = get_tiers(data_set)\nruns_prop_1 = triggering_events_proportion(data_set, repos_list_1)\nruns_prop_2 = triggering_events_proportion(data_set, repos_list_2)\ntime_prop_1 = triggering_events_time_proportion(data_set, repos_list_1)\ntime_prop_2 = triggering_events_time_proportion(data_set, repos_list_2)\navg_time_1 = get_avg_runtime_by_event(data_set, repos_list_1)\navg_time_2 = get_avg_runtime_by_event(data_set, repos_list_2)\n\n====\n\nCELL 8 TYPE: code\n-----\ndef show_event_summary(event):\n    print(\"{:<30} {:<6} {:<6} {:<6} {:<6} {:<6} (iqr={:<6}) {:<6} (iqr={:<6}) {:<6} {:<6}\".format(\n        event,\n        round(time_prop_1[event], 1),\n        round(time_prop_2[event], 1),\n        round(runs_prop_1[event], 1),\n        round(runs_prop_2[event], 1),\n        round(avg_time_1[event][0], 1),\n        round(avg_time_1[event][-1], 1),\n        round(avg_time_2[event][0], 1),\n        round(avg_time_2[event][-1], 1),\n        round(calc_costs(avg_time_1[event][0], event), 2),\n        round(calc_costs(avg_time_2[event][0], event), 2)\n         ))\n\n====\n\nCELL 9 TYPE: code\n-----\ndef calc_others():\n    c1 = 0\n    c2 = 0\n    c3 = 0\n    c4 = 0\n    c5 = 0\n    c6 = 0\n    c7 = 0\n    c8 = 0\n    for event in [\"pull_request\", \"push\", \"schedule\", \"pull_request_target\", \"workflow_dispatch\", \"workflow_run\", \"release\"]:\n        c1 += round(time_prop_1[event], 1)\n        c2 += round(time_prop_2[event], 1)\n        c3 += round(runs_prop_1[event], 1)\n        c4 += round(runs_prop_2[event], 1)\n        \n    rest_2 = get_avg_runtime_rest(data_set, repos_list_2, \n                              [\"push\", \"pull_request\", \"target_pull_request\", \"schedule\", \"workflow_dispatch\", \"release\", \"workflow_run\"])\n    rest_1 = get_avg_runtime_rest(data_set, repos_list_1, \n                              [\"push\", \"pull_request\", \"target_pull_request\", \"schedule\", \"workflow_dispatch\", \"release\", \"workflow_run\"])\n    c5 = rest_1[0]\n    c6 = rest_1[-1]\n    c7 = rest_2[0]\n    c8 = rest_2[-1]\n    return 100- c1, 100 -c2, 100 - c3, 100 - c4, c5, c6, c7, c8   \n\n====\n\n</output>",
+      "exec_time": 0.5132427215576172
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Construct the `repro_action_table_3.sh` script following the provided template, embedding the Python code (mirroring the notebook logic for the \u201cTermination status (Table 3 in PDF)\u201d section) inside a Docker exec call, and ensure it writes a properly formatted Markdown table to `/workspace/repro.txt`, then submit the script with `artisan submit`.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_action_table_3.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: Termination status: comparison between free tier and paid tier.**\n\n| Status          | Runs proportion % (Paid) | Runs proportion % (Free) | VM time proportion % (Paid) | VM time proportion % (Free) |\n| --------------- | -----------------------: | -----------------------: | --------------------------: | --------------------------: |\n| Success         |                     ??.? |                     ??.? |                        ??.? |                        ??.? |\n| Failure         |                     ??.? |                     ??.? |                        ??.? |                        ??.? |\n| Skipped         |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Canceled        |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Startup failure |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Action required |                    < ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Stale           |                    < ?.? |                      ?.? |                         ?.? |                         ?.? |\n\nEOTABLE\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/10529665\n# Section 3: Reproduction commands (populate from reviewed steps)\ndocker pull islemdockerdev/github-workflow-resource-study:v1.1\ndocker run -d --init --entrypoint bash --name github-study islemdockerdev/github-workflow-resource-study:v1.1 -c 'sleep infinity'\ndocker exec github-study /bin/bash --noprofile --norc -c \"/workdir/.venv2/bin/python - << 'PY'\nfrom runs_collector.dataset import RunsDataSet\nfrom runs_analysis.resource_usage import get_tiers\n\nworkdir = \\\"/workdir/\\\"\ndata_set = RunsDataSet(None, None, from_checkpoint=True, checkpoint_dir=workdir)\n\n# Split repositories into paid and free tiers\nrepos_list_1, repos_list_2 = get_tiers(data_set)\n\n# Load runs and jobs\nall_runs = data_set.get_all_runs()\nall_jobs = data_set.get_all_jobs()\n\n# Filter runs and jobs per tier (excluding the specific job ID as in the notebook)\nall_runs_1 = all_runs[all_runs.repo_id.isin(repos_list_1)]\nall_jobs_1 = all_jobs[(all_jobs.run_id.isin(all_runs_1.id)) & (all_jobs.id != 3253494537)]\n\nall_runs_2 = all_runs[all_runs.repo_id.isin(repos_list_2)]\nall_jobs_2 = all_jobs[(all_jobs.run_id.isin(all_runs_2.id)) & (all_jobs.id != 3253494537)]\n\n# Proportion of runs per conclusion\nconclusion_1 = all_runs_1.groupby(\\\"conclusion\\\").agg({\\\"id\\\": \\\"count\\\"}).reset_index()\nconclusion_2 = all_runs_2.groupby(\\\"conclusion\\\").agg({\\\"id\\\": \\\"count\\\"}).reset_index()\nconclusion_1[\\\"prop\\\"] = conclusion_1[\\\"id\\\"] * 100 / conclusion_1[\\\"id\\\"].sum()\nconclusion_2[\\\"prop\\\"] = conclusion_2[\\\"id\\\"] * 100 / conclusion_2[\\\"id\\\"].sum()\n\n# VM time proportions per conclusion\nruns_with_time_1 = all_runs_1.merge(all_jobs_1[[\\\"run_id\\\", \\\"up_time\\\"]], left_on=\\\"id\\\", right_on=\\\"run_id\\\")\nruns_with_time_2 = all_runs_2.merge(all_jobs_2[[\\\"run_id\\\", \\\"up_time\\\"]], left_on=\\\"id\\\", right_on=\\\"run_id\\\")\n\ntime_per_conclusion_1 = runs_with_time_1.groupby(\\\"conclusion\\\").agg({\\\"up_time\\\": \\\"sum\\\"}).reset_index()\ntime_per_conclusion_1[\\\"prop\\\"] = time_per_conclusion_1[\\\"up_time\\\"] * 100 / time_per_conclusion_1.up_time.sum()\n\ntime_per_conclusion_2 = runs_with_time_2.groupby(\\\"conclusion\\\").agg({\\\"up_time\\\": \\\"sum\\\"}).reset_index()\ntime_per_conclusion_2[\\\"prop\\\"] = time_per_conclusion_2[\\\"up_time\\\"] * 100 / time_per_conclusion_2.up_time.sum()\n\ndef get_prop(df, key):\n    row = df[df.conclusion == key]\n    if row.empty:\n        return 0.0\n    return round(float(row.prop.iloc[0]), 1)\n\nstatuses = [\n    (\\\"Success\\\", \\\"success\\\"),\n    (\\\"Failure\\\", \\\"failure\\\"),\n    (\\\"Skipped\\\", \\\"skipped\\\"),\n    (\\\"Canceled\\\", \\\"cancelled\\\"),  # GitHub uses \\\"cancelled\\\" internally\n    (\\\"Startup failure\\\", \\\"startup_failure\\\"),\n    (\\\"Action required\\\", \\\"action_required\\\"),\n    (\\\"Stale\\\", \\\"stale\\\"),\n]\n\nprint(\\\"**Table 3: Termination status: comparison between free tier and paid tier.**\\\\n\\\")\nprint(\\\"| Status          | Runs proportion % (Paid) | Runs proportion % (Free) | VM time proportion % (Paid) | VM time proportion % (Free) |\\\")\nprint(\\\"| --------------- | -----------------------: | -----------------------: | --------------------------: | --------------------------: |\\\")\n\nfor label, key in statuses:\n    rp1 = get_prop(conclusion_1, key)\n    rp2 = get_prop(conclusion_2, key)\n    tp1 = get_prop(time_per_conclusion_1, key)\n    tp2 = get_prop(time_per_conclusion_2, key)\n    print(f\\\"| {label:14} | {rp1:23.1f} | {rp2:23.1f} | {tp1:26.1f} | {tp2:26.1f} |\\\")\nPY\" > /workspace/repro.txt\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_action_table_3.sh\nartisan submit /workspace/repro_action_table_3.sh\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 52.09798717498779,
+        "response": {
+          "id": "chatcmpl-D0XF5wV7FeXsCHYAxmFjb4KrtJf16",
+          "created": 1769020155,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Construct the `repro_action_table_3.sh` script following the provided template, embedding the Python code (mirroring the notebook logic for the \u201cTermination status (Table 3 in PDF)\u201d section) inside a Docker exec call, and ensure it writes a properly formatted Markdown table to `/workspace/repro.txt`, then submit the script with `artisan submit`.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_action_table_3.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: Termination status: comparison between free tier and paid tier.**\n\n| Status          | Runs proportion % (Paid) | Runs proportion % (Free) | VM time proportion % (Paid) | VM time proportion % (Free) |\n| --------------- | -----------------------: | -----------------------: | --------------------------: | --------------------------: |\n| Success         |                     ??.? |                     ??.? |                        ??.? |                        ??.? |\n| Failure         |                     ??.? |                     ??.? |                        ??.? |                        ??.? |\n| Skipped         |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Canceled        |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Startup failure |                      ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Action required |                    < ?.? |                      ?.? |                         ?.? |                         ?.? |\n| Stale           |                    < ?.? |                      ?.? |                         ?.? |                         ?.? |\n\nEOTABLE\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/10529665\n# Section 3: Reproduction commands (populate from reviewed steps)\ndocker pull islemdockerdev/github-workflow-resource-study:v1.1\ndocker run -d --init --entrypoint bash --name github-study islemdockerdev/github-workflow-resource-study:v1.1 -c 'sleep infinity'\ndocker exec github-study /bin/bash --noprofile --norc -c \"/workdir/.venv2/bin/python - << 'PY'\nfrom runs_collector.dataset import RunsDataSet\nfrom runs_analysis.resource_usage import get_tiers\n\nworkdir = \\\"/workdir/\\\"\ndata_set = RunsDataSet(None, None, from_checkpoint=True, checkpoint_dir=workdir)\n\n# Split repositories into paid and free tiers\nrepos_list_1, repos_list_2 = get_tiers(data_set)\n\n# Load runs and jobs\nall_runs = data_set.get_all_runs()\nall_jobs = data_set.get_all_jobs()\n\n# Filter runs and jobs per tier (excluding the specific job ID as in the notebook)\nall_runs_1 = all_runs[all_runs.repo_id.isin(repos_list_1)]\nall_jobs_1 = all_jobs[(all_jobs.run_id.isin(all_runs_1.id)) & (all_jobs.id != 3253494537)]\n\nall_runs_2 = all_runs[all_runs.repo_id.isin(repos_list_2)]\nall_jobs_2 = all_jobs[(all_jobs.run_id.isin(all_runs_2.id)) & (all_jobs.id != 3253494537)]\n\n# Proportion of runs per conclusion\nconclusion_1 = all_runs_1.groupby(\\\"conclusion\\\").agg({\\\"id\\\": \\\"count\\\"}).reset_index()\nconclusion_2 = all_runs_2.groupby(\\\"conclusion\\\").agg({\\\"id\\\": \\\"count\\\"}).reset_index()\nconclusion_1[\\\"prop\\\"] = conclusion_1[\\\"id\\\"] * 100 / conclusion_1[\\\"id\\\"].sum()\nconclusion_2[\\\"prop\\\"] = conclusion_2[\\\"id\\\"] * 100 / conclusion_2[\\\"id\\\"].sum()\n\n# VM time proportions per conclusion\nruns_with_time_1 = all_runs_1.merge(all_jobs_1[[\\\"run_id\\\", \\\"up_time\\\"]], left_on=\\\"id\\\", right_on=\\\"run_id\\\")\nruns_with_time_2 = all_runs_2.merge(all_jobs_2[[\\\"run_id\\\", \\\"up_time\\\"]], left_on=\\\"id\\\", right_on=\\\"run_id\\\")\n\ntime_per_conclusion_1 = runs_with_time_1.groupby(\\\"conclusion\\\").agg({\\\"up_time\\\": \\\"sum\\\"}).reset_index()\ntime_per_conclusion_1[\\\"prop\\\"] = time_per_conclusion_1[\\\"up_time\\\"] * 100 / time_per_conclusion_1.up_time.sum()\n\ntime_per_conclusion_2 = runs_with_time_2.groupby(\\\"conclusion\\\").agg({\\\"up_time\\\": \\\"sum\\\"}).reset_index()\ntime_per_conclusion_2[\\\"prop\\\"] = time_per_conclusion_2[\\\"up_time\\\"] * 100 / time_per_conclusion_2.up_time.sum()\n\ndef get_prop(df, key):\n    row = df[df.conclusion == key]\n    if row.empty:\n        return 0.0\n    return round(float(row.prop.iloc[0]), 1)\n\nstatuses = [\n    (\\\"Success\\\", \\\"success\\\"),\n    (\\\"Failure\\\", \\\"failure\\\"),\n    (\\\"Skipped\\\", \\\"skipped\\\"),\n    (\\\"Canceled\\\", \\\"cancelled\\\"),  # GitHub uses \\\"cancelled\\\" internally\n    (\\\"Startup failure\\\", \\\"startup_failure\\\"),\n    (\\\"Action required\\\", \\\"action_required\\\"),\n    (\\\"Stale\\\", \\\"stale\\\"),\n]\n\nprint(\\\"**Table 3: Termination status: comparison between free tier and paid tier.**\\\\n\\\")\nprint(\\\"| Status          | Runs proportion % (Paid) | Runs proportion % (Free) | VM time proportion % (Paid) | VM time proportion % (Free) |\\\")\nprint(\\\"| --------------- | -----------------------: | -----------------------: | --------------------------: | --------------------------: |\\\")\n\nfor label, key in statuses:\n    rp1 = get_prop(conclusion_1, key)\n    rp2 = get_prop(conclusion_2, key)\n    tp1 = get_prop(time_per_conclusion_1, key)\n    tp2 = get_prop(time_per_conclusion_2, key)\n    print(f\\\"| {label:14} | {rp1:23.1f} | {rp2:23.1f} | {tp1:26.1f} | {tp2:26.1f} |\\\")\nPY\" > /workspace/repro.txt\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_action_table_3.sh\nartisan submit /workspace/repro_action_table_3.sh\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 3627,
+            "prompt_tokens": 16183,
+            "total_tokens": 19810,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 2182,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 11392
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nWrote speedometer tool logs to /workspace/artisan-speedometer.json\nSubmitting to judge service at http://129.69.217.153:8000/submit...\n</output>",
+      "exec_time": 24.107059955596924
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The reproduction script has been submitted; mark the task as complete per the workflow instructions by emitting the designated completion token.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 9.345451831817627,
+        "response": {
+          "id": "chatcmpl-D0XGKm5YCqgr9I4m4OLZbisJM8SbS",
+          "created": 1769020232,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The reproduction script has been submitted; mark the task as complete per the workflow instructions by emitting the designated completion token.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 324,
+            "prompt_tokens": 17679,
+            "total_tokens": 18003,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 263,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 14848
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": ""
+    }
+  ],
+  "trajectory_format": "mini-swe-agent-1"
+}

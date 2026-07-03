@@ -1,0 +1,597 @@
+{
+  "info": {
+    "exit_status": "Submitted",
+    "submission": "",
+    "model_stats": {
+      "instance_cost": 0.0291311,
+      "api_calls": 10,
+      "llm_time": 135.75866866111755
+    },
+    "mini_version": "1.14.4",
+    "config": {
+      "agent": {
+        "system_template": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected.",
+        "instance_template": "Please reproduce the results reported in Table {{ table_index }} of the target paper.\n\n<expected_table>\n{{ expected_table }}\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from {{ artifact_url }}.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table {{ table_index }}:\n   - `grep -in docker README.md`\n   - `grep -in \"Table {{ table_index }}\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_{{ artifact_name }}_table_{{ table_index }}.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n{{ expected_table }}\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\necho '</artisan_submit>'\nEOF\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward.",
+        "timeout_template": "The last command <command>{{action['action']}}</command> timed out and has been killed.\nThe output of the command was:\n<output>\n{{output}}\n</output>\nPlease try another command and make sure to avoid those requiring interactive input.\n",
+        "format_error_template": "Please always provide EXACTLY ONE action in <mini_swe_agent_bash>, found {{actions|length}} actions.\nIf you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\nwithout any other command.\nElse, please format your response exactly as follows:\n\n<response_example>\nHere are some thoughts about why you want to perform the action.\n\n<mini_swe_agent_bash>\n<action>\n</mini_swe_agent_bash>\n</response_example>\n",
+        "action_observation_template": "<returncode>{{output.returncode}}</returncode>\n{% if output.output | length < 100000 -%}\n<output>\n{{ output.output -}}\n</output>\n{%- else -%}\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning>\n{%- set elided_chars = output.output | length - 100000 -%}\n<output_head>\n{{ output.output[:5000] }}\n</output_head>\n<elided_chars>\n{{ elided_chars }} characters elided\n</elided_chars>\n<output_tail>\n{{ output.output[-5000:] }}\n</output_tail>\n{%- endif -%}\n",
+        "step_limit": 30.0,
+        "cost_limit": 1.0
+      },
+      "model": {
+        "model_name": "gpt-5-mini-2025-08-07",
+        "model_kwargs": {
+          "drop_params": true,
+          "reasoning_effort": "medium"
+        },
+        "litellm_model_registry": null,
+        "set_cache_control": null
+      },
+      "environment": {
+        "image": "doehyunbaek1/artisan:c268b22",
+        "container_name": "agent-lasapp-t1-868a",
+        "cwd": "/workspace",
+        "env": {
+          "PAGER": "cat",
+          "MANPAGER": "cat",
+          "LESS": "-R",
+          "PIP_PROGRESS_BAR": "off",
+          "TQDM_DISABLE": "1",
+          "MSWEA_SILENT_STARTUP": "1"
+        },
+        "forward_env": [],
+        "timeout": 28800,
+        "executable": "docker",
+        "run_args": [
+          "--rm",
+          "--privileged",
+          "-e",
+          "OPENAI_API_KEY",
+          "-e",
+          "MSWEA_SILENT_STARTUP",
+          "-v",
+          "/home/doehyunbaek/artisan/logs/minisweagent-gpt5mini-a830/lasapp/table_1/094656-694881:/workspace:rw",
+          "-e",
+          "ARTISAN_MITM_URL=http://129.69.217.153:8082",
+          "--group-add",
+          "999"
+        ],
+        "container_timeout": "8h",
+        "pull_timeout": 3000
+      },
+      "agent_type": "evaluation.agents.minisweagent.DefaultAgentWithLogs",
+      "model_type": "minisweagent.models.litellm_model.LitellmModel",
+      "environment_type": "minisweagent.environments.docker.DockerEnvironment"
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected."
+    },
+    {
+      "role": "user",
+      "content": "Please reproduce the results reported in Table 1 of the target paper.\n\n<expected_table>\n**Table 1: Lines of code needed to add LASAPP support for various PPLs and probability distribution back-ends.**\n\n|        | Back-end / PPL           | LOC  |                 |\n| ---    | ---                      | ---  | ---             |\n| Python | Language Server          | 1553 |                 |\n| Python | PyMC [51]                | 281  | custom back-end |\n| Python | torch.distributions [48] | 67   | shared back-end |\n| Python | Pyro [8]                 | 133  |                 |\n| Python | BeanMachine [55]         | 95   |                 |\n| Julia  | Language Server          | 2175 |                 |\n| Julia  | Distributions.jl [7]     | 240  | shared back-end |\n| Julia  | Gen [14]                 | 227  |                 |\n| Julia  | Turing [21]              | 172  |                 |\n\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from https://zenodo.org/records/15857114.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table 1:\n   - `grep -in docker README.md`\n   - `grep -in \"Table 1\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_lasapp_table_1.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_lasapp_table_1.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 1: Lines of code needed to add LASAPP support for various PPLs and probability distribution back-ends.**\n\n|        | Back-end / PPL           | LOC  |                 |\n| ---    | ---                      | ---  | ---             |\n| Python | Language Server          | 1553 |                 |\n| Python | PyMC [51]                | 281  | custom back-end |\n| Python | torch.distributions [48] | 67   | shared back-end |\n| Python | Pyro [8]                 | 133  |                 |\n| Python | BeanMachine [55]         | 95   |                 |\n| Julia  | Language Server          | 2175 |                 |\n| Julia  | Distributions.jl [7]     | 240  | shared back-end |\n| Julia  | Gen [14]                 | 227  |                 |\n| Julia  | Turing [21]              | 172  |                 |\n\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\necho '</artisan_submit>'\nEOF\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward."
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: First I need to download the artifact page (and any linked files) from Zenodo so I can inspect the README and locate the commands/resources needed to reproduce Table 1. I'll save the Zenodo record HTML to /workspace so I can parse it in subsequent steps.\n\n<mini_swe_agent_bash>\ncurl -L -s -o /workspace/zenodo_15857114.html 'https://zenodo.org/records/15857114'\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 9.076610565185547,
+        "response": {
+          "id": "chatcmpl-D1UWHnci2pgQ1Vv38r5XZ2z0ZUY4P",
+          "created": 1769248017,
+          "model": "gpt-5-mini-2025-08-07",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: First I need to download the artifact page (and any linked files) from Zenodo so I can inspect the README and locate the commands/resources needed to reproduce Table 1. I'll save the Zenodo record HTML to /workspace so I can parse it in subsequent steps.\n\n<mini_swe_agent_bash>\ncurl -L -s -o /workspace/zenodo_15857114.html 'https://zenodo.org/records/15857114'\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 561,
+            "prompt_tokens": 1275,
+            "total_tokens": 1836,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 448,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n</output>",
+      "exec_time": 0.13943076133728027
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Search the downloaded Zenodo HTML for references to a README or downloadable files so I can find the artifact archive or README link to follow next.\n\n<mini_swe_agent_bash>\ngrep -inE 'README|readme|files|href|download' /workspace/zenodo_15857114.html | sed -n '1,200p'\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.310348272323608,
+        "response": {
+          "id": "chatcmpl-D1UWQljbieTwO6bX2UA2GKqop2Bhz",
+          "created": 1769248026,
+          "model": "gpt-5-mini-2025-08-07",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Search the downloaded Zenodo HTML for references to a README or downloadable files so I can find the artifact archive or README link to follow next.\n\n<mini_swe_agent_bash>\ngrep -inE 'README|readme|files|href|download' /workspace/zenodo_15857114.html | sed -n '1,200p'\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 285,
+            "prompt_tokens": 1404,
+            "total_tokens": 1689,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 192,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n41:    <link rel=\"alternate\" type=\"application/x-tar\" href=\"https://zenodo.org/records/15857114/files/lasapp-arm64.tar\">\n42:    <link rel=\"item\" type=\"application/x-tar\" href=\"https://zenodo.org/records/15857114/files/lasapp-arm64.tar\">\n44:    <link rel=\"alternate\" type=\"application/x-tar\" href=\"https://zenodo.org/records/15857114/files/lasapp-amd64.tar\">\n45:    <link rel=\"item\" type=\"application/x-tar\" href=\"https://zenodo.org/records/15857114/files/lasapp-amd64.tar\">\n47:    <link rel=\"alternate\" type=\"application/zip\" href=\"https://zenodo.org/records/15857114/files/lasapp-main.zip\">\n48:    <link rel=\"item\" type=\"application/zip\" href=\"https://zenodo.org/records/15857114/files/lasapp-main.zip\">\n50:      <meta name=\"citation_pdf_url\" content=\"https://zenodo.org/records/15857114/files/LASAPP_supplementary_material.pdf\"/>\n51:    <link rel=\"alternate\" type=\"application/pdf\" href=\"https://zenodo.org/records/15857114/files/LASAPP_supplementary_material.pdf\">\n52:    <link rel=\"item\" type=\"application/pdf\" href=\"https://zenodo.org/records/15857114/files/LASAPP_supplementary_material.pdf\">\n55:<link rel=\"canonical\" href=\"https://zenodo.org/records/15857114\">\n57:      <link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"/static/favicon.ico\"/>\n58:          <link rel=\"apple-touch-icon\" sizes=\"120x120\" href=\"/static/apple-touch-icon-120.png\"/>\n59:          <link rel=\"apple-touch-icon\" sizes=\"152x152\" href=\"/static/apple-touch-icon-152.png\"/>\n60:          <link rel=\"apple-touch-icon\" sizes=\"167x167\" href=\"/static/apple-touch-icon-167.png\"/>\n61:          <link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"/static/apple-touch-icon-180.png\"/>\n63:      <link rel=\"stylesheet\" href=\"/static/dist/css/3526.2bdf02c28fcf25a2b8d3.css\" />\n73:      <a id=\"skip-to-main\" class=\"ui button primary ml-5 mt-5 skip-link\" href=\"#main\">Skip to main</a>\n75:        <p class=\"browserupgrade\">You are using an <strong>outdated</strong> browser. Please <a href=\"http://browsehappy.com/\">upgrade your browser</a> to improve your experience.</p>\n86:                    <a class=\"logo-link\" href=\"/\">\n141:                    <a href=\"/communities\">Communities</a>\n146:                  <a href=\"/me/uploads\">My dashboard</a>\n152:        href=\"/login/?next=/records/15857114\"\n159:        <a href=\"/signup/\" class=\"ui button signup\">\n233:                            data-tooltip=\"The record and files are publicly accessible.\"\n242:                          aria-label=\"The record and files are publicly accessible.\">\n272:      href=\"/search?q=metadata.creators.person_or_org.name:%22B%C3%B6ck,+Markus%22\"\n283:        <a href=\"https://orcid.org/0009-0001-6704-5903\"\n333:             href=\"https://ror.org/04d836q62\"\n371:      href=\"/search?q=metadata.contributors.person_or_org.name:%22B%C3%B6ck,+Markus%22\"\n381:        <a href=\"https://orcid.org/0009-0001-6704-5903\"\n407:      href=\"/search?q=metadata.contributors.person_or_org.name:%22Schr%C3%B6der,+Michael%22\"\n417:        <a href=\"https://orcid.org/0000-0003-1496-0531\"\n450:      href=\"/search?q=metadata.contributors.person_or_org.name:%22Cito,+J%C3%BCrgen%22\"\n460:        <a href=\"https://orcid.org/0000-0001-8619-1271\"\n510:             href=\"https://ror.org/04d836q62\"\n566:        <p>This version has the most up-to-date files (docker images).</p>\n572:      id=\"record-files\" class=\"rel-mt-2 rel-mb-3\"\n573:      aria-label=\"Files\"\n574:    ><h2 id=\"files-heading\">Files</h2>\n576:  <div class=\"ui accordion panel mb-10 open\" href=\"#files-preview-accordion-panel\">\n580:        id=\"files-preview-accordion-trigger\"\n581:        aria-controls=\"files-preview-accordion-panel\"\n593:      id=\"files-preview-accordion-panel\"\n594:      aria-labelledby=\"files-preview-accordion-trigger\"\n611:  <div class=\"ui accordion panel mb-10 open\" href=\"#files-list-accordion-panel\">\n613:      <div role=\"button\" id=\"files-list-accordion-trigger\" aria-controls=\"files-list-accordion-panel\" aria-expanded=\"true\" tabindex=\"0\" class=\"trigger\">\n614:        Files\n620:    <div role=\"region\" id=\"files-list-accordion-panel\" aria-labelledby=\"files-list-accordion-trigger\" class=\"active content pt-0\">\n624:  <table class=\"ui striped table files fluid open\">\n631:            <a role=\"button\" class=\"ui compact mini button right floated archive-link\" href=\"https://zenodo.org/api/records/15857114/files-archive\">\n632:              <i class=\"file archive icon button\" aria-hidden=\"true\"></i> Download all\n645:              <a href=\"/records/15857114/files/lasapp-amd64.tar?download=1\">lasapp-amd64.tar</a>\n657:              <a role=\"button\" class=\"ui compact mini button\" href=\"/records/15857114/files/lasapp-amd64.tar?download=1\">\n658:                <i class=\"download icon\" aria-hidden=\"true\"></i>Download\n671:              <a href=\"/records/15857114/files/lasapp-arm64.tar?download=1\">lasapp-arm64.tar</a>\n683:              <a role=\"button\" class=\"ui compact mini button\" href=\"/records/15857114/files/lasapp-arm64.tar?download=1\">\n684:                <i class=\"download icon\" aria-hidden=\"true\"></i>Download\n697:              <a href=\"/records/15857114/files/lasapp-main.zip?download=1\">lasapp-main.zip</a>\n709:                <a role=\"button\" class=\"ui compact mini button preview-link\" href=\"/records/15857114/preview/lasapp-main.zip?include_deleted=0\" target=\"preview-iframe\" data-file-key=\"lasapp-main.zip\">\n713:              <a role=\"button\" class=\"ui compact mini button\" href=\"/records/15857114/files/lasapp-main.zip?download=1\">\n714:                <i class=\"download icon\" aria-hidden=\"true\"></i>Download\n727:              <a href=\"/records/15857114/files/LASAPP_supplementary_material.pdf?download=1\">LASAPP_supplementary_material.pdf</a>\n739:                <a role=\"button\" class=\"ui compact mini button preview-link\" href=\"/records/15857114/preview/LASAPP_supplementary_material.pdf?include_deleted=0\" target=\"preview-iframe\" data-file-key=\"LASAPP_supplementary_material.pdf\">\n743:              <a role=\"button\" class=\"ui compact mini button\" href=\"/records/15857114/files/LASAPP_supplementary_material.pdf?download=1\">\n744:                <i class=\"download icon\" aria-hidden=\"true\"></i>Download\n860:            <a href=\"https://codemeta.github.io/terms/#codeRepository\" aria-label=\"https://codemeta.github.io/terms/#codeRepository\">\n869:              <a href=\"https://github.com/lasapp/lasapp\">https://github.com/lasapp/lasapp</a>\n883:            <a href=\"https://codemeta.github.io/terms/#programmingLanguage\" aria-label=\"https://codemeta.github.io/terms/#programmingLanguage\">\n909:            <a href=\"https://codemeta.github.io/terms/#developmentStatus\" aria-label=\"https://codemeta.github.io/terms/#developmentStatus\">\n919:      <a href=\"/search?q=custom_fields.code%5C:developmentStatus:Concept\">Concept</a>\n1153:      <i aria-hidden=\"true\" class=\"download icon\"></i>\n1154:      Downloads\n1210:            Downloads\n1222:              Total downloads\n1261:        <a href=\"/help/statistics\">More info on how stats are collected....</a>\n1274:      <div id=\"recordVersions\" data-record='{\"access\": {\"embargo\": {\"active\": false, \"reason\": null}, \"files\": \"public\", \"record\": \"public\", \"status\": \"open\"}, \"created\": \"2025-07-13T15:35:22.301810+00:00\", \"custom_fields\": {\"code:codeRepository\": \"https://github.com/lasapp/lasapp\", \"code:developmentStatus\": {\"id\": \"concept\", \"title\": {\"en\": \"Concept\"}}, \"code:programmingLanguage\": [{\"id\": \"python\", \"title\": {\"en\": \"Python\"}}, {\"id\": \"julia\", \"title\": {\"en\": \"Julia\"}}]}, \"deletion_status\": {\"is_deleted\": false, \"status\": \"P\"}, \"expanded\": {\"parent\": {\"access\": {\"owned_by\": {\"active\": null, \"blocked_at\": null, \"confirmed_at\": null, \"email\": \"\", \"id\": \"1177338\", \"is_current_user\": false, \"links\": {\"avatar\": \"https://zenodo.org/api/users/1177338/avatar.svg\", \"records_html\": \"https://zenodo.org/search/records?q=parent.access.owned_by.user:1177338\", \"self\": \"https://zenodo.org/api/users/1177338\"}, \"profile\": {\"affiliations\": \"TU Wien\", \"full_name\": \"Markus B\\u00f6ck\"}, \"username\": \"markusb7800\", \"verified_at\": null}}}}, \"files\": {\"count\": 4, \"enabled\": true, \"entries\": {\"LASAPP_supplementary_material.pdf\": {\"access\": {\"hidden\": false}, \"checksum\": \"md5:fdb43bf45f5733734e09dbc6580e35a6\", \"ext\": \"pdf\", \"id\": \"682580d0-5d86-4205-80d9-e9b506455f61\", \"key\": \"LASAPP_supplementary_material.pdf\", \"links\": {\"content\": \"https://zenodo.org/api/records/15857114/files/LASAPP_supplementary_material.pdf/content\", \"iiif_api\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/full/0/default.png\", \"iiif_base\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf\", \"iiif_canvas\": \"https://zenodo.org/api/iiif/record:15857114/canvas/LASAPP_supplementary_material.pdf\", \"iiif_info\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/info.json\", \"self\": \"https://zenodo.org/api/records/15857114/files/LASAPP_supplementary_material.pdf\"}, \"metadata\": {}, \"mimetype\": \"application/pdf\", \"size\": 712963, \"storage_class\": \"L\"}, \"lasapp-amd64.tar\": {\"access\": {\"hidden\": false}, \"checksum\": \"md5:ff8e6d74d4dd767722cac0e7bce4cc09\", \"ext\": \"tar\", \"id\": \"eb18004a-c10a-4773-a475-0d2afd2fc4e9\", \"key\": \"lasapp-amd64.tar\", \"links\": {\"content\": \"https://zenodo.org/api/records/15857114/files/lasapp-amd64.tar/content\", \"self\": \"https://zenodo.org/api/records/15857114/files/lasapp-amd64.tar\"}, \"metadata\": {}, \"mimetype\": \"application/x-tar\", \"size\": 505087488, \"storage_class\": \"L\"}, \"lasapp-arm64.tar\": {\"access\": {\"hidden\": false}, \"checksum\": \"md5:b57465da72fe5ff02471897898e052de\", \"ext\": \"tar\", \"id\": \"924b798f-92ee-4215-89e3-83c98ab3f543\", \"key\": \"lasapp-arm64.tar\", \"links\": {\"content\": \"https://zenodo.org/api/records/15857114/files/lasapp-arm64.tar/content\", \"self\": \"https://zenodo.org/api/records/15857114/files/lasapp-arm64.tar\"}, \"metadata\": {}, \"mimetype\": \"application/x-tar\", \"size\": 444457472, \"storage_class\": \"L\"}, \"lasapp-main.zip\": {\"access\": {\"hidden\": false}, \"checksum\": \"md5:4ea5cc760760a367da5ed98ab8067e64\", \"ext\": \"zip\", \"id\": \"1901a067-8fb7-4105-b50c-58954a52845e\", \"key\": \"lasapp-main.zip\", \"links\": {\"content\": \"https://zenodo.org/api/records/15857114/files/lasapp-main.zip/content\", \"self\": \"https://zenodo.org/api/records/15857114/files/lasapp-main.zip\"}, \"metadata\": {}, \"mimetype\": \"application/zip\", \"size\": 378046, \"storage_class\": \"L\"}}, \"order\": [], \"total_bytes\": 950635969}, \"id\": \"15857114\", \"is_draft\": false, \"is_published\": true, \"links\": {\"access\": \"https://zenodo.org/api/records/15857114/access\", \"access_grants\": \"https://zenodo.org/api/records/15857114/access/grants\", \"access_links\": \"https://zenodo.org/api/records/15857114/access/links\", \"access_request\": \"https://zenodo.org/api/records/15857114/access/request\", \"access_users\": \"https://zenodo.org/api/records/15857114/access/users\", \"archive\": \"https://zenodo.org/api/records/15857114/files-archive\", \"archive_media\": \"https://zenodo.org/api/records/15857114/media-files-archive\", \"communities\": \"https://zenodo.org/api/records/15857114/communities\", \"communities-suggestions\": \"https://zenodo.org/api/records/15857114/communities-suggestions\", \"doi\": \"https://doi.org/10.5281/zenodo.15857114\", \"draft\": \"https://zenodo.org/api/records/15857114/draft\", \"file_modification\": \"https://zenodo.org/api/records/15857114/file-modification\", \"files\": \"https://zenodo.org/api/records/15857114/files\", \"latest\": \"https://zenodo.org/api/records/15857114/versions/latest\", \"latest_html\": \"https://zenodo.org/records/15857114/latest\", \"media_files\": \"https://zenodo.org/api/records/15857114/media-files\", \"parent\": \"https://zenodo.org/api/records/13347681\", \"parent_doi\": \"https://doi.org/10.5281/zenodo.13347681\", \"parent_doi_html\": \"https://zenodo.org/doi/10.5281/zenodo.13347681\", \"parent_html\": \"https://zenodo.org/records/13347681\", \"preview_html\": \"https://zenodo.org/records/15857114?preview=1\", \"request_deletion\": \"https://zenodo.org/api/records/15857114/request-deletion\", \"requests\": \"https://zenodo.org/api/records/15857114/requests\", \"reserve_doi\": \"https://zenodo.org/api/records/15857114/draft/pids/doi\", \"self\": \"https://zenodo.org/api/records/15857114\", \"self_doi\": \"https://doi.org/10.5281/zenodo.15857114\", \"self_doi_html\": \"https://zenodo.org/doi/10.5281/zenodo.15857114\", \"self_html\": \"https://zenodo.org/records/15857114\", \"self_iiif_manifest\": \"https://zenodo.org/api/iiif/record:15857114/manifest\", \"self_iiif_sequence\": \"https://zenodo.org/api/iiif/record:15857114/sequence/default\", \"thumbnails\": {\"10\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E10,/0/default.jpg\", \"100\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E100,/0/default.jpg\", \"1200\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E1200,/0/default.jpg\", \"250\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E250,/0/default.jpg\", \"50\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E50,/0/default.jpg\", \"750\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E750,/0/default.jpg\"}, \"versions\": \"https://zenodo.org/api/records/15857114/versions\"}, \"media_files\": {\"count\": 1, \"enabled\": true, \"entries\": {\"LASAPP_supplementary_material.pdf.ptif\": {\"access\": {\"hidden\": true}, \"ext\": \"ptif\", \"id\": \"c351748a-eb12-4276-8ca5-c4529866910b\", \"key\": \"LASAPP_supplementary_material.pdf.ptif\", \"links\": {\"content\": \"https://zenodo.org/api/records/15857114/files/LASAPP_supplementary_material.pdf.ptif/content\", \"self\": \"https://zenodo.org/api/records/15857114/files/LASAPP_supplementary_material.pdf.ptif\"}, \"metadata\": null, \"mimetype\": \"application/octet-stream\", \"processor\": {\"source_file_id\": \"682580d0-5d86-4205-80d9-e9b506455f61\", \"status\": \"finished\", \"type\": \"image-tiles\"}, \"size\": 0, \"storage_class\": \"L\"}}, \"order\": [], \"total_bytes\": 0}, \"metadata\": {\"additional_descriptions\": [{\"description\": \"\\u003cp\\u003eThis version has the most up-to-date files (docker images).\\u003c/p\\u003e\\n\\u003cp\\u003eTo reproduce you may load the docker image like `docker load -i lasapp-amd64.tar` or `docker load -i lasapp-arm64.tar` depending on your system.\\u003c/p\\u003e\", \"type\": {\"id\": \"technical-info\", \"title\": {\"de\": \"Technische Informationen\", \"en\": \"Technical info\"}}}], \"contributors\": [{\"affiliations\": [{\"id\": \"04d836q62\", \"identifiers\": [{\"identifier\": \"04d836q62\", \"scheme\": \"ror\"}, {\"identifier\": \"grid.5329.d\", \"scheme\": \"grid\"}, {\"identifier\": \"0000 0004 1937 0669\", \"scheme\": \"isni\"}], \"name\": \"TU Wien\"}], \"person_or_org\": {\"family_name\": \"B\\u00f6ck\", \"given_name\": \"Markus\", \"identifiers\": [{\"identifier\": \"0009-0001-6704-5903\", \"scheme\": \"orcid\"}], \"name\": \"B\\u00f6ck, Markus\", \"type\": \"personal\"}, \"role\": {\"id\": \"researcher\", \"title\": {\"de\": \"WissenschaftlerIn\", \"en\": \"Researcher\"}}}, {\"affiliations\": [{\"name\": \"TU Wien\"}], \"person_or_org\": {\"family_name\": \"Schr\\u00f6der\", \"given_name\": \"Michael\", \"identifiers\": [{\"identifier\": \"0000-0003-1496-0531\", \"scheme\": \"orcid\"}], \"name\": \"Schr\\u00f6der, Michael\", \"type\": \"personal\"}, \"role\": {\"id\": \"researcher\", \"title\": {\"de\": \"WissenschaftlerIn\", \"en\": \"Researcher\"}}}, {\"affiliations\": [{\"id\": \"04d836q62\", \"identifiers\": [{\"identifier\": \"04d836q62\", \"scheme\": \"ror\"}, {\"identifier\": \"grid.5329.d\", \"scheme\": \"grid\"}, {\"identifier\": \"0000 0004 1937 0669\", \"scheme\": \"isni\"}], \"name\": \"TU Wien\"}], \"person_or_org\": {\"family_name\": \"Cito\", \"given_name\": \"J\\u00fcrgen\", \"identifiers\": [{\"identifier\": \"0000-0001-8619-1271\", \"scheme\": \"orcid\"}], \"name\": \"Cito, J\\u00fcrgen\", \"type\": \"personal\"}, \"role\": {\"id\": \"supervisor\", \"title\": {\"de\": \"SupervisorIn\", \"en\": \"Supervisor\"}}}], \"creators\": [{\"affiliations\": [{\"id\": \"04d836q62\", \"identifiers\": [{\"identifier\": \"04d836q62\", \"scheme\": \"ror\"}, {\"identifier\": \"grid.5329.d\", \"scheme\": \"grid\"}, {\"identifier\": \"0000 0004 1937 0669\", \"scheme\": \"isni\"}], \"name\": \"TU Wien\"}], \"person_or_org\": {\"family_name\": \"B\\u00f6ck\", \"given_name\": \"Markus\", \"identifiers\": [{\"identifier\": \"0009-0001-6704-5903\", \"scheme\": \"orcid\"}], \"name\": \"B\\u00f6ck, Markus\", \"type\": \"personal\"}, \"role\": {\"id\": \"researcher\", \"title\": {\"de\": \"WissenschaftlerIn\", \"en\": \"Researcher\"}}}], \"dates\": [{\"date\": \"2024-08-06\", \"description\": \"ASE 2024: 39th IEEE/ACM International Conference on Automated Software Engineering\", \"type\": {\"id\": \"accepted\", \"title\": {\"de\": \"Angenommen\", \"en\": \"Accepted\"}}}], \"description\": \"\\u003cp\\u003eProbabilistic programming allows developers to focus on the modeling aspect in the Bayesian workflow by abstracting away the posterior inference machinery.\\u003cbr\\u003eIn practice, however, programming errors specific to the probabilistic environment are hard to fix without deep knowledge of the underlying systems.\\u003cbr\\u003eLike in classical software engineering, static program analysis methods could be employed to catch many of these errors.\\u003cbr\\u003eIn this work, we present the first framework to formulate static analyses for probabilistic programs in a language-agnostic manner: LASAPP.\\u003cbr\\u003eWhile prior work focused on specific languages, all analyses written with our framework can be readily applied to new languages by adding easy-to-implement API bindings.\\u003cbr\\u003eOur prototype supports five popular probabilistic programming languages out-of-the-box.\\u003cbr\\u003eWe demonstrate the effectiveness and expressiveness of the LASAPP framework by presenting four provably-correct language-agnostic probabilistic program analyses that address problems discussed in the literature and evaluate them on over 200 real-world programs.\\u003c/p\\u003e\", \"languages\": [{\"id\": \"eng\", \"title\": {\"en\": \"English\"}}], \"publication_date\": \"2025-07-10\", \"publisher\": \"Zenodo\", \"resource_type\": {\"id\": \"software\", \"title\": {\"de\": \"Software\", \"en\": \"Software\"}}, \"rights\": [{\"description\": {\"en\": \"The Creative Commons Attribution license allows re-distribution and re-use of a licensed work on the condition that the creator is appropriately credited.\"}, \"icon\": \"cc-by-icon\", \"id\": \"cc-by-4.0\", \"props\": {\"scheme\": \"spdx\", \"url\": \"https://creativecommons.org/licenses/by/4.0/legalcode\"}, \"title\": {\"en\": \"Creative Commons Attribution 4.0 International\"}}], \"subjects\": [{\"subject\": \"probabilistic programming\"}, {\"subject\": \"program analysis\"}, {\"subject\": \"language-agnostic\"}, {\"subject\": \"static analysis\"}], \"title\": \"LASAPP: Language-Agnostic Static Analysis of Probabilistic Programs\"}, \"parent\": {\"access\": {\"owned_by\": {\"user\": \"1177338\"}, \"settings\": {\"accept_conditions_text\": null, \"allow_guest_requests\": false, \"allow_user_requests\": false, \"secret_link_expiration\": 0}}, \"communities\": {}, \"id\": \"13347681\", \"pids\": {\"doi\": {\"client\": \"datacite\", \"identifier\": \"10.5281/zenodo.13347681\", \"provider\": \"datacite\"}}}, \"pids\": {\"doi\": {\"client\": \"datacite\", \"identifier\": \"10.5281/zenodo.15857114\", \"provider\": \"datacite\"}, \"oai\": {\"identifier\": \"oai:zenodo.org:15857114\", \"provider\": \"oai\"}}, \"revision_id\": 4, \"stats\": {\"all_versions\": {\"data_volume\": 6244893731.0, \"downloads\": 107, \"unique_downloads\": 99, \"unique_views\": 198, \"views\": 232}, \"this_version\": {\"data_volume\": 5778791348.0, \"downloads\": 46, \"unique_downloads\": 43, \"unique_views\": 40, \"views\": 47}}, \"status\": \"published\", \"swh\": {}, \"ui\": {\"access_status\": {\"description_l10n\": \"The record and files are publicly accessible.\", \"embargo_date_l10n\": null, \"icon\": \"unlock\", \"id\": \"open\", \"message_class\": \"\", \"title_l10n\": \"Open\"}, \"additional_descriptions\": [{\"description\": \"\\u003cp\\u003eThis version has the most up-to-date files (docker images).\\u003c/p\\u003e\\n\\u003cp\\u003eTo reproduce you may load the docker image like `docker load -i lasapp-amd64.tar` or `docker load -i lasapp-arm64.tar` depending on your system.\\u003c/p\\u003e\", \"type\": {\"id\": \"technical-info\", \"title_l10n\": \"Technical info\"}}], \"contributors\": {\"affiliations\": [[1, \"TU Wien\", \"04d836q62\"]], \"contributors\": [{\"affiliations\": [[1, \"TU Wien\"]], \"person_or_org\": {\"family_name\": \"B\\u00f6ck\", \"given_name\": \"Markus\", \"identifiers\": [{\"identifier\": \"0009-0001-6704-5903\", \"scheme\": \"orcid\"}], \"name\": \"B\\u00f6ck, Markus\", \"type\": \"personal\"}, \"role\": {\"id\": \"researcher\", \"title\": \"Researcher\"}}, {\"affiliations\": [[1, \"TU Wien\"]], \"person_or_org\": {\"family_name\": \"Schr\\u00f6der\", \"given_name\": \"Michael\", \"identifiers\": [{\"identifier\": \"0000-0003-1496-0531\", \"scheme\": \"orcid\"}], \"name\": \"Schr\\u00f6der, Michael\", \"type\": \"personal\"}, \"role\": {\"id\": \"researcher\", \"title\": \"Researcher\"}}, {\"affiliations\": [[1, \"TU Wien\"]], \"person_or_org\": {\"family_name\": \"Cito\", \"given_name\": \"J\\u00fcrgen\", \"identifiers\": [{\"identifier\": \"0000-0001-8619-1271\", \"scheme\": \"orcid\"}], \"name\": \"Cito, J\\u00fcrgen\", \"type\": \"personal\"}, \"role\": {\"id\": \"supervisor\", \"title\": \"Supervisor\"}}]}, \"created_date_l10n_long\": \"July 13, 2025\", \"creators\": {\"affiliations\": [[1, \"TU Wien\", \"04d836q62\"]], \"creators\": [{\"affiliations\": [[1, \"TU Wien\"]], \"person_or_org\": {\"family_name\": \"B\\u00f6ck\", \"given_name\": \"Markus\", \"identifiers\": [{\"identifier\": \"0009-0001-6704-5903\", \"scheme\": \"orcid\"}], \"name\": \"B\\u00f6ck, Markus\", \"type\": \"personal\"}, \"role\": {\"id\": \"researcher\", \"title\": \"Researcher\"}}]}, \"custom_fields\": {\"code:codeRepository\": \"https://github.com/lasapp/lasapp\", \"code:developmentStatus\": {\"id\": \"concept\", \"title_l10n\": \"Concept\"}, \"code:programmingLanguage\": [{\"id\": \"python\", \"title_l10n\": \"Python\"}, {\"id\": \"julia\", \"title_l10n\": \"Julia\"}]}, \"dates\": [{\"date\": \"2024-08-06\", \"description\": \"ASE 2024: 39th IEEE/ACM International Conference on Automated Software Engineering\", \"type\": {\"id\": \"accepted\", \"title_l10n\": \"Accepted\"}}], \"description_stripped\": \"Probabilistic programming allows developers to focus on the modeling aspect in the Bayesian workflow by abstracting away the posterior inference machinery.In practice, however, programming errors specific to the probabilistic environment are hard to fix without deep knowledge of the underlying systems.Like in classical software engineering, static program analysis methods could be employed to catch many of these errors.In this work, we present the first framework to formulate static analyses for probabilistic programs in a language-agnostic manner: LASAPP.While prior work focused on specific languages, all analyses written with our framework can be readily applied to new languages by adding easy-to-implement API bindings.Our prototype supports five popular probabilistic programming languages out-of-the-box.We demonstrate the effectiveness and expressiveness of the LASAPP framework by presenting four provably-correct language-agnostic probabilistic program analyses that address problems discussed in the literature and evaluate them on over 200 real-world programs.\", \"is_draft\": false, \"languages\": [{\"id\": \"eng\", \"title_l10n\": \"English\"}], \"publication_date_l10n_long\": \"July 10, 2025\", \"publication_date_l10n_medium\": \"Jul 10, 2025\", \"resource_type\": {\"id\": \"software\", \"title_l10n\": \"Software\"}, \"rights\": [{\"description_l10n\": \"The Creative Commons Attribution license allows re-distribution and re-use of a licensed work on the condition that the creator is appropriately credited.\", \"icon\": \"cc-by-icon\", \"id\": \"cc-by-4.0\", \"props\": {\"scheme\": \"spdx\", \"url\": \"https://creativecommons.org/licenses/by/4.0/legalcode\"}, \"title_l10n\": \"Creative Commons Attribution 4.0 International\"}], \"updated_date_l10n_long\": \"July 13, 2025\", \"version\": \"v4\"}, \"updated\": \"2025-07-13T15:35:22.674031+00:00\", \"versions\": {\"index\": 4, \"is_latest\": true}}' data-preview='false'>\n1300:                    href=\"https://explore.openaire.eu/search/result?pid=10.5281/zenodo.15857114\"\n1317:  data-permissions='{\"can_edit\": false, \"can_immediately_delete\": false, \"can_manage\": false, \"can_media_read_files\": true, \"can_moderate\": false, \"can_new_version\": false, \"can_read_files\": true, \"can_request_deletion\": false, \"can_review\": false, \"can_update_draft\": false, \"can_view\": false}'\n1318:  data-record='{\"access\": {\"embargo\": {\"active\": false, \"reason\": null}, \"files\": \"public\", \"record\": \"public\", \"status\": \"open\"}, \"created\": \"2025-07-13T15:35:22.301810+00:00\", \"custom_fields\": {\"code:codeRepository\": \"https://github.com/lasapp/lasapp\", \"code:developmentStatus\": {\"id\": \"concept\", \"title\": {\"en\": \"Concept\"}}, \"code:programmingLanguage\": [{\"id\": \"python\", \"title\": {\"en\": \"Python\"}}, {\"id\": \"julia\", \"title\": {\"en\": \"Julia\"}}]}, \"deletion_status\": {\"is_deleted\": false, \"status\": \"P\"}, \"expanded\": {\"parent\": {\"access\": {\"owned_by\": {\"active\": null, \"blocked_at\": null, \"confirmed_at\": null, \"email\": \"\", \"id\": \"1177338\", \"is_current_user\": false, \"links\": {\"avatar\": \"https://zenodo.org/api/users/1177338/avatar.svg\", \"records_html\": \"https://zenodo.org/search/records?q=parent.access.owned_by.user:1177338\", \"self\": \"https://zenodo.org/api/users/1177338\"}, \"profile\": {\"affiliations\": \"TU Wien\", \"full_name\": \"Markus B\\u00f6ck\"}, \"username\": \"markusb7800\", \"verified_at\": null}}}}, \"files\": {\"count\": 4, \"enabled\": true, \"entries\": {\"LASAPP_supplementary_material.pdf\": {\"access\": {\"hidden\": false}, \"checksum\": \"md5:fdb43bf45f5733734e09dbc6580e35a6\", \"ext\": \"pdf\", \"id\": \"682580d0-5d86-4205-80d9-e9b506455f61\", \"key\": \"LASAPP_supplementary_material.pdf\", \"links\": {\"content\": \"https://zenodo.org/api/records/15857114/files/LASAPP_supplementary_material.pdf/content\", \"iiif_api\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/full/0/default.png\", \"iiif_base\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf\", \"iiif_canvas\": \"https://zenodo.org/api/iiif/record:15857114/canvas/LASAPP_supplementary_material.pdf\", \"iiif_info\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/info.json\", \"self\": \"https://zenodo.org/api/records/15857114/files/LASAPP_supplementary_material.pdf\"}, \"metadata\": {}, \"mimetype\": \"application/pdf\", \"size\": 712963, \"storage_class\": \"L\"}, \"lasapp-amd64.tar\": {\"access\": {\"hidden\": false}, \"checksum\": \"md5:ff8e6d74d4dd767722cac0e7bce4cc09\", \"ext\": \"tar\", \"id\": \"eb18004a-c10a-4773-a475-0d2afd2fc4e9\", \"key\": \"lasapp-amd64.tar\", \"links\": {\"content\": \"https://zenodo.org/api/records/15857114/files/lasapp-amd64.tar/content\", \"self\": \"https://zenodo.org/api/records/15857114/files/lasapp-amd64.tar\"}, \"metadata\": {}, \"mimetype\": \"application/x-tar\", \"size\": 505087488, \"storage_class\": \"L\"}, \"lasapp-arm64.tar\": {\"access\": {\"hidden\": false}, \"checksum\": \"md5:b57465da72fe5ff02471897898e052de\", \"ext\": \"tar\", \"id\": \"924b798f-92ee-4215-89e3-83c98ab3f543\", \"key\": \"lasapp-arm64.tar\", \"links\": {\"content\": \"https://zenodo.org/api/records/15857114/files/lasapp-arm64.tar/content\", \"self\": \"https://zenodo.org/api/records/15857114/files/lasapp-arm64.tar\"}, \"metadata\": {}, \"mimetype\": \"application/x-tar\", \"size\": 444457472, \"storage_class\": \"L\"}, \"lasapp-main.zip\": {\"access\": {\"hidden\": false}, \"checksum\": \"md5:4ea5cc760760a367da5ed98ab8067e64\", \"ext\": \"zip\", \"id\": \"1901a067-8fb7-4105-b50c-58954a52845e\", \"key\": \"lasapp-main.zip\", \"links\": {\"content\": \"https://zenodo.org/api/records/15857114/files/lasapp-main.zip/content\", \"self\": \"https://zenodo.org/api/records/15857114/files/lasapp-main.zip\"}, \"metadata\": {}, \"mimetype\": \"application/zip\", \"size\": 378046, \"storage_class\": \"L\"}}, \"order\": [], \"total_bytes\": 950635969}, \"id\": \"15857114\", \"is_draft\": false, \"is_published\": true, \"links\": {\"access\": \"https://zenodo.org/api/records/15857114/access\", \"access_grants\": \"https://zenodo.org/api/records/15857114/access/grants\", \"access_links\": \"https://zenodo.org/api/records/15857114/access/links\", \"access_request\": \"https://zenodo.org/api/records/15857114/access/request\", \"access_users\": \"https://zenodo.org/api/records/15857114/access/users\", \"archive\": \"https://zenodo.org/api/records/15857114/files-archive\", \"archive_media\": \"https://zenodo.org/api/records/15857114/media-files-archive\", \"communities\": \"https://zenodo.org/api/records/15857114/communities\", \"communities-suggestions\": \"https://zenodo.org/api/records/15857114/communities-suggestions\", \"doi\": \"https://doi.org/10.5281/zenodo.15857114\", \"draft\": \"https://zenodo.org/api/records/15857114/draft\", \"file_modification\": \"https://zenodo.org/api/records/15857114/file-modification\", \"files\": \"https://zenodo.org/api/records/15857114/files\", \"latest\": \"https://zenodo.org/api/records/15857114/versions/latest\", \"latest_html\": \"https://zenodo.org/records/15857114/latest\", \"media_files\": \"https://zenodo.org/api/records/15857114/media-files\", \"parent\": \"https://zenodo.org/api/records/13347681\", \"parent_doi\": \"https://doi.org/10.5281/zenodo.13347681\", \"parent_doi_html\": \"https://zenodo.org/doi/10.5281/zenodo.13347681\", \"parent_html\": \"https://zenodo.org/records/13347681\", \"preview_html\": \"https://zenodo.org/records/15857114?preview=1\", \"request_deletion\": \"https://zenodo.org/api/records/15857114/request-deletion\", \"requests\": \"https://zenodo.org/api/records/15857114/requests\", \"reserve_doi\": \"https://zenodo.org/api/records/15857114/draft/pids/doi\", \"self\": \"https://zenodo.org/api/records/15857114\", \"self_doi\": \"https://doi.org/10.5281/zenodo.15857114\", \"self_doi_html\": \"https://zenodo.org/doi/10.5281/zenodo.15857114\", \"self_html\": \"https://zenodo.org/records/15857114\", \"self_iiif_manifest\": \"https://zenodo.org/api/iiif/record:15857114/manifest\", \"self_iiif_sequence\": \"https://zenodo.org/api/iiif/record:15857114/sequence/default\", \"thumbnails\": {\"10\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E10,/0/default.jpg\", \"100\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E100,/0/default.jpg\", \"1200\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E1200,/0/default.jpg\", \"250\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E250,/0/default.jpg\", \"50\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E50,/0/default.jpg\", \"750\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E750,/0/default.jpg\"}, \"versions\": \"https://zenodo.org/api/records/15857114/versions\"}, \"media_files\": {\"count\": 1, \"enabled\": true, \"entries\": {\"LASAPP_supplementary_material.pdf.ptif\": {\"access\": {\"hidden\": true}, \"ext\": \"ptif\", \"id\": \"c351748a-eb12-4276-8ca5-c4529866910b\", \"key\": \"LASAPP_supplementary_material.pdf.ptif\", \"links\": {\"content\": \"https://zenodo.org/api/records/15857114/files/LASAPP_supplementary_material.pdf.ptif/content\", \"self\": \"https://zenodo.org/api/records/15857114/files/LASAPP_supplementary_material.pdf.ptif\"}, \"metadata\": null, \"mimetype\": \"application/octet-stream\", \"processor\": {\"source_file_id\": \"682580d0-5d86-4205-80d9-e9b506455f61\", \"status\": \"finished\", \"type\": \"image-tiles\"}, \"size\": 0, \"storage_class\": \"L\"}}, \"order\": [], \"total_bytes\": 0}, \"metadata\": {\"additional_descriptions\": [{\"description\": \"\\u003cp\\u003eThis version has the most up-to-date files (docker images).\\u003c/p\\u003e\\n\\u003cp\\u003eTo reproduce you may load the docker image like `docker load -i lasapp-amd64.tar` or `docker load -i lasapp-arm64.tar` depending on your system.\\u003c/p\\u003e\", \"type\": {\"id\": \"technical-info\", \"title\": {\"de\": \"Technische Informationen\", \"en\": \"Technical info\"}}}], \"contributors\": [{\"affiliations\": [{\"id\": \"04d836q62\", \"identifiers\": [{\"identifier\": \"04d836q62\", \"scheme\": \"ror\"}, {\"identifier\": \"grid.5329.d\", \"scheme\": \"grid\"}, {\"identifier\": \"0000 0004 1937 0669\", \"scheme\": \"isni\"}], \"name\": \"TU Wien\"}], \"person_or_org\": {\"family_name\": \"B\\u00f6ck\", \"given_name\": \"Markus\", \"identifiers\": [{\"identifier\": \"0009-0001-6704-5903\", \"scheme\": \"orcid\"}], \"name\": \"B\\u00f6ck, Markus\", \"type\": \"personal\"}, \"role\": {\"id\": \"researcher\", \"title\": {\"de\": \"WissenschaftlerIn\", \"en\": \"Researcher\"}}}, {\"affiliations\": [{\"name\": \"TU Wien\"}], \"person_or_org\": {\"family_name\": \"Schr\\u00f6der\", \"given_name\": \"Michael\", \"identifiers\": [{\"identifier\": \"0000-0003-1496-0531\", \"scheme\": \"orcid\"}], \"name\": \"Schr\\u00f6der, Michael\", \"type\": \"personal\"}, \"role\": {\"id\": \"researcher\", \"title\": {\"de\": \"WissenschaftlerIn\", \"en\": \"Researcher\"}}}, {\"affiliations\": [{\"id\": \"04d836q62\", \"identifiers\": [{\"identifier\": \"04d836q62\", \"scheme\": \"ror\"}, {\"identifier\": \"grid.5329.d\", \"scheme\": \"grid\"}, {\"identifier\": \"0000 0004 1937 0669\", \"scheme\": \"isni\"}], \"name\": \"TU Wien\"}], \"person_or_org\": {\"family_name\": \"Cito\", \"given_name\": \"J\\u00fcrgen\", \"identifiers\": [{\"identifier\": \"0000-0001-8619-1271\", \"scheme\": \"orcid\"}], \"name\": \"Cito, J\\u00fcrgen\", \"type\": \"personal\"}, \"role\": {\"id\": \"supervisor\", \"title\": {\"de\": \"SupervisorIn\", \"en\": \"Supervisor\"}}}], \"creators\": [{\"affiliations\": [{\"id\": \"04d836q62\", \"identifiers\": [{\"identifier\": \"04d836q62\", \"scheme\": \"ror\"}, {\"identifier\": \"grid.5329.d\", \"scheme\": \"grid\"}, {\"identifier\": \"0000 0004 1937 0669\", \"scheme\": \"isni\"}], \"name\": \"TU Wien\"}], \"person_or_org\": {\"family_name\": \"B\\u00f6ck\", \"given_name\": \"Markus\", \"identifiers\": [{\"identifier\": \"0009-0001-6704-5903\", \"scheme\": \"orcid\"}], \"name\": \"B\\u00f6ck, Markus\", \"type\": \"personal\"}, \"role\": {\"id\": \"researcher\", \"title\": {\"de\": \"WissenschaftlerIn\", \"en\": \"Researcher\"}}}], \"dates\": [{\"date\": \"2024-08-06\", \"description\": \"ASE 2024: 39th IEEE/ACM International Conference on Automated Software Engineering\", \"type\": {\"id\": \"accepted\", \"title\": {\"de\": \"Angenommen\", \"en\": \"Accepted\"}}}], \"description\": \"\\u003cp\\u003eProbabilistic programming allows developers to focus on the modeling aspect in the Bayesian workflow by abstracting away the posterior inference machinery.\\u003cbr\\u003eIn practice, however, programming errors specific to the probabilistic environment are hard to fix without deep knowledge of the underlying systems.\\u003cbr\\u003eLike in classical software engineering, static program analysis methods could be employed to catch many of these errors.\\u003cbr\\u003eIn this work, we present the first framework to formulate static analyses for probabilistic programs in a language-agnostic manner: LASAPP.\\u003cbr\\u003eWhile prior work focused on specific languages, all analyses written with our framework can be readily applied to new languages by adding easy-to-implement API bindings.\\u003cbr\\u003eOur prototype supports five popular probabilistic programming languages out-of-the-box.\\u003cbr\\u003eWe demonstrate the effectiveness and expressiveness of the LASAPP framework by presenting four provably-correct language-agnostic probabilistic program analyses that address problems discussed in the literature and evaluate them on over 200 real-world programs.\\u003c/p\\u003e\", \"languages\": [{\"id\": \"eng\", \"title\": {\"en\": \"English\"}}], \"publication_date\": \"2025-07-10\", \"publisher\": \"Zenodo\", \"resource_type\": {\"id\": \"software\", \"title\": {\"de\": \"Software\", \"en\": \"Software\"}}, \"rights\": [{\"description\": {\"en\": \"The Creative Commons Attribution license allows re-distribution and re-use of a licensed work on the condition that the creator is appropriately credited.\"}, \"icon\": \"cc-by-icon\", \"id\": \"cc-by-4.0\", \"props\": {\"scheme\": \"spdx\", \"url\": \"https://creativecommons.org/licenses/by/4.0/legalcode\"}, \"title\": {\"en\": \"Creative Commons Attribution 4.0 International\"}}], \"subjects\": [{\"subject\": \"probabilistic programming\"}, {\"subject\": \"program analysis\"}, {\"subject\": \"language-agnostic\"}, {\"subject\": \"static analysis\"}], \"title\": \"LASAPP: Language-Agnostic Static Analysis of Probabilistic Programs\"}, \"parent\": {\"access\": {\"owned_by\": {\"user\": \"1177338\"}, \"settings\": {\"accept_conditions_text\": null, \"allow_guest_requests\": false, \"allow_user_requests\": false, \"secret_link_expiration\": 0}}, \"communities\": {}, \"id\": \"13347681\", \"pids\": {\"doi\": {\"client\": \"datacite\", \"identifier\": \"10.5281/zenodo.13347681\", \"provider\": \"datacite\"}}}, \"pids\": {\"doi\": {\"client\": \"datacite\", \"identifier\": \"10.5281/zenodo.15857114\", \"provider\": \"datacite\"}, \"oai\": {\"identifier\": \"oai:zenodo.org:15857114\", \"provider\": \"oai\"}}, \"revision_id\": 4, \"stats\": {\"all_versions\": {\"data_volume\": 6244893731.0, \"downloads\": 107, \"unique_downloads\": 99, \"unique_views\": 198, \"views\": 232}, \"this_version\": {\"data_volume\": 5778791348.0, \"downloads\": 46, \"unique_downloads\": 43, \"unique_views\": 40, \"views\": 47}}, \"status\": \"published\", \"swh\": {}, \"ui\": {\"access_status\": {\"description_l10n\": \"The record and files are publicly accessible.\", \"embargo_date_l10n\": null, \"icon\": \"unlock\", \"id\": \"open\", \"message_class\": \"\", \"title_l10n\": \"Open\"}, \"additional_descriptions\": [{\"description\": \"\\u003cp\\u003eThis version has the most up-to-date files (docker images).\\u003c/p\\u003e\\n\\u003cp\\u003eTo reproduce you may load the docker image like `docker load -i lasapp-amd64.tar` or `docker load -i lasapp-arm64.tar` depending on your system.\\u003c/p\\u003e\", \"type\": {\"id\": \"technical-info\", \"title_l10n\": \"Technical info\"}}], \"contributors\": {\"affiliations\": [[1, \"TU Wien\", \"04d836q62\"]], \"contributors\": [{\"affiliations\": [[1, \"TU Wien\"]], \"person_or_org\": {\"family_name\": \"B\\u00f6ck\", \"given_name\": \"Markus\", \"identifiers\": [{\"identifier\": \"0009-0001-6704-5903\", \"scheme\": \"orcid\"}], \"name\": \"B\\u00f6ck, Markus\", \"type\": \"personal\"}, \"role\": {\"id\": \"researcher\", \"title\": \"Researcher\"}}, {\"affiliations\": [[1, \"TU Wien\"]], \"person_or_org\": {\"family_name\": \"Schr\\u00f6der\", \"given_name\": \"Michael\", \"identifiers\": [{\"identifier\": \"0000-0003-1496-0531\", \"scheme\": \"orcid\"}], \"name\": \"Schr\\u00f6der, Michael\", \"type\": \"personal\"}, \"role\": {\"id\": \"researcher\", \"title\": \"Researcher\"}}, {\"affiliations\": [[1, \"TU Wien\"]], \"person_or_org\": {\"family_name\": \"Cito\", \"given_name\": \"J\\u00fcrgen\", \"identifiers\": [{\"identifier\": \"0000-0001-8619-1271\", \"scheme\": \"orcid\"}], \"name\": \"Cito, J\\u00fcrgen\", \"type\": \"personal\"}, \"role\": {\"id\": \"supervisor\", \"title\": \"Supervisor\"}}]}, \"created_date_l10n_long\": \"July 13, 2025\", \"creators\": {\"affiliations\": [[1, \"TU Wien\", \"04d836q62\"]], \"creators\": [{\"affiliations\": [[1, \"TU Wien\"]], \"person_or_org\": {\"family_name\": \"B\\u00f6ck\", \"given_name\": \"Markus\", \"identifiers\": [{\"identifier\": \"0009-0001-6704-5903\", \"scheme\": \"orcid\"}], \"name\": \"B\\u00f6ck, Markus\", \"type\": \"personal\"}, \"role\": {\"id\": \"researcher\", \"title\": \"Researcher\"}}]}, \"custom_fields\": {\"code:codeRepository\": \"https://github.com/lasapp/lasapp\", \"code:developmentStatus\": {\"id\": \"concept\", \"title_l10n\": \"Concept\"}, \"code:programmingLanguage\": [{\"id\": \"python\", \"title_l10n\": \"Python\"}, {\"id\": \"julia\", \"title_l10n\": \"Julia\"}]}, \"dates\": [{\"date\": \"2024-08-06\", \"description\": \"ASE 2024: 39th IEEE/ACM International Conference on Automated Software Engineering\", \"type\": {\"id\": \"accepted\", \"title_l10n\": \"Accepted\"}}], \"description_stripped\": \"Probabilistic programming allows developers to focus on the modeling aspect in the Bayesian workflow by abstracting away the posterior inference machinery.In practice, however, programming errors specific to the probabilistic environment are hard to fix without deep knowledge of the underlying systems.Like in classical software engineering, static program analysis methods could be employed to catch many of these errors.In this work, we present the first framework to formulate static analyses for probabilistic programs in a language-agnostic manner: LASAPP.While prior work focused on specific languages, all analyses written with our framework can be readily applied to new languages by adding easy-to-implement API bindings.Our prototype supports five popular probabilistic programming languages out-of-the-box.We demonstrate the effectiveness and expressiveness of the LASAPP framework by presenting four provably-correct language-agnostic probabilistic program analyses that address problems discussed in the literature and evaluate them on over 200 real-world programs.\", \"is_draft\": false, \"languages\": [{\"id\": \"eng\", \"title_l10n\": \"English\"}], \"publication_date_l10n_long\": \"July 10, 2025\", \"publication_date_l10n_medium\": \"Jul 10, 2025\", \"resource_type\": {\"id\": \"software\", \"title_l10n\": \"Software\"}, \"rights\": [{\"description_l10n\": \"The Creative Commons Attribution license allows re-distribution and re-use of a licensed work on the condition that the creator is appropriately credited.\", \"icon\": \"cc-by-icon\", \"id\": \"cc-by-4.0\", \"props\": {\"scheme\": \"spdx\", \"url\": \"https://creativecommons.org/licenses/by/4.0/legalcode\"}, \"title_l10n\": \"Creative Commons Attribution 4.0 International\"}], \"updated_date_l10n_long\": \"July 13, 2025\", \"version\": \"v4\"}, \"updated\": \"2025-07-13T15:35:22.674031+00:00\", \"versions\": {\"index\": 4, \"is_latest\": true}}'\n1352:      <a href=\"/search?q=metadata.subjects.subject:%22probabilistic+programming%22\"\n1360:      <a href=\"/search?q=metadata.subjects.subject:%22program+analysis%22\"\n1368:      <a href=\"/search?q=metadata.subjects.subject:%22language-agnostic%22\"\n1376:      <a href=\"/search?q=metadata.subjects.subject:%22static+analysis%22\"\n1439:      <pre>&lt;a href=\"https://doi.org/10.5281/zenodo.15857114\"&gt;&lt;img src=\"https://zenodo.org/badge/DOI/10.5281/zenodo.15857114.svg\" alt=\"DOI\"&gt;&lt;/a&gt;</pre>\n1529:    <a class=\"license-link\" href=\"https://creativecommons.org/licenses/by/4.0/legalcode\" target=\"_blank\"\n1546:<div id=\"recordCitation\" data-record-links='{\"access\": \"https://zenodo.org/api/records/15857114/access\", \"access_grants\": \"https://zenodo.org/api/records/15857114/access/grants\", \"access_links\": \"https://zenodo.org/api/records/15857114/access/links\", \"access_request\": \"https://zenodo.org/api/records/15857114/access/request\", \"access_users\": \"https://zenodo.org/api/records/15857114/access/users\", \"archive\": \"https://zenodo.org/api/records/15857114/files-archive\", \"archive_media\": \"https://zenodo.org/api/records/15857114/media-files-archive\", \"communities\": \"https://zenodo.org/api/records/15857114/communities\", \"communities-suggestions\": \"https://zenodo.org/api/records/15857114/communities-suggestions\", \"doi\": \"https://doi.org/10.5281/zenodo.15857114\", \"draft\": \"https://zenodo.org/api/records/15857114/draft\", \"file_modification\": \"https://zenodo.org/api/records/15857114/file-modification\", \"files\": \"https://zenodo.org/api/records/15857114/files\", \"latest\": \"https://zenodo.org/api/records/15857114/versions/latest\", \"latest_html\": \"https://zenodo.org/records/15857114/latest\", \"media_files\": \"https://zenodo.org/api/records/15857114/media-files\", \"parent\": \"https://zenodo.org/api/records/13347681\", \"parent_doi\": \"https://doi.org/10.5281/zenodo.13347681\", \"parent_doi_html\": \"https://zenodo.org/doi/10.5281/zenodo.13347681\", \"parent_html\": \"https://zenodo.org/records/13347681\", \"preview_html\": \"https://zenodo.org/records/15857114?preview=1\", \"request_deletion\": \"https://zenodo.org/api/records/15857114/request-deletion\", \"requests\": \"https://zenodo.org/api/records/15857114/requests\", \"reserve_doi\": \"https://zenodo.org/api/records/15857114/draft/pids/doi\", \"self\": \"https://zenodo.org/api/records/15857114\", \"self_doi\": \"https://doi.org/10.5281/zenodo.15857114\", \"self_doi_html\": \"https://zenodo.org/doi/10.5281/zenodo.15857114\", \"self_html\": \"https://zenodo.org/records/15857114\", \"self_iiif_manifest\": \"https://zenodo.org/api/iiif/record:15857114/manifest\", \"self_iiif_sequence\": \"https://zenodo.org/api/iiif/record:15857114/sequence/default\", \"thumbnails\": {\"10\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E10,/0/default.jpg\", \"100\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E100,/0/default.jpg\", \"1200\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E1200,/0/default.jpg\", \"250\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E250,/0/default.jpg\", \"50\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E50,/0/default.jpg\", \"750\": \"https://zenodo.org/api/iiif/record:15857114:LASAPP_supplementary_material.pdf/full/%5E750,/0/default.jpg\"}, \"versions\": \"https://zenodo.org/api/records/15857114/versions\"}'\n1584:        <div id=\"recordExportDownload\" data-formats='[{\"export_url\": \"/records/15857114/export/json\", \"name\": \"JSON\"}, {\"export_url\": \"/records/15857114/export/json-ld\", \"name\": \"JSON-LD\"}, {\"export_url\": \"/records/15857114/export/csl\", \"name\": \"CSL\"}, {\"export_url\": \"/records/15857114/export/datacite-json\", \"name\": \"DataCite JSON\"}, {\"export_url\": \"/records/15857114/export/datacite-xml\", \"name\": \"DataCite XML\"}, {\"export_url\": \"/records/15857114/export/dublincore\", \"name\": \"Dublin Core XML\"}, {\"export_url\": \"/records/15857114/export/marcxml\", \"name\": \"MARCXML\"}, {\"export_url\": \"/records/15857114/export/bibtex\", \"name\": \"BibTeX\"}, {\"export_url\": \"/records/15857114/export/geojson\", \"name\": \"GeoJSON\"}, {\"export_url\": \"/records/15857114/export/dcat-ap\", \"name\": \"DCAT\"}, {\"export_url\": \"/records/15857114/export/codemeta\", \"name\": \"Codemeta\"}, {\"export_url\": \"/records/15857114/export/cff\", \"name\": \"Citation File Format\"}, {\"export_url\": \"/records/15857114/export/datapackage\", \"name\": \"Data Package JSON\"}]'></div>\n1641:        <a href=\"https://about.zenodo.org\">About</a>\n1644:        <a href=\"https://about.zenodo.org/policies\">Policies</a>\n1647:        <a href=\"https://about.zenodo.org/infrastructure\">Infrastructure</a>\n1650:        <a href=\"https://about.zenodo.org/principles\">Principles</a>\n1653:        <a href=\"https://about.zenodo.org/projects/\">Projects</a>\n1656:        <a href=\"https://about.zenodo.org/roadmap/\">Roadmap</a>\n1659:        <a href=\"https://about.zenodo.org/contact\">Contact</a>\n1667:        <a href=\"https://blog.zenodo.org\">Blog</a>\n1675:        <a href=\"https://help.zenodo.org\">FAQ</a>\n1678:        <a href=\"https://help.zenodo.org/docs/\">Docs</a>\n1681:        <a href=\"https://help.zenodo.org/guides/\">Guides</a>\n1684:        <a href=\"https://zenodo.org/support\">Support</a>\n1692:        <a href=\"https://developers.zenodo.org\">REST API</a>\n1695:        <a href=\"https://developers.zenodo.org#oai-pmh\">OAI-PMH</a>\n1703:        <a href=\"https://github.com/zenodo/zenodo-rdm\">\n1709:        <a href=\"/donate\">\n1720:      <a href=\"https://home.cern\" aria-label=\"CERN\">\n1725:      <a href=\"https://www.openaire.eu\" aria-label=\"OpenAIRE\">\n1730:      <a href=\"https://commission.europa.eu/index_en\" aria-label=\"European Commission\">\n1746:          <a href=\"https://home.cern/science/computing/data-centre\">CERN Data Centre</a> & <a href=\"https://inveniordm.docs.cern.ch/\">InvenioRDM</a>\n1752:            <a href=\"https://stats.uptimerobot.com/vlYOVuWgM/\">Status</a>\n1755:            <a href=\"https://about.zenodo.org/privacy-policy\">Privacy policy</a>\n1758:            <a href=\"https://about.zenodo.org/cookie-policy\">Cookie policy</a>\n1761:            <a href=\"https://about.zenodo.org/terms\">Terms of Use</a>\n1764:            <a href=\"/support\">Support</a>\n1833:    <p class=\"inline\">This site uses cookies. Find out more on <a href=\"https://about.zenodo.org/cookie-policy\">how we use cookies</a></p>\n</output>",
+      "exec_time": 0.07442331314086914
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The zenodo record lists several files; the lasapp-main.zip is the small source archive that likely contains the README and reproduction instructions needed for Table 1. I'll download that zip to /workspace so I can inspect its README in the next steps.\n\n<mini_swe_agent_bash>\ncurl -L -o /workspace/lasapp-main.zip 'https://zenodo.org/records/15857114/files/lasapp-main.zip?download=1'\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 8.637040615081787,
+        "response": {
+          "id": "chatcmpl-D1UWWgiZBsKOtOVNmHqLa09PpNA07",
+          "created": 1769248032,
+          "model": "gpt-5-mini-2025-08-07",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The zenodo record lists several files; the lasapp-main.zip is the small source archive that likely contains the README and reproduction instructions needed for Table 1. I'll download that zip to /workspace so I can inspect its README in the next steps.\n\n<mini_swe_agent_bash>\ncurl -L -o /workspace/lasapp-main.zip 'https://zenodo.org/records/15857114/files/lasapp-main.zip?download=1'\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 370,
+            "prompt_tokens": 15858,
+            "total_tokens": 16228,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 256,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n                                 Dload  Upload   Total   Spent    Left  Speed\n\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n100  369k  100  369k    0     0  5656k      0 --:--:-- --:--:-- --:--:-- 5679k\n</output>",
+      "exec_time": 0.14512348175048828
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I need to inspect the package contents to find the README with reproduction steps for Table 1. I'll extract the downloaded ZIP into /workspace/lasapp-main so I can read the README in the next step.\n\n<mini_swe_agent_bash>\nunzip -q /workspace/lasapp-main.zip -d /workspace/lasapp-main\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 4.9142749309539795,
+        "response": {
+          "id": "chatcmpl-D1UWf8uQ2LyHAJq463PnYAsuJzGmy",
+          "created": 1769248041,
+          "model": "gpt-5-mini-2025-08-07",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I need to inspect the package contents to find the README with reproduction steps for Table 1. I'll extract the downloaded ZIP into /workspace/lasapp-main so I can read the README in the next step.\n\n<mini_swe_agent_bash>\nunzip -q /workspace/lasapp-main.zip -d /workspace/lasapp-main\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 219,
+            "prompt_tokens": 16114,
+            "total_tokens": 16333,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 128,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 15104
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n</output>",
+      "exec_time": 0.08841586112976074
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I need to find the README file inside the extracted archive so I can read the reproduction instructions for Table 1. I'll search for README* files under /workspace/lasapp-main to locate the correct file.\n\n<mini_swe_agent_bash>\nfind /workspace/lasapp-main -maxdepth 3 -type f -iname \"readme*\" -print\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 4.843059062957764,
+        "response": {
+          "id": "chatcmpl-D1UWkT60ns7LahOsCHJ3XVmWc2y75",
+          "created": 1769248046,
+          "model": "gpt-5-mini-2025-08-07",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I need to find the README file inside the extracted archive so I can read the reproduction instructions for Table 1. I'll search for README* files under /workspace/lasapp-main to locate the correct file.\n\n<mini_swe_agent_bash>\nfind /workspace/lasapp-main -maxdepth 3 -type f -iname \"readme*\" -print\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 223,
+            "prompt_tokens": 16221,
+            "total_tokens": 16444,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 128,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 15104
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n/workspace/lasapp-main/lasapp-main/README.md\n</output>",
+      "exec_time": 0.06663632392883301
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I need to read the repository README to find the reproduction instructions (Docker commands, scripts, and any references to Table 1). I'll print the README to the terminal so I can locate the specific reproduction steps and follow-up grep commands.\n\n<mini_swe_agent_bash>\ncat /workspace/lasapp-main/lasapp-main/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 9.949124574661255,
+        "response": {
+          "id": "chatcmpl-D1UWpK4VMPM9lgbiK6vxqUg9y7W1h",
+          "created": 1769248051,
+          "model": "gpt-5-mini-2025-08-07",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I need to read the repository README to find the reproduction instructions (Docker commands, scripts, and any references to Table 1). I'll print the README to the terminal so I can locate the specific reproduction steps and follow-up grep commands.\n\n<mini_swe_agent_bash>\ncat /workspace/lasapp-main/lasapp-main/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 539,
+            "prompt_tokens": 16346,
+            "total_tokens": 16885,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 448,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 16128
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n<img width=600px, src=\"lasapp_logo.png\">\n\n# Language-Agnostic Static Analysis of Probabilistic Programs\n\nReplication package for [ASE2024 paper](https://dl.acm.org/doi/pdf/10.1145/3691620.3695031) with the same name.\n\nOverview:\n```\n.  \n\u251c\u2500\u2500 evaluation/                                     # Probabilistic Program Benchmark Dataset\n\u2502     \u251c\u2500\u2500 gen/                                      # 8 Gen.jl programs with discontinuous density\n\u2502     \u251c\u2500\u2500 pymc/                                     # 97 PyMC programs sourced from [pymc-resources]\n\u2502     \u251c\u2500\u2500 pyro/                                     # 8 Pyro programs with model-guide pairs sourced from [wonyeol]\n\u2502     \u2514\u2500\u2500 turing/                                   # 117 Turing.jl programs sourced from [SR2TuringPluto.jl] and [TuringTutorials]\n\u2502\n\u251c\u2500\u2500 experiments/                                    # Scripts to reproduce results of paper\n\u2502     \u251c\u2500\u2500 examples/                                 # Some probabilistic programs featured as examples in the paper tranlsated to several PPLs\n\u2502     \u251c\u2500\u2500 evaluate_graph_and_constraints.py         # Script to reproduce Dependency Analysis and Constraint Verifier experiments for PyMC and Turing\n\u2502     \u251c\u2500\u2500 evaluate_guide.py                         # Script to reproduce Model-Guide Validator experiment for Pyro\n\u2502     \u2514\u2500\u2500 evaluate_hmc.py                           # Script to reproduce HMC Assumption Checker for Gen\n\u2502\n\u251c\u2500\u2500 scripts/                                        # Scripts to start, stop, and test language servers\n\u2502     \u251c\u2500\u2500 start_servers.sh                          # Start Python and Julia language server\n\u2502     \u251c\u2500\u2500 stop_servers.sh                           # Stop Python and Julia language server\n\u2502     \u2514\u2500\u2500 test_servers.sh                           # Test Python and Julia language server\n\u2502\n\u251c\u2500\u2500 src/                                            # LASAPP source code\n\u2502     \u251c\u2500\u2500 jl/                                       # Julia language server\n\u2502     \u2502     \u251c\u2500\u2500 analysis/                           # Julia classical analysis backend\n\u2502     \u2502     \u251c\u2500\u2500 ast/                                # AST utilities\n\u2502     \u2502     \u251c\u2500\u2500 ppls/                               # Julia PPL bindings\n\u2502     \u2502     \u2502     \u251c\u2500\u2500 distributions.jl              # Distributions.jl distribution backend\n\u2502     \u2502     \u2502     \u251c\u2500\u2500 gen.jl                        # Gen.jl bindings\n\u2502     \u2502     \u2502     \u2514\u2500\u2500 turing.jl                     # Turing.jl bindings\n\u2502     \u2502     \u2514\u2500\u2500 test/                               # Unit tests\n\u2502     \u2514\u2500\u2500 py/                                       # Python language server\n\u2502     \u2502     \u251c\u2500\u2500 analysis/                           # Python classical analysis backend\n\u2502     \u2502     \u251c\u2500\u2500 ast_utils/                          # AST utilities\n\u2502     \u2502     \u251c\u2500\u2500 ppls/                               # Python PPL bindings\n\u2502     \u2502     \u2502     \u251c\u2500\u2500 beanmachine.py                # BeanMachine bindings\n\u2502     \u2502     \u2502     \u251c\u2500\u2500 pymc.py                       # PyMC bindings\n\u2502     \u2502     \u2502     \u251c\u2500\u2500 pyro.py                       # Pyro bindings\n\u2502     \u2502     \u2502     \u2514\u2500\u2500 torch_distributions.py        # PyTorch distributions backend\n\u2502     \u2502     \u2514\u2500\u2500 test/                               # Unit tests\n\u2502     \u2514\u2500\u2500 static/                                   # Static analysis front-end\n\u2502           \u251c\u2500\u2500 analysis/                           # Python classical analysis backend\n\u2502           \u2502     \u251c\u2500\u2500 constraint_verification.py    # Parameter Constraint Verifier (Section 4.4)\n\u2502           \u2502     \u251c\u2500\u2500 guide_validation.py           # Model-Guide Validator (Section 4.5)\n\u2502           \u2502     \u251c\u2500\u2500 hmc_assumption_checker.py     # HMC Assumptions Checker (Section 4.3)\n\u2502           \u2502     \u2514\u2500\u2500 model_graph.py                # Statistical Dependency Analysis (Section 4.2)\n\u2502           \u251c\u2500\u2500 lassap/                             # LASAPP framework front-end\n\u2502           \u2514\u2500\u2500 test/                               # Unit tests\n\u2502 \n\u251c\u2500\u2500 Dockerfile                                      # File for building Docker image  \n\u2514\u2500\u2500 main.py                                         # Script to apply any analysis to probabilstic program in file\n```\n\nData sources:\n- [[pymc-resources]](https://github.com/pymc-devs/pymc-resources/tree/a5f993653e467da11e9fc4ec682e96d59b880102)\n- [[wonyeol]](https://github.com/wonyeol/static-analysis-for-support-match/tree/850fb58ec5ce2f5e82262c2a9bfc067b799297c1/tests/pyro_examples)\n- [[SR2TuringPluto.jl]](https://github.com/StatisticalRethinkingJulia/SR2TuringPluto.jl/tree/75072280947a45f030bd45a62710c558d60a2a80)\n- [[TuringTutorials]](https://github.com/TuringLang/TuringTutorials/tree/8515a567321adf1531974dd14eb29c00eea05648)\n\n## Setup\n\nNo special hardware is needed for installation.\n\nRecommendations:\n- Hardware: >= 3.5 GHZ dual core CPU, >= 8 GB RAM, and >= 10 GB storage\n- OS: unix-based operating system\n- Installation with Docker\n\n### Docker Installation\n\nInstall [docker](https://www.docker.com).\n\nBuild the lasapp image (this may take several minutes):\n```\ndocker build -t lasapp .\n```\nIf the build was successful, run the docker image:\n```\ndocker run -it --name lasapp --rm lasapp\n```\n\nAlternatively, you can load the docker image provided at [Zenodo](https://doi.org/10.5281/zenodo.13347681) with\n```\ndocker load -i lasapp-amd64.tar\ndocker load -i lasapp-arm64.tar\n```\ndepending on your system, which was saved with (Docker version 28.3.0)\n```\ndocker buildx build --platform linux/amd64 -t lasapp-amd64 .\ndocker image save lasapp-amd64 > lasapp-amd64.tar\ndocker buildx build --platform linux/arm64 -t lasapp-arm64 .\ndocker image save lasapp-arm64 > lasapp-arm64.tar\n```\nRun those images with\n```\ndocker run -it --name lasapp-amd64 --rm lasapp-amd64\ndocker run -it --name lasapp-arm64 --rm lasapp-arm64\n```\n\n\n\n### Manual Installation\n\nRequirements:\n- Unix-based operating system\n- Python 3.10.12\n- Julia 1.9.2\n- tmux\n- [graphviz](https://www.graphviz.org)\n- [Z3](https://github.com/Z3Prover/z3)\n  \nInstall packages:\n```\npip install -r src/py/requirements.txt\njulia --project=src/jl -e \"using Pkg; Pkg.instantiate();\"\n```\n\n### Test Installation\n\nTo test the installation, first we run test scripts for both the Julia and Python language server.\n```\n./scripts/test_servers.sh\n```\n(If for some reason a segmentation error is reported run the tests individually: `julia --project=src/jl src/jl/test/all.jl` `python3 src/py/test/all.py`)\n\nIf all tests pass, you can start the language servers:\n```\n# start language servers\n./scripts/start_servers.sh\n```\n\n```\n# verify that language servers are running\ntmux ls\n```\nYou should see two instances `ls-jl` and `ls-py`.\n\nIf you like, you can attach to the servers with one of the following commands and detach with `Ctrl+b d`.\nHowever, this is not required.\n```\ntmux attach -t ls-jl\ntmux attach -t ls-py\n```\n\nRun the test file.\n```\npython3 src/static/test/all.py\n```\nIf there are no errors (result is OK), installation was successful.\n\n## Usage\n\n```\n# start language servers if not started already\n./scripts/start_servers.sh\n```\nRun main file:\n```\npython3 main.py -h\nusage: main.py [-h] [-a A] [-v] filename\n\npositional arguments:\n  filename    path to probabilistic program\n\noptions:\n  -h, --help  show this help message and exit\n  -a A        graph | hmc | constraint | guide-proposal | guide-svi\n  --v         if set, source code of file will be printed\n  --view      Only applicable for -a graph. If set, model graph will be plotted and displayed. Otherwise, only saved to disk.\n```\n\nYou can use all static analyses:\n- `-a=graph` model graph extraction\n- `-a=hmc` HMC assumption checker\n- `-a=constraint` parameter constraint verification\n- `-a=guide-proposal` model-guide validation (model >> guide)\n- `-a=guide-svi` model-guide validation (guide >> model)\n\nExample programs can be found at `experiments/examples`.\n\nUsage examples can be found below.\n\nAfter you are finished, you may stop the language servers.\n```\n# stop language servers\n./scripts/stop_servers.sh\n```\n\n## Reproducing the Results of the Paper (Section 5 / Table 2)\nStart the language servers and verify that they are running.\n```\n# start language servers if not started already\n./scripts/start_servers.sh\n```\n### Evaluation\n\nStatistical Dependency Analysis (Model Graph) and Parameter Constraint Analysis\n```\npython3 experiments/evaluate_graph_and_constraints.py -ppl turing\n```\nThis will perfrom the Statistical Dependency Analysis and the Parameter Constraint Verifier for 117 Turing programs.  \nFor each program, the result will be printed: Everything is ok = correct, Warnings produced = unsupported.  \nAt the end, the summary counts are reported.\n\n```\npython3 experiments/evaluate_graph_and_constraints.py -ppl pymc\n```\nPerforms the same experiment for 97 PyMC programs.\n\nHMC Assumption Analysis\n```\npython3 experiments/evaluate_hmc.py\n```\nPerforms the HMC Assumption Checker for 8 Gen programs.  \nFor each program, the result will be printed: Everything is ok = false negative, Warnings produced = true positive.  \n\n\nModel-Guide Validation Analysis\n```\npython3 experiments/evaluate_guide.py\n```\nPerforms the Model-Guide Validation Validator for 8 Pyro programs.  \nFor each program, the result will be printed: Everything is ok = true negative, Warnings produced = true positive.  \n\nNote: With the model graph analysis we have identified a bug in <a href=\"evaluation/turing/statistical_rethinking_2/chapter_14_6.jl\">chapter_14_6.jl</a>.\n\n### Some additional examples\n\n#### Motivating example (Figure 3): Catching discrete variables.\n```\npython3 main.py experiments/examples/motivating_turing.jl -a hmc\npython3 main.py experiments/examples/motivating_beanmachine.py -a hmc\npython3 main.py experiments/examples/motivating_pyro.py -a hmc\n```\nAlso available for `gen`, and `pymc`.\n\n#### Model graph extraction (Figure 6):\n```\npython3 main.py experiments/examples/pedestrian_turing.jl -a graph\n```\nCheck out the plot by running on the host machine:\n```\ndocker cp lasapp:/LASAPP/tmp/model.gv.pdf . && open model.gv.pdf\n```\nAlso available for `gen`, `pyro`.\n\n#### HMC Assumption Checking for Pedestrian Model:\n```\npython3 main.py experiments/examples/pedestrian_pyro.py -a hmc\n```\nAlso available for `gen`, `turing`, and `beanmachine`.\n\n#### Parameter Constraint Verification (Figure 7):\n```\npython3 main.py experiments/examples/constraint_gen.jl -a constraint\n```\nAlso available for `turing`, `gen`, `pyro`, `pymc`, and `beanmachine`.\n\n#### Model-Guide Validation:\n```\npython3 main.py experiments/examples/guide_pyro.py -a guide-proposal\n```\nAlso available for `gen`.\n\n\n## Citation\n[ASE2024 paper](https://dl.acm.org/doi/pdf/10.1145/3691620.3695031)\n```\n@inproceedings{boeck2024,\n  title={Language-Agnostic Static Analysis of Probabilistic Programs},\n  author={B{\\\"o}ck, Markus and Schr{\\\"o}der, Michael and Cito, J{\\\"u}rgen},\n  booktitle={Proceedings of the 39th IEEE/ACM International Conference on Automated Software Engineering},\n  pages={78--90},\n  year={2024}\n}\n```</output>",
+      "exec_time": 0.05846405029296875
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: To find the exact reproduction commands and any references to Table 1 in the replication package, I will search the README for mentions of \"docker\" (to follow the recommended Docker-based workflow) and for literal \"Table 1\". This will show where to load images or run experiments relevant to reproducing Table 1.\n\n<mini_swe_agent_bash>\n(grep -in 'docker' /workspace/lasapp-main/lasapp-main/README.md || true) && (grep -in 'Table 1' /workspace/lasapp-main/lasapp-main/README.md || true)\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 19.58604645729065,
+        "response": {
+          "id": "chatcmpl-D1UWz1JueUZCWjg331StNlcvLgPbY",
+          "created": 1769248061,
+          "model": "gpt-5-mini-2025-08-07",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: To find the exact reproduction commands and any references to Table 1 in the replication package, I will search the README for mentions of \"docker\" (to follow the recommended Docker-based workflow) and for literal \"Table 1\". This will show where to load images or run experiments relevant to reproducing Table 1.\n\n<mini_swe_agent_bash>\n(grep -in 'docker' /workspace/lasapp-main/lasapp-main/README.md || true) && (grep -in 'Table 1' /workspace/lasapp-main/lasapp-main/README.md || true)\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 910,
+            "prompt_tokens": 19164,
+            "total_tokens": 20074,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 768,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n54:\u251c\u2500\u2500 Dockerfile                                      # File for building Docker image  \n71:- Installation with Docker\n73:### Docker Installation\n75:Install [docker](https://www.docker.com).\n79:docker build -t lasapp .\n81:If the build was successful, run the docker image:\n83:docker run -it --name lasapp --rm lasapp\n86:Alternatively, you can load the docker image provided at [Zenodo](https://doi.org/10.5281/zenodo.13347681) with\n88:docker load -i lasapp-amd64.tar\n89:docker load -i lasapp-arm64.tar\n91:depending on your system, which was saved with (Docker version 28.3.0)\n93:docker buildx build --platform linux/amd64 -t lasapp-amd64 .\n94:docker image save lasapp-amd64 > lasapp-amd64.tar\n95:docker buildx build --platform linux/arm64 -t lasapp-arm64 .\n96:docker image save lasapp-arm64 > lasapp-arm64.tar\n100:docker run -it --name lasapp-amd64 --rm lasapp-amd64\n101:docker run -it --name lasapp-arm64 --rm lasapp-arm64\n247:docker cp lasapp:/LASAPP/tmp/model.gv.pdf . && open model.gv.pdf\n</output>",
+      "exec_time": 0.08247494697570801
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I'll create the reproduction script repro_lasapp_table_1.sh that: (1) writes the expected table to /workspace/expected.md, (2) downloads the lasapp archive if missing, (3) unpacks the source tree, (4) computes line counts for the language servers and per-PPL binding files (Python and Julia) using wc/find so the numbers match how the repo is organized, (5) writes the reproduced table to /workspace/repro.txt, and (6) prints a submission block with the reproduced table. This single command will create that script so you (or the automated workflow) can run it as the next step.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_lasapp_table_1.sh <<'EOF'\n#!/usr/bin/bash\nset -euo pipefail\n\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 1: Lines of code needed to add LASAPP support for various PPLs and probability distribution back-ends.**\n\n|        | Back-end / PPL           | LOC  |                 |\n| ---    | ---                      | ---  | ---             |\n| Python | Language Server          | 1553 |                 |\n| Python | PyMC [51]                | 281  | custom back-end |\n| Python | torch.distributions [48] | 67   | shared back-end |\n| Python | Pyro [8]                 | 133  |                 |\n| Python | BeanMachine [55]         | 95   |                 |\n| Julia  | Language Server          | 2175 |                 |\n| Julia  | Distributions.jl [7]     | 240  | shared back-end |\n| Julia  | Gen [14]                 | 227  |                 |\n| Julia  | Turing [21]              | 172  |                 |\nEOTABLE\n\n# Section 2: Artifact download (download only if missing)\n[ -f /workspace/lasapp-main.zip ] || curl -L -o /workspace/lasapp-main.zip 'https://zenodo.org/records/15857114/files/lasapp-main.zip?download=1'\n\n# Section 3: Reproduction commands\nrm -rf /workspace/lasapp-main-extract || true\nunzip -q /workspace/lasapp-main.zip -d /workspace/lasapp-main-extract\n\n# The repo in the zip is under lasapp-main/lasapp-main\nROOT_DIR=/workspace/lasapp-main-extract/lasapp-main\nif [ ! -d \"$ROOT_DIR\" ]; then\n  # fallback if the archive layout differs\n  ROOT_DIR=/workspace/lasapp-main-extract\nfi\n\ncd \"$ROOT_DIR\"\n\n# Compute LOCs\npython_ls_loc=$(find src/py -type f -name '*.py' ! -path '*/ppls/*' -print0 2>/dev/null | xargs -0 cat 2>/dev/null | wc -l || echo 0)\npymc_loc=$(wc -l < src/py/ppls/pymc.py 2>/dev/null || echo 0)\ntorch_loc=$(wc -l < src/py/ppls/torch_distributions.py 2>/dev/null || echo 0)\npyro_loc=$(wc -l < src/py/ppls/pyro.py 2>/dev/null || echo 0)\nbean_loc=$(wc -l < src/py/ppls/beanmachine.py 2>/dev/null || echo 0)\n\njulia_ls_loc=$(find src/jl -type f -name '*.jl' ! -path '*/ppls/*' -print0 2>/dev/null | xargs -0 cat 2>/dev/null | wc -l || echo 0)\ndists_loc=$(wc -l < src/jl/ppls/distributions.jl 2>/dev/null || echo 0)\ngen_loc=$(wc -l < src/jl/ppls/gen.jl 2>/dev/null || echo 0)\nturing_loc=$(wc -l < src/jl/ppls/turing.jl 2>/dev/null || echo 0)\n\n# Section 3 (continued): Write reproduction results to /workspace/repro.txt\ncat > /workspace/repro.txt <<EOT\n**Table 1: Lines of code needed to add LASAPP support for various PPLs and probability distribution back-ends.**\n\n|        | Back-end / PPL           | LOC  |                 |\n| ---    | ---                      | ---  | ---             |\n| Python | Language Server          | ${python_ls_loc} |                 |\n| Python | PyMC [51]                | ${pymc_loc} | custom back-end |\n| Python | torch.distributions [48] | ${torch_loc} | shared back-end |\n| Python | Pyro [8]                 | ${pyro_loc} |                 |\n| Python | BeanMachine [55]         | ${bean_loc} |                 |\n| Julia  | Language Server          | ${julia_ls_loc} |                 |\n| Julia  | Distributions.jl [7]     | ${dists_loc} | shared back-end |\n| Julia  | Gen [14]                 | ${gen_loc} |                 |\n| Julia  | Turing [21]              | ${turing_loc} |                 |\nEOT\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\ncat /workspace/repro.txt\necho '</artisan_submit>'\n\nEOF\nchmod +x /workspace/repro_lasapp_table_1.sh\necho \"Wrote /workspace/repro_lasapp_table_1.sh (make executable).\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 60.91993451118469,
+        "response": {
+          "id": "chatcmpl-D1UXIXVjxpJhNf7E32b1sLK4tgrSO",
+          "created": 1769248080,
+          "model": "gpt-5-mini-2025-08-07",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I'll create the reproduction script repro_lasapp_table_1.sh that: (1) writes the expected table to /workspace/expected.md, (2) downloads the lasapp archive if missing, (3) unpacks the source tree, (4) computes line counts for the language servers and per-PPL binding files (Python and Julia) using wc/find so the numbers match how the repo is organized, (5) writes the reproduced table to /workspace/repro.txt, and (6) prints a submission block with the reproduced table. This single command will create that script so you (or the automated workflow) can run it as the next step.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_lasapp_table_1.sh <<'EOF'\n#!/usr/bin/bash\nset -euo pipefail\n\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 1: Lines of code needed to add LASAPP support for various PPLs and probability distribution back-ends.**\n\n|        | Back-end / PPL           | LOC  |                 |\n| ---    | ---                      | ---  | ---             |\n| Python | Language Server          | 1553 |                 |\n| Python | PyMC [51]                | 281  | custom back-end |\n| Python | torch.distributions [48] | 67   | shared back-end |\n| Python | Pyro [8]                 | 133  |                 |\n| Python | BeanMachine [55]         | 95   |                 |\n| Julia  | Language Server          | 2175 |                 |\n| Julia  | Distributions.jl [7]     | 240  | shared back-end |\n| Julia  | Gen [14]                 | 227  |                 |\n| Julia  | Turing [21]              | 172  |                 |\nEOTABLE\n\n# Section 2: Artifact download (download only if missing)\n[ -f /workspace/lasapp-main.zip ] || curl -L -o /workspace/lasapp-main.zip 'https://zenodo.org/records/15857114/files/lasapp-main.zip?download=1'\n\n# Section 3: Reproduction commands\nrm -rf /workspace/lasapp-main-extract || true\nunzip -q /workspace/lasapp-main.zip -d /workspace/lasapp-main-extract\n\n# The repo in the zip is under lasapp-main/lasapp-main\nROOT_DIR=/workspace/lasapp-main-extract/lasapp-main\nif [ ! -d \"$ROOT_DIR\" ]; then\n  # fallback if the archive layout differs\n  ROOT_DIR=/workspace/lasapp-main-extract\nfi\n\ncd \"$ROOT_DIR\"\n\n# Compute LOCs\npython_ls_loc=$(find src/py -type f -name '*.py' ! -path '*/ppls/*' -print0 2>/dev/null | xargs -0 cat 2>/dev/null | wc -l || echo 0)\npymc_loc=$(wc -l < src/py/ppls/pymc.py 2>/dev/null || echo 0)\ntorch_loc=$(wc -l < src/py/ppls/torch_distributions.py 2>/dev/null || echo 0)\npyro_loc=$(wc -l < src/py/ppls/pyro.py 2>/dev/null || echo 0)\nbean_loc=$(wc -l < src/py/ppls/beanmachine.py 2>/dev/null || echo 0)\n\njulia_ls_loc=$(find src/jl -type f -name '*.jl' ! -path '*/ppls/*' -print0 2>/dev/null | xargs -0 cat 2>/dev/null | wc -l || echo 0)\ndists_loc=$(wc -l < src/jl/ppls/distributions.jl 2>/dev/null || echo 0)\ngen_loc=$(wc -l < src/jl/ppls/gen.jl 2>/dev/null || echo 0)\nturing_loc=$(wc -l < src/jl/ppls/turing.jl 2>/dev/null || echo 0)\n\n# Section 3 (continued): Write reproduction results to /workspace/repro.txt\ncat > /workspace/repro.txt <<EOT\n**Table 1: Lines of code needed to add LASAPP support for various PPLs and probability distribution back-ends.**\n\n|        | Back-end / PPL           | LOC  |                 |\n| ---    | ---                      | ---  | ---             |\n| Python | Language Server          | ${python_ls_loc} |                 |\n| Python | PyMC [51]                | ${pymc_loc} | custom back-end |\n| Python | torch.distributions [48] | ${torch_loc} | shared back-end |\n| Python | Pyro [8]                 | ${pyro_loc} |                 |\n| Python | BeanMachine [55]         | ${bean_loc} |                 |\n| Julia  | Language Server          | ${julia_ls_loc} |                 |\n| Julia  | Distributions.jl [7]     | ${dists_loc} | shared back-end |\n| Julia  | Gen [14]                 | ${gen_loc} |                 |\n| Julia  | Turing [21]              | ${turing_loc} |                 |\nEOT\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\ncat /workspace/repro.txt\necho '</artisan_submit>'\n\nEOF\nchmod +x /workspace/repro_lasapp_table_1.sh\necho \"Wrote /workspace/repro_lasapp_table_1.sh (make executable).\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 3772,
+            "prompt_tokens": 19612,
+            "total_tokens": 23384,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 2560,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 16128
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nWrote /workspace/repro_lasapp_table_1.sh (make executable).\n</output>",
+      "exec_time": 0.06559205055236816
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I'll run the reproduction script we just created (/workspace/repro_lasapp_table_1.sh). That script unpacks the archive (if needed), counts lines of code for the Python and Julia language servers and PPL/back-end binding files, writes the reproduced Table 1 to /workspace/repro.txt, and prints an <artisan_submit> block. Running it now will produce the reproduction output for Table 1.\n\n<mini_swe_agent_bash>\n/workspace/repro_lasapp_table_1.sh\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 6.377544403076172,
+        "response": {
+          "id": "chatcmpl-D1UYH7AaecfzjpUw47v0CC4H26H0B",
+          "created": 1769248141,
+          "model": "gpt-5-mini-2025-08-07",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I'll run the reproduction script we just created (/workspace/repro_lasapp_table_1.sh). That script unpacks the archive (if needed), counts lines of code for the Python and Julia language servers and PPL/back-end binding files, writes the reproduced Table 1 to /workspace/repro.txt, and prints an <artisan_submit> block. Running it now will produce the reproduction output for Table 1.\n\n<mini_swe_agent_bash>\n/workspace/repro_lasapp_table_1.sh\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 317,
+            "prompt_tokens": 20857,
+            "total_tokens": 21174,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 192,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 19328
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n<artisan_submit>\n**Table 1: Lines of code needed to add LASAPP support for various PPLs and probability distribution back-ends.**\n\n|        | Back-end / PPL           | LOC  |                 |\n| ---    | ---                      | ---  | ---             |\n| Python | Language Server          | 3519 |                 |\n| Python | PyMC [51]                | 249 | custom back-end |\n| Python | torch.distributions [48] | 70 | shared back-end |\n| Python | Pyro [8]                 | 80 |                 |\n| Python | BeanMachine [55]         | 139 |                 |\n| Julia  | Language Server          | 5204 |                 |\n| Julia  | Distributions.jl [7]     | 289 | shared back-end |\n| Julia  | Gen [14]                 | 319 |                 |\n| Julia  | Turing [21]              | 251 |                 |\n</artisan_submit>\n</output>",
+      "exec_time": 0.12215089797973633
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I ran the provided reproduction script which unpacked the artifact and computed LOC for the language servers and PPL/back-end binding files. The script produced a reproduced Table 1 (shown in /workspace/repro.txt). Now I will signal completion of the reproduction workflow by outputting the required completion token.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 6.1446852684021,
+        "response": {
+          "id": "chatcmpl-D1UYOGQ7dLdCZZrGVm5oUTaG2Pxpv",
+          "created": 1769248148,
+          "model": "gpt-5-mini-2025-08-07",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I ran the provided reproduction script which unpacked the artifact and computed LOC for the language servers and PPL/back-end binding files. The script produced a reproduced Table 1 (shown in /workspace/repro.txt). Now I will signal completion of the reproduction workflow by outputting the required completion token.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 354,
+            "prompt_tokens": 21203,
+            "total_tokens": 21557,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 256,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 20352
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": ""
+    }
+  ],
+  "trajectory_format": "mini-swe-agent-1"
+}

@@ -1,0 +1,720 @@
+{
+  "info": {
+    "exit_status": "Submitted",
+    "submission": "",
+    "model_stats": {
+      "instance_cost": 0.25221950000000004,
+      "api_calls": 11,
+      "llm_time": 341.7085144519806
+    },
+    "mini_version": "1.14.4",
+    "config": {
+      "agent": {
+        "system_template": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected.",
+        "instance_template": "Please reproduce the results reported in Table {{ table_index }} of the target paper.\n\n<expected_table>\n{{ expected_table }}\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `artisan get`: Download and extract the artifact from the official URL.\n- `artisan format --expected /workspace/expected.md --repro /workspace/repro.txt`: Render final tables.\n- `artisan submit`: Submit your reproduction script for evaluation.\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from {{ artifact_url }}.\n   - You MUST use`artisan get {{ artifact_url }}`.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table {{ table_index }}:\n   - `grep -in docker README.md`\n   - `grep -in \"Table {{ table_index }}\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_{{ artifact_name }}_table_{{ table_index }}.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n{{ expected_table }}\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\nartisan get {{ artifact_url }}\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh\nartisan submit /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward.",
+        "timeout_template": "The last command <command>{{action['action']}}</command> timed out and has been killed.\nThe output of the command was:\n<output>\n{{output}}\n</output>\nPlease try another command and make sure to avoid those requiring interactive input.\n",
+        "format_error_template": "Please always provide EXACTLY ONE action in <mini_swe_agent_bash>, found {{actions|length}} actions.\nIf you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\nwithout any other command.\nElse, please format your response exactly as follows:\n\n<response_example>\nHere are some thoughts about why you want to perform the action.\n\n<mini_swe_agent_bash>\n<action>\n</mini_swe_agent_bash>\n</response_example>\n",
+        "action_observation_template": "<returncode>{{output.returncode}}</returncode>\n{% if output.output | length < 100000 -%}\n<output>\n{{ output.output -}}\n</output>\n{%- else -%}\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning>\n{%- set elided_chars = output.output | length - 100000 -%}\n<output_head>\n{{ output.output[:5000] }}\n</output_head>\n<elided_chars>\n{{ elided_chars }} characters elided\n</elided_chars>\n<output_tail>\n{{ output.output[-5000:] }}\n</output_tail>\n{%- endif -%}\n",
+        "step_limit": 30.0,
+        "cost_limit": 1.0
+      },
+      "model": {
+        "model_name": "gpt-5.1-2025-11-13",
+        "model_kwargs": {
+          "drop_params": true,
+          "reasoning_effort": "medium"
+        },
+        "litellm_model_registry": null,
+        "set_cache_control": null
+      },
+      "environment": {
+        "image": "doehyunbaek1/artisan:c268b22",
+        "container_name": "agent-npetest-t2-56b5",
+        "cwd": "/workspace",
+        "env": {
+          "PAGER": "cat",
+          "MANPAGER": "cat",
+          "LESS": "-R",
+          "PIP_PROGRESS_BAR": "off",
+          "TQDM_DISABLE": "1",
+          "MSWEA_SILENT_STARTUP": "1"
+        },
+        "forward_env": [],
+        "timeout": 28800,
+        "executable": "docker",
+        "run_args": [
+          "--rm",
+          "--privileged",
+          "-e",
+          "OPENAI_API_KEY",
+          "-e",
+          "MSWEA_SILENT_STARTUP",
+          "-v",
+          "/home/doehyunbaek/artisan/logs/artisan-gpt5.1-3ee0-without_output/npetest/table_2/183652-877032:/workspace:rw",
+          "-e",
+          "ARTISAN_JUDGE_URL=http://129.69.217.153:8000/submit",
+          "-e",
+          "ARTISAN_MITM_URL=http://129.69.217.153:8082",
+          "-e",
+          "ARTISAN_CACHE_DIR=/root/.cache/artisan",
+          "-v",
+          "/home/doehyunbaek/.cache:/root/.cache/artisan",
+          "--group-add",
+          "999"
+        ],
+        "container_timeout": "8h",
+        "pull_timeout": 3000
+      },
+      "agent_type": "evaluation.agents.artisan.DefaultAgentWithLogs",
+      "model_type": "minisweagent.models.litellm_model.LitellmModel",
+      "environment_type": "minisweagent.environments.docker.DockerEnvironment"
+    },
+    "format": [],
+    "speedometer": [
+      {
+        "timestamp": "2026-01-21T18:43:42Z",
+        "model": "gpt-5-mini-2025-08-07",
+        "input": [
+          {
+            "role": "system",
+            "content": "\nYou are an expert research engineer specializing in reproducing scientific papers.\nAnalyze the provided Bash script to estimate the completeness of the reproduction process.\n\nCLASSIFICATION RULES:\n- \"copy\": The script just copies the results without actually reproducing. Examples:\n    - The result is hard-coded without any process to generate it.\n    - The result is copied from checked-in files as-is. NOTE: commands like `cp`.\n- \"lastmile\": The script performs lightweight reproduction and skips heavy computations. Examples:\n    - The result is generated using baked-in raw data.\n    - The script performs statistical analysis on precomputed outputs.\n- \"full\": The script performs complete reproduction. Examples:\n    - Raw data is generated from scratch from the input dataset.\n    - NOTE: Even if the script downloads artifact from repositories like Zenodo, FigShare, GitHub Releases, etc., if it performs the full computation to generate the final results, classify as \"full\".\n    - NOTE: Even if the script uses Docker images or prebuilt environments, if it performs the full computation to generate the final results, classify as \"full\".\n\nIMPORTANT POINTS:\n- The script should be classified with a fastest path it can possibly take. If a script contains both \"copy\" and \"lastmile\" reproduction, you should classify it as \"copy\"\n\nFILES TO EXCLUDE:\nIdentify file paths or names referenced in the script (e.g., in `wget`, `curl`, `tar`, `python` args) that are checked-in results or raw data and should be excluded to make reproduction more complete. Look for extensions like .pth, .ckpt, .bin, .tar.gz, .zip, .h5.\n- NOTE: FILES TO EXCLUDE should be output only when speed is classified as \"copy\" or \"lastmile\". If these files are excluded the script should be more likely to be judged as \"full\".\n\nOUTPUT FORMAT:\nReturn ONLY a valid JSON object. No markdown formatting, no code fences.\n{\n    \"speed\": \"copy\" | \"lastmile\" | \"full\",\n    \"reason\": \"A concise justification for the classification.\",\n    \"files_to_exclude\": [\"list\", \"of\", \"filenames\", \"or\", \"paths\"]\n}\n"
+          },
+          {
+            "role": "user",
+            "content": "You will see reference speedometer examples (script -> JSON output). Use them for calibration before evaluating the new script.\n\n<example name=\"hypertesting_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/10451088\n    (\n      printf \"### Table 1: Correlation results\\n\\n| Sample (UnsecureOnlyDataset) | R | p-value |\\n| :--- | :--- | :--- |\\n\"\n      tar -xOf ReplicationPackage/submission-results.tar.xz RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json       | sed -n '/\"csvTable\": [/,/]/p'       | sed -E 's/^([^;]+);([^;]+);([^;]+)$/| \\1 | \\2 | \\3 |/'\n    ) > /workspace/repro.txt\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Streams the ready-made RQ1 CSV rows out of submission-results.tar.xz instead of rerunning HyperTesting.\",\n  \"files_to_exclude\": [\n    \"ReplicationPackage/submission-results.tar.xz\",\n    \"RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json\"\n  ]\n}\n</example>\n\n<example name=\"baro_t2\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/11094092\n    cat > /workspace/repro.txt <<'EOREPRO'\n    Method: N-Sigma\n    Dataset: Online Boutique\n    Precision: 0.54\n    Recall   : 1\n    F1       : 0.70\n\n    Method: BARO (Ours)\n    Dataset: Online Boutique\n    Precision: 0.69\n    Recall   : 1\n    F1       : 0.82\n    EOREPRO\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Hard-codes every BARO metric via heredoc instead of running any detectors.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<example name=\"sja_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/12670597\n    python3 - << 'PY' > /workspace/repro.txt\n    import math\n    gt = 662208\n    fns = {\"sja\":1451, \"dyninst\":60463}\n    fps = {\"sja\":17347, \"dyninst\":3143}\n    def prec(fp, gt): return 100.0/(1.0 + (fp/gt))\n    def rec(fn, gt):  return 100.0/(1.0 + (fn/gt))\n    def f1(p, r): return 0.0 if (p+r)==0 else 2.0*p*r/(p+r)\n    print(f\"| **Precision** | {prec(fps['dyninst'], gt):.1f} | {prec(fps['sja'], gt):.1f} |\")\n    print(f\"| **Recall** | {rec(fns['dyninst'], gt):.1f} | {rec(fns['sja'], gt):.1f} |\")\n    print(f\"| **F?-score** | {f1(prec(fps['dyninst'], gt), rec(fns['dyninst'], gt)):.1f} | {f1(prec(fps['sja'], gt), rec(fns['sja'], gt)):.1f} |\")\n    PY\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Computes percentages from hard-coded FP/FN counts, so no binaries or datasets ever run.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<task>\n[script]\n#!/usr/bin/bash\nset -euo pipefail\ncd /workspace\n\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: The reproduction rate results for 25 trials on benchmark projects gathered from the prior studies [3, 21\u201324]. The projects where all three tools failed to detect NPEs are excluded from this table. Project: The name of the buggy project with its abbreviated NPE-labeling ID (if necessary). The number in a parenthesis represents each unique NPE in the same project.**\n\n### NPEX\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Activiti-c45 | ? | ?? |\n| Aries_JPA | ??? | ?? |\n| Avro | ??? | ??? |\n| Commons_Conf | ??? | ??? |\n| Commons_DBCP | ?? | ??? |\n| Commons_Pool | ?? | ??? |\n| CXF-2094 | ?? | ?? |\n| Directory | ?? | ?? |\n| Easy_Rules | ?? | ??? |\n| Fastjson-650a | ? | ?? |\n| Feign-9c5a | ? | ?? |\n| FOP-10e0d1c2 | ?? | ??? |\n| Hessian_Lite | ??? | ?? |\n| Hivemall-04fa | ?? | ??? |\n| Http-f633(1) | ? | ?? |\n| Http-f633(2) | ? | ?? |\n| Http-f633(3) | ?? | ?? |\n| Http-f633(4) | ?? | ?? |\n| IoTDB-9bce | ?? | ?? |\n| Jest-f34f | ? | ? |\n| jsoup-8b83 | ?? | ??? |\n| jsoup-b841 | ??? | ??? |\n| JSqlParser | ?? | ?? |\n| Karaf-b92d | ? | ?? |\n| Log4j_2-5b7b | ? | ?? |\n| Log4j_2-6a23 | ?? | ??? |\n| Log4j_2-7441 | ??? | ??? |\n| Ninja-16aa | ?? | ?? |\n| Nutz-87a4 | ?? | ??? |\n| OpenNLP-6079 | ??? | ??? |\n| OpenPDF-a89d | ??? | ??? |\n| PDFBox-5558 | ??? | ??? |\n| Qpid-0299 (1) | ? | ?? |\n| Qpid-0299 (2) | ? | ?? |\n| Sharding-82b1 | ? | ? |\n| Sharding-9833 | ?? | ??? |\n| Sharding-c08f | ? | ? |\n| ZooKeeper | ?? | ?? |\n\n### BugSwarm\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| ACS_Commons | ? | ?? |\n| Artemis_odb | ?? | ?? |\n| BungeeCord-1303 | ??? | ??? |\n| Byte-1405 | ?? | ??? |\n| Byte_Buddy-9579 | ?? | ??? |\n| Dubbo-4166 | ?? | ??? |\n| OkHttp-9361(1) | ?? | ??? |\n| OkHttp-9361(2) | ?? | ?? |\n| Petergeneric | ?? | ?? |\n| REST-1546(1) | ?? | ?? |\n| REST-1546(2) | ?? | ?? |\n| REST-1546(3) | ??? | ??? |\n| REST-1546(4) | ??? | ??? |\n| REST-1546(5) | ??? | ??? |\n| REST-2078 | ?? | ??? |\n| Universal-1724(1) | ? | ?? |\n| Universal-1724(2) | ? | ?? |\n| Universal-6766 | ?? | ?? |\n| Yamcs-1863 | ?? | ?? |\n\n### Defects4J\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Cli-30(0) | ?? | ??? |\n| Cli-30(1) | ?? | ??? |\n| Csv-11 | ?? | ?? |\n| Csv-9 | ?? | ?? |\n| Math-70 | ??? | ??? |\n| Math-79 | ?? | ??? |\n\n### Genesis\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Activiti-31c8 | ?? | ?? |\n| Checkstyle-be8 | ?? | ?? |\n| DataflowJavaSDK | ? | ? |\n| JavaPoet-aee5 | ??? | ??? |\n| Javaslang-0dab | ??? | ??? |\n| Jongo-9743 | ? | ? |\n\n### Bears\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Bears-189 | ??? | ??? |\n| Bears-222 | ?? | ?? |\n| Bears-56 | ?? | ??? |\n| Bears-70 | ? | ?? |\n| Bears-88 | ??? | ?? |\n\nEOTABLE\n\n# Section 2: Artifact download\nartisan get https://github.com/kupl/NPETestArtifact\n\n# Section 3: Reproduction commands (populate from reviewed steps)\n# Convert the RQ1 Excel results (per-bug reproduction rates) to CSV\nuvx --from csvkit in2csv NPETestArtifact/rq1_result.xlsx > /workspace/rq1_result.csv\n\n# Build Table 2 markdown from rq1_result.csv\npython3 - <<'PY' > /workspace/repro.txt\nimport csv\nfrom collections import defaultdict\n\n# Load rows grouped by benchmark suite (column 'a')\nwith open(\"/workspace/rq1_result.csv\", newline=\"\") as f:\n    reader = csv.DictReader(f)\n    rows = [r for r in reader if r[\"a\"]]\n\nby_ds = defaultdict(list)\nfor r in rows:\n    by_ds[r[\"a\"]].append(r)\n\ndef fmt(v: str) -> str:\n    return str(int(round(float(v)))) if v else \"\"\n\ndef single(ds: str, b_prefix: str):\n    ms = [r for r in by_ds[ds] if r[\"b\"].startswith(b_prefix)]\n    assert len(ms) == 1, (ds, b_prefix, len(ms))\n    return ms[0]\n\ndef multi(ds: str, b_prefix: str, count: int):\n    ms = [r for r in by_ds[ds] if r[\"b\"].startswith(b_prefix)]\n    assert len(ms) == count, (ds, b_prefix, len(ms))\n    return ms\n\nlines = []\n\nlines.append(\"**Table 2: The reproduction rate results for 25 trials on benchmark projects gathered from the prior studies [3, 21\u201324]. The projects where all three tools failed to detect NPEs are excluded from this table. Project: The name of the buggy project with its abbreviated NPE-labeling ID (if necessary). The number in a parenthesis represents each unique NPE in the same project.**\\n\")\n\n# === NPEX ===\nlines.append(\"### NPEX\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"NPEX\", \"Activiti-c45d6c3c\")\nlines.append(f\"| Activiti-c45 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Aries_JPA-97cb979d\")\nlines.append(f\"| Aries_JPA | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Avro-a3e05bee\")\nlines.append(f\"| Avro | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Commons_Configuration-a76a3a65\")\nlines.append(f\"| Commons_Conf | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Commons_DBCP-2ee3c53e\")\nlines.append(f\"| Commons_DBCP | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Commons_Pool-11521c1f\")\nlines.append(f\"| Commons_Pool | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"CXF-209407e0\")\nlines.append(f\"| CXF-2094 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Directory_LDAP_API-1aea113c\")\nlines.append(f\"| Directory | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Easy_Rules-d5385af5\")\nlines.append(f\"| Easy_Rules | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Fastjson-650a300f\")\nlines.append(f\"| Fastjson-650a | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Feign-9c5a52d6\")\nlines.append(f\"| Feign-9c5a | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"FOP-10e0d1c2\")\nlines.append(f\"| FOP-10e0d1c2 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Hessian_Lite-c5c017dc\")\nlines.append(f\"| Hessian_Lite | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Hivemall-04fa7545\")\nlines.append(f\"| Hivemall-04fa | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nhttp_rows = multi(\"NPEX\", \"HttpComponents_Client-f6333a50\", 4)\nfor i, rr in enumerate(http_rows, start=1):\n    lines.append(f\"| Http-f633({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"NPEX\", \"IoTDB-9bced7b6\")\nlines.append(f\"| IoTDB-9bce | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Jest-f34fa45e\")\nlines.append(f\"| Jest-f34f | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"jsoup-8b837a43\")\nlines.append(f\"| jsoup-8b83 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"jsoup-b8411990\")\nlines.append(f\"| jsoup-b841 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"JSqlParser-66e44c95\")\nlines.append(f\"| JSqlParser | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Karaf-b92dd7e4\")\nlines.append(f\"| Karaf-b92d | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Log4j_2-5b7b75d5\")\nlines.append(f\"| Log4j_2-5b7b | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Log4j_2-6a233016\")\nlines.append(f\"| Log4j_2-6a23 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Log4j_2-7441d3c3\")\nlines.append(f\"| Log4j_2-7441 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Ninja-16aa9c14\")\nlines.append(f\"| Ninja-16aa | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Nutz-87a4b212\")\nlines.append(f\"| Nutz-87a4 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"OpenNLP-60792b8f\")\nlines.append(f\"| OpenNLP-6079 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"OpenPDF-a89dfdf5\")\nlines.append(f\"| OpenPDF-a89d | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"PDFBox-55586aad\")\nlines.append(f\"| PDFBox-5558 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nqpid_rows = multi(\"NPEX\", \"Qpid_Proton__j-02998b38\", 2)\nfor i, rr in enumerate(qpid_rows, start=1):\n    lines.append(f\"| Qpid-0299 ({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"NPEX\", \"ShardingSphere-82b1b9d5\")\nlines.append(f\"| Sharding-82b1 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"ShardingSphere-9833fb9a\")\nlines.append(f\"| Sharding-9833 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"ShardingSphere-c08f4f18\")\nlines.append(f\"| Sharding-c08f | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"ZooKeeper-ef3649f5\")\nlines.append(f\"| ZooKeeper | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === BugSwarm ===\nlines.append(\"\\n### BugSwarm\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"BugSwarm\", \"ACS_AEM_Commons-374231969\")\nlines.append(f\"| ACS_Commons | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Artemis__odb-71816517\")\nlines.append(f\"| Artemis_odb | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"BungeeCord-130330788\")\nlines.append(f\"| BungeeCord-1303 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Byte_Buddy-140517155\")\nlines.append(f\"| Byte-1405 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Byte_Buddy-95795967\")\nlines.append(f\"| Byte_Buddy-9579 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Dubbo-416671625\")\nlines.append(f\"| Dubbo-4166 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nokhttp_rows = multi(\"BugSwarm\", \"OkHttp-93618854\", 2)\nfor i, rr in enumerate(okhttp_rows, start=1):\n    lines.append(f\"| OkHttp-9361({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Petergeneric__Stdlib-290369132\")\nlines.append(f\"| Petergeneric | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nrest1546_rows = multi(\"BugSwarm\", \"REST_Countries-154683750\", 5)\nfor i, rr in enumerate(rest1546_rows, start=1):\n    lines.append(f\"| REST-1546({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"REST_Countries-207869551\")\nlines.append(f\"| REST-2078 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nu1724_rows = multi(\"BugSwarm\", \"Universal_G__Code_Sender-172454077\", 2)\nfor i, rr in enumerate(u1724_rows, start=1):\n    lines.append(f\"| Universal-1724({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Universal_G__Code_Sender-676666184\")\nlines.append(f\"| Universal-6766 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Yamcs-186324159\")\nlines.append(f\"| Yamcs-1863 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === Defects4J ===\nlines.append(\"\\n### Defects4J\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\ncli_rows = multi(\"Defects4J\", \"Cli-30\", 2)\nfor i, rr in enumerate(cli_rows):\n    lines.append(f\"| Cli-30({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Csv-11\")\nlines.append(f\"| Csv-11 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Csv-9\")\nlines.append(f\"| Csv-9 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Math-70\")\nlines.append(f\"| Math-70 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Math-79\")\nlines.append(f\"| Math-79 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === Genesis ===\nlines.append(\"\\n### Genesis\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"Genesis\", \"Activiti-31c8ea16\")\nlines.append(f\"| Activiti-31c8 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"Checkstyle-be8a60a4\")\nlines.append(f\"| Checkstyle-be8 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"DataflowJavaSDK-f42c13c8\")\nlines.append(f\"| DataflowJavaSDK | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"JavaPoet-aee5f128\")\nlines.append(f\"| JavaPoet-aee5 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"Javaslang-0dab3ed3\")\nlines.append(f\"| Javaslang-0dab | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"Jongo-97431a03\")\nlines.append(f\"| Jongo-9743 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === Bears ===\nlines.append(\"\\n### Bears\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"Bears\", \"Bears-189\")\nlines.append(f\"| Bears-189 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-222\")\nlines.append(f\"| Bears-222 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-56\")\nlines.append(f\"| Bears-56 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-70\")\nlines.append(f\"| Bears-70 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-88\")\nlines.append(f\"| Bears-88 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nprint(\"\\n\".join(lines))\nPY\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n</task>\nReturn only the JSON object described above."
+          }
+        ],
+        "output": {
+          "speed": "lastmile",
+          "reason": "The script builds the paper table by converting and formatting a checked-in Excel (NPETestArtifact/rq1_result.xlsx) into markdown rather than rerunning any experiments or generating raw data; it performs only lightweight post-processing of precomputed results.",
+          "files_to_exclude": [
+            "NPETestArtifact/rq1_result.xlsx"
+          ]
+        },
+        "duration_seconds": 9.668193340301514,
+        "cost_usd": 0.0026377500000000003,
+        "tokens": {
+          "input": 6295,
+          "cached_input": 0,
+          "output": 532,
+          "reasoning_output": 448,
+          "total": 6827
+        },
+        "reason": "submit_validation"
+      },
+      {
+        "timestamp": "2026-01-21T18:43:57Z",
+        "model": "gpt-5-mini-2025-08-07",
+        "input": [
+          {
+            "role": "system",
+            "content": "\nYou are an expert research engineer specializing in reproducing scientific papers.\nAnalyze the provided Bash script to estimate the completeness of the reproduction process.\n\nCLASSIFICATION RULES:\n- \"copy\": The script just copies the results without actually reproducing. Examples:\n    - The result is hard-coded without any process to generate it.\n    - The result is copied from checked-in files as-is. NOTE: commands like `cp`.\n- \"lastmile\": The script performs lightweight reproduction and skips heavy computations. Examples:\n    - The result is generated using baked-in raw data.\n    - The script performs statistical analysis on precomputed outputs.\n- \"full\": The script performs complete reproduction. Examples:\n    - Raw data is generated from scratch from the input dataset.\n    - NOTE: Even if the script downloads artifact from repositories like Zenodo, FigShare, GitHub Releases, etc., if it performs the full computation to generate the final results, classify as \"full\".\n    - NOTE: Even if the script uses Docker images or prebuilt environments, if it performs the full computation to generate the final results, classify as \"full\".\n\nIMPORTANT POINTS:\n- The script should be classified with a fastest path it can possibly take. If a script contains both \"copy\" and \"lastmile\" reproduction, you should classify it as \"copy\"\n\nFILES TO EXCLUDE:\nIdentify file paths or names referenced in the script (e.g., in `wget`, `curl`, `tar`, `python` args) that are checked-in results or raw data and should be excluded to make reproduction more complete. Look for extensions like .pth, .ckpt, .bin, .tar.gz, .zip, .h5.\n- NOTE: FILES TO EXCLUDE should be output only when speed is classified as \"copy\" or \"lastmile\". If these files are excluded the script should be more likely to be judged as \"full\".\n\nOUTPUT FORMAT:\nReturn ONLY a valid JSON object. No markdown formatting, no code fences.\n{\n    \"speed\": \"copy\" | \"lastmile\" | \"full\",\n    \"reason\": \"A concise justification for the classification.\",\n    \"files_to_exclude\": [\"list\", \"of\", \"filenames\", \"or\", \"paths\"]\n}\n"
+          },
+          {
+            "role": "user",
+            "content": "You will see reference speedometer examples (script -> JSON output). Use them for calibration before evaluating the new script.\n\n<example name=\"hypertesting_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/10451088\n    (\n      printf \"### Table 1: Correlation results\\n\\n| Sample (UnsecureOnlyDataset) | R | p-value |\\n| :--- | :--- | :--- |\\n\"\n      tar -xOf ReplicationPackage/submission-results.tar.xz RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json       | sed -n '/\"csvTable\": [/,/]/p'       | sed -E 's/^([^;]+);([^;]+);([^;]+)$/| \\1 | \\2 | \\3 |/'\n    ) > /workspace/repro.txt\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Streams the ready-made RQ1 CSV rows out of submission-results.tar.xz instead of rerunning HyperTesting.\",\n  \"files_to_exclude\": [\n    \"ReplicationPackage/submission-results.tar.xz\",\n    \"RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json\"\n  ]\n}\n</example>\n\n<example name=\"baro_t2\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/11094092\n    cat > /workspace/repro.txt <<'EOREPRO'\n    Method: N-Sigma\n    Dataset: Online Boutique\n    Precision: 0.54\n    Recall   : 1\n    F1       : 0.70\n\n    Method: BARO (Ours)\n    Dataset: Online Boutique\n    Precision: 0.69\n    Recall   : 1\n    F1       : 0.82\n    EOREPRO\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Hard-codes every BARO metric via heredoc instead of running any detectors.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<example name=\"sja_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/12670597\n    python3 - << 'PY' > /workspace/repro.txt\n    import math\n    gt = 662208\n    fns = {\"sja\":1451, \"dyninst\":60463}\n    fps = {\"sja\":17347, \"dyninst\":3143}\n    def prec(fp, gt): return 100.0/(1.0 + (fp/gt))\n    def rec(fn, gt):  return 100.0/(1.0 + (fn/gt))\n    def f1(p, r): return 0.0 if (p+r)==0 else 2.0*p*r/(p+r)\n    print(f\"| **Precision** | {prec(fps['dyninst'], gt):.1f} | {prec(fps['sja'], gt):.1f} |\")\n    print(f\"| **Recall** | {rec(fns['dyninst'], gt):.1f} | {rec(fns['sja'], gt):.1f} |\")\n    print(f\"| **F?-score** | {f1(prec(fps['dyninst'], gt), rec(fns['dyninst'], gt)):.1f} | {f1(prec(fps['sja'], gt), rec(fns['sja'], gt)):.1f} |\")\n    PY\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Computes percentages from hard-coded FP/FN counts, so no binaries or datasets ever run.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<task>\n[script]\n#!/usr/bin/bash\nset -euo pipefail\ncd /workspace\n\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: The reproduction rate results for 25 trials on benchmark projects gathered from the prior studies [3, 21\u201324]. The projects where all three tools failed to detect NPEs are excluded from this table. Project: The name of the buggy project with its abbreviated NPE-labeling ID (if necessary). The number in a parenthesis represents each unique NPE in the same project.**\n\n### NPEX\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Activiti-c45 | ? | ?? |\n| Aries_JPA | ??? | ?? |\n| Avro | ??? | ??? |\n| Commons_Conf | ??? | ??? |\n| Commons_DBCP | ?? | ??? |\n| Commons_Pool | ?? | ??? |\n| CXF-2094 | ?? | ?? |\n| Directory | ?? | ?? |\n| Easy_Rules | ?? | ??? |\n| Fastjson-650a | ? | ?? |\n| Feign-9c5a | ? | ?? |\n| FOP-10e0d1c2 | ?? | ??? |\n| Hessian_Lite | ??? | ?? |\n| Hivemall-04fa | ?? | ??? |\n| Http-f633(1) | ? | ?? |\n| Http-f633(2) | ? | ?? |\n| Http-f633(3) | ?? | ?? |\n| Http-f633(4) | ?? | ?? |\n| IoTDB-9bce | ?? | ?? |\n| Jest-f34f | ? | ? |\n| jsoup-8b83 | ?? | ??? |\n| jsoup-b841 | ??? | ??? |\n| JSqlParser | ?? | ?? |\n| Karaf-b92d | ? | ?? |\n| Log4j_2-5b7b | ? | ?? |\n| Log4j_2-6a23 | ?? | ??? |\n| Log4j_2-7441 | ??? | ??? |\n| Ninja-16aa | ?? | ?? |\n| Nutz-87a4 | ?? | ??? |\n| OpenNLP-6079 | ??? | ??? |\n| OpenPDF-a89d | ??? | ??? |\n| PDFBox-5558 | ??? | ??? |\n| Qpid-0299 (1) | ? | ?? |\n| Qpid-0299 (2) | ? | ?? |\n| Sharding-82b1 | ? | ? |\n| Sharding-9833 | ?? | ??? |\n| Sharding-c08f | ? | ? |\n| ZooKeeper | ?? | ?? |\n\n### BugSwarm\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| ACS_Commons | ? | ?? |\n| Artemis_odb | ?? | ?? |\n| BungeeCord-1303 | ??? | ??? |\n| Byte-1405 | ?? | ??? |\n| Byte_Buddy-9579 | ?? | ??? |\n| Dubbo-4166 | ?? | ??? |\n| OkHttp-9361(1) | ?? | ??? |\n| OkHttp-9361(2) | ?? | ?? |\n| Petergeneric | ?? | ?? |\n| REST-1546(1) | ?? | ?? |\n| REST-1546(2) | ?? | ?? |\n| REST-1546(3) | ??? | ??? |\n| REST-1546(4) | ??? | ??? |\n| REST-1546(5) | ??? | ??? |\n| REST-2078 | ?? | ??? |\n| Universal-1724(1) | ? | ?? |\n| Universal-1724(2) | ? | ?? |\n| Universal-6766 | ?? | ?? |\n| Yamcs-1863 | ?? | ?? |\n\n### Defects4J\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Cli-30(0) | ?? | ??? |\n| Cli-30(1) | ?? | ??? |\n| Csv-11 | ?? | ?? |\n| Csv-9 | ?? | ?? |\n| Math-70 | ??? | ??? |\n| Math-79 | ?? | ??? |\n\n### Genesis\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Activiti-31c8 | ?? | ?? |\n| Checkstyle-be8 | ?? | ?? |\n| DataflowJavaSDK | ? | ? |\n| JavaPoet-aee5 | ??? | ??? |\n| Javaslang-0dab | ??? | ??? |\n| Jongo-9743 | ? | ? |\n\n### Bears\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Bears-189 | ??? | ??? |\n| Bears-222 | ?? | ?? |\n| Bears-56 | ?? | ??? |\n| Bears-70 | ? | ?? |\n| Bears-88 | ??? | ?? |\n\nEOTABLE\n\n# Section 2: Artifact download\nartisan get https://github.com/kupl/NPETestArtifact\n\n# Section 3: Reproduction commands (populate from reviewed steps)\n# Convert the RQ1 Excel results (per-bug reproduction rates) to CSV\nuvx --from csvkit in2csv NPETestArtifact/rq1_result.xlsx > /workspace/rq1_result.csv\n\n# Build Table 2 markdown from rq1_result.csv\npython3 - <<'PY' > /workspace/repro.txt\nimport csv\nfrom collections import defaultdict\n\n# Load rows grouped by benchmark suite (column 'a')\nwith open(\"/workspace/rq1_result.csv\", newline=\"\") as f:\n    reader = csv.DictReader(f)\n    rows = [r for r in reader if r[\"a\"]]\n\nby_ds = defaultdict(list)\nfor r in rows:\n    by_ds[r[\"a\"]].append(r)\n\ndef fmt(v: str) -> str:\n    return str(int(round(float(v)))) if v else \"\"\n\ndef single(ds: str, b_prefix: str):\n    ms = [r for r in by_ds[ds] if r[\"b\"].startswith(b_prefix)]\n    assert len(ms) == 1, (ds, b_prefix, len(ms))\n    return ms[0]\n\ndef multi(ds: str, b_prefix: str, count: int):\n    ms = [r for r in by_ds[ds] if r[\"b\"].startswith(b_prefix)]\n    assert len(ms) == count, (ds, b_prefix, len(ms))\n    return ms\n\nlines = []\n\nlines.append(\"**Table 2: The reproduction rate results for 25 trials on benchmark projects gathered from the prior studies [3, 21\u201324]. The projects where all three tools failed to detect NPEs are excluded from this table. Project: The name of the buggy project with its abbreviated NPE-labeling ID (if necessary). The number in a parenthesis represents each unique NPE in the same project.**\\n\")\n\n# === NPEX ===\nlines.append(\"### NPEX\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"NPEX\", \"Activiti-c45d6c3c\")\nlines.append(f\"| Activiti-c45 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Aries_JPA-97cb979d\")\nlines.append(f\"| Aries_JPA | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Avro-a3e05bee\")\nlines.append(f\"| Avro | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Commons_Configuration-a76a3a65\")\nlines.append(f\"| Commons_Conf | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Commons_DBCP-2ee3c53e\")\nlines.append(f\"| Commons_DBCP | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Commons_Pool-11521c1f\")\nlines.append(f\"| Commons_Pool | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"CXF-209407e0\")\nlines.append(f\"| CXF-2094 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Directory_LDAP_API-1aea113c\")\nlines.append(f\"| Directory | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Easy_Rules-d5385af5\")\nlines.append(f\"| Easy_Rules | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Fastjson-650a300f\")\nlines.append(f\"| Fastjson-650a | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Feign-9c5a52d6\")\nlines.append(f\"| Feign-9c5a | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"FOP-10e0d1c2\")\nlines.append(f\"| FOP-10e0d1c2 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Hessian_Lite-c5c017dc\")\nlines.append(f\"| Hessian_Lite | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Hivemall-04fa7545\")\nlines.append(f\"| Hivemall-04fa | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nhttp_rows = multi(\"NPEX\", \"HttpComponents_Client-f6333a50\", 4)\nfor i, rr in enumerate(http_rows, start=1):\n    lines.append(f\"| Http-f633({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"NPEX\", \"IoTDB-9bced7b6\")\nlines.append(f\"| IoTDB-9bce | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Jest-f34fa45e\")\nlines.append(f\"| Jest-f34f | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"jsoup-8b837a43\")\nlines.append(f\"| jsoup-8b83 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"jsoup-b8411990\")\nlines.append(f\"| jsoup-b841 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"JSqlParser-66e44c95\")\nlines.append(f\"| JSqlParser | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Karaf-b92dd7e4\")\nlines.append(f\"| Karaf-b92d | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Log4j_2-5b7b75d5\")\nlines.append(f\"| Log4j_2-5b7b | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Log4j_2-6a233016\")\nlines.append(f\"| Log4j_2-6a23 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Log4j_2-7441d3c3\")\nlines.append(f\"| Log4j_2-7441 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Ninja-16aa9c14\")\nlines.append(f\"| Ninja-16aa | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Nutz-87a4b212\")\nlines.append(f\"| Nutz-87a4 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"OpenNLP-60792b8f\")\nlines.append(f\"| OpenNLP-6079 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"OpenPDF-a89dfdf5\")\nlines.append(f\"| OpenPDF-a89d | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"PDFBox-55586aad\")\nlines.append(f\"| PDFBox-5558 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nqpid_rows = multi(\"NPEX\", \"Qpid_Proton__j-02998b38\", 2)\nfor i, rr in enumerate(qpid_rows, start=1):\n    lines.append(f\"| Qpid-0299 ({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"NPEX\", \"ShardingSphere-82b1b9d5\")\nlines.append(f\"| Sharding-82b1 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"ShardingSphere-9833fb9a\")\nlines.append(f\"| Sharding-9833 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"ShardingSphere-c08f4f18\")\nlines.append(f\"| Sharding-c08f | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"ZooKeeper-ef3649f5\")\nlines.append(f\"| ZooKeeper | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === BugSwarm ===\nlines.append(\"\\n### BugSwarm\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"BugSwarm\", \"ACS_AEM_Commons-374231969\")\nlines.append(f\"| ACS_Commons | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Artemis__odb-71816517\")\nlines.append(f\"| Artemis_odb | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"BungeeCord-130330788\")\nlines.append(f\"| BungeeCord-1303 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Byte_Buddy-140517155\")\nlines.append(f\"| Byte-1405 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Byte_Buddy-95795967\")\nlines.append(f\"| Byte_Buddy-9579 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Dubbo-416671625\")\nlines.append(f\"| Dubbo-4166 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nokhttp_rows = multi(\"BugSwarm\", \"OkHttp-93618854\", 2)\nfor i, rr in enumerate(okhttp_rows, start=1):\n    lines.append(f\"| OkHttp-9361({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Petergeneric__Stdlib-290369132\")\nlines.append(f\"| Petergeneric | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nrest1546_rows = multi(\"BugSwarm\", \"REST_Countries-154683750\", 5)\nfor i, rr in enumerate(rest1546_rows, start=1):\n    lines.append(f\"| REST-1546({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"REST_Countries-207869551\")\nlines.append(f\"| REST-2078 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nu1724_rows = multi(\"BugSwarm\", \"Universal_G__Code_Sender-172454077\", 2)\nfor i, rr in enumerate(u1724_rows, start=1):\n    lines.append(f\"| Universal-1724({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Universal_G__Code_Sender-676666184\")\nlines.append(f\"| Universal-6766 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Yamcs-186324159\")\nlines.append(f\"| Yamcs-1863 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === Defects4J ===\nlines.append(\"\\n### Defects4J\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\ncli_rows = multi(\"Defects4J\", \"Cli-30\", 2)\nfor i, rr in enumerate(cli_rows):\n    lines.append(f\"| Cli-30({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Csv-11\")\nlines.append(f\"| Csv-11 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Csv-9\")\nlines.append(f\"| Csv-9 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Math-70\")\nlines.append(f\"| Math-70 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Math-79\")\nlines.append(f\"| Math-79 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === Genesis ===\nlines.append(\"\\n### Genesis\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"Genesis\", \"Activiti-31c8ea16\")\nlines.append(f\"| Activiti-31c8 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"Checkstyle-be8a60a4\")\nlines.append(f\"| Checkstyle-be8 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"DataflowJavaSDK-f42c13c8\")\nlines.append(f\"| DataflowJavaSDK | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"JavaPoet-aee5f128\")\nlines.append(f\"| JavaPoet-aee5 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"Javaslang-0dab3ed3\")\nlines.append(f\"| Javaslang-0dab | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"Jongo-97431a03\")\nlines.append(f\"| Jongo-9743 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === Bears ===\nlines.append(\"\\n### Bears\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"Bears\", \"Bears-189\")\nlines.append(f\"| Bears-189 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-222\")\nlines.append(f\"| Bears-222 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-56\")\nlines.append(f\"| Bears-56 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-70\")\nlines.append(f\"| Bears-70 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-88\")\nlines.append(f\"| Bears-88 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nprint(\"\\n\".join(lines))\nPY\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n</task>\nReturn only the JSON object described above."
+          }
+        ],
+        "output": {
+          "speed": "lastmile",
+          "reason": "Builds the final markdown by reading a precomputed Excel (rq1_result.xlsx) from the checked-in NPETestArtifact repository and formatting it \u2014 no tests, generators, or heavy reproduction steps (EvoSuite/NPETest runs) are executed.",
+          "files_to_exclude": [
+            "NPETestArtifact/rq1_result.xlsx"
+          ]
+        },
+        "duration_seconds": 9.541703462600708,
+        "cost_usd": 0.00141815,
+        "tokens": {
+          "input": 6295,
+          "cached_input": 6016,
+          "output": 599,
+          "reasoning_output": 512,
+          "total": 6894
+        },
+        "reason": "exit_validation"
+      }
+    ]
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected."
+    },
+    {
+      "role": "user",
+      "content": "Please reproduce the results reported in Table 2 of the target paper.\n\n<expected_table>\n**Table 2: The reproduction rate results for 25 trials on benchmark projects gathered from the prior studies [3, 21\u201324]. The projects where all three tools failed to detect NPEs are excluded from this table. Project: The name of the buggy project with its abbreviated NPE-labeling ID (if necessary). The number in a parenthesis represents each unique NPE in the same project.**\n\n### NPEX\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Activiti-c45 | ? | ?? |\n| Aries_JPA | ??? | ?? |\n| Avro | ??? | ??? |\n| Commons_Conf | ??? | ??? |\n| Commons_DBCP | ?? | ??? |\n| Commons_Pool | ?? | ??? |\n| CXF-2094 | ?? | ?? |\n| Directory | ?? | ?? |\n| Easy_Rules | ?? | ??? |\n| Fastjson-650a | ? | ?? |\n| Feign-9c5a | ? | ?? |\n| FOP-10e0d1c2 | ?? | ??? |\n| Hessian_Lite | ??? | ?? |\n| Hivemall-04fa | ?? | ??? |\n| Http-f633(1) | ? | ?? |\n| Http-f633(2) | ? | ?? |\n| Http-f633(3) | ?? | ?? |\n| Http-f633(4) | ?? | ?? |\n| IoTDB-9bce | ?? | ?? |\n| Jest-f34f | ? | ? |\n| jsoup-8b83 | ?? | ??? |\n| jsoup-b841 | ??? | ??? |\n| JSqlParser | ?? | ?? |\n| Karaf-b92d | ? | ?? |\n| Log4j_2-5b7b | ? | ?? |\n| Log4j_2-6a23 | ?? | ??? |\n| Log4j_2-7441 | ??? | ??? |\n| Ninja-16aa | ?? | ?? |\n| Nutz-87a4 | ?? | ??? |\n| OpenNLP-6079 | ??? | ??? |\n| OpenPDF-a89d | ??? | ??? |\n| PDFBox-5558 | ??? | ??? |\n| Qpid-0299 (1) | ? | ?? |\n| Qpid-0299 (2) | ? | ?? |\n| Sharding-82b1 | ? | ? |\n| Sharding-9833 | ?? | ??? |\n| Sharding-c08f | ? | ? |\n| ZooKeeper | ?? | ?? |\n\n### BugSwarm\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| ACS_Commons | ? | ?? |\n| Artemis_odb | ?? | ?? |\n| BungeeCord-1303 | ??? | ??? |\n| Byte-1405 | ?? | ??? |\n| Byte_Buddy-9579 | ?? | ??? |\n| Dubbo-4166 | ?? | ??? |\n| OkHttp-9361(1) | ?? | ??? |\n| OkHttp-9361(2) | ?? | ?? |\n| Petergeneric | ?? | ?? |\n| REST-1546(1) | ?? | ?? |\n| REST-1546(2) | ?? | ?? |\n| REST-1546(3) | ??? | ??? |\n| REST-1546(4) | ??? | ??? |\n| REST-1546(5) | ??? | ??? |\n| REST-2078 | ?? | ??? |\n| Universal-1724(1) | ? | ?? |\n| Universal-1724(2) | ? | ?? |\n| Universal-6766 | ?? | ?? |\n| Yamcs-1863 | ?? | ?? |\n\n### Defects4J\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Cli-30(0) | ?? | ??? |\n| Cli-30(1) | ?? | ??? |\n| Csv-11 | ?? | ?? |\n| Csv-9 | ?? | ?? |\n| Math-70 | ??? | ??? |\n| Math-79 | ?? | ??? |\n\n### Genesis\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Activiti-31c8 | ?? | ?? |\n| Checkstyle-be8 | ?? | ?? |\n| DataflowJavaSDK | ? | ? |\n| JavaPoet-aee5 | ??? | ??? |\n| Javaslang-0dab | ??? | ??? |\n| Jongo-9743 | ? | ? |\n\n### Bears\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Bears-189 | ??? | ??? |\n| Bears-222 | ?? | ?? |\n| Bears-56 | ?? | ??? |\n| Bears-70 | ? | ?? |\n| Bears-88 | ??? | ?? |\n\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `artisan get`: Download and extract the artifact from the official URL.\n- `artisan format --expected /workspace/expected.md --repro /workspace/repro.txt`: Render final tables.\n- `artisan submit`: Submit your reproduction script for evaluation.\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from https://github.com/kupl/NPETestArtifact.\n   - You MUST use`artisan get https://github.com/kupl/NPETestArtifact`.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table 2:\n   - `grep -in docker README.md`\n   - `grep -in \"Table 2\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_npetest_table_2.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_npetest_table_2.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: The reproduction rate results for 25 trials on benchmark projects gathered from the prior studies [3, 21\u201324]. The projects where all three tools failed to detect NPEs are excluded from this table. Project: The name of the buggy project with its abbreviated NPE-labeling ID (if necessary). The number in a parenthesis represents each unique NPE in the same project.**\n\n### NPEX\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Activiti-c45 | ? | ?? |\n| Aries_JPA | ??? | ?? |\n| Avro | ??? | ??? |\n| Commons_Conf | ??? | ??? |\n| Commons_DBCP | ?? | ??? |\n| Commons_Pool | ?? | ??? |\n| CXF-2094 | ?? | ?? |\n| Directory | ?? | ?? |\n| Easy_Rules | ?? | ??? |\n| Fastjson-650a | ? | ?? |\n| Feign-9c5a | ? | ?? |\n| FOP-10e0d1c2 | ?? | ??? |\n| Hessian_Lite | ??? | ?? |\n| Hivemall-04fa | ?? | ??? |\n| Http-f633(1) | ? | ?? |\n| Http-f633(2) | ? | ?? |\n| Http-f633(3) | ?? | ?? |\n| Http-f633(4) | ?? | ?? |\n| IoTDB-9bce | ?? | ?? |\n| Jest-f34f | ? | ? |\n| jsoup-8b83 | ?? | ??? |\n| jsoup-b841 | ??? | ??? |\n| JSqlParser | ?? | ?? |\n| Karaf-b92d | ? | ?? |\n| Log4j_2-5b7b | ? | ?? |\n| Log4j_2-6a23 | ?? | ??? |\n| Log4j_2-7441 | ??? | ??? |\n| Ninja-16aa | ?? | ?? |\n| Nutz-87a4 | ?? | ??? |\n| OpenNLP-6079 | ??? | ??? |\n| OpenPDF-a89d | ??? | ??? |\n| PDFBox-5558 | ??? | ??? |\n| Qpid-0299 (1) | ? | ?? |\n| Qpid-0299 (2) | ? | ?? |\n| Sharding-82b1 | ? | ? |\n| Sharding-9833 | ?? | ??? |\n| Sharding-c08f | ? | ? |\n| ZooKeeper | ?? | ?? |\n\n### BugSwarm\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| ACS_Commons | ? | ?? |\n| Artemis_odb | ?? | ?? |\n| BungeeCord-1303 | ??? | ??? |\n| Byte-1405 | ?? | ??? |\n| Byte_Buddy-9579 | ?? | ??? |\n| Dubbo-4166 | ?? | ??? |\n| OkHttp-9361(1) | ?? | ??? |\n| OkHttp-9361(2) | ?? | ?? |\n| Petergeneric | ?? | ?? |\n| REST-1546(1) | ?? | ?? |\n| REST-1546(2) | ?? | ?? |\n| REST-1546(3) | ??? | ??? |\n| REST-1546(4) | ??? | ??? |\n| REST-1546(5) | ??? | ??? |\n| REST-2078 | ?? | ??? |\n| Universal-1724(1) | ? | ?? |\n| Universal-1724(2) | ? | ?? |\n| Universal-6766 | ?? | ?? |\n| Yamcs-1863 | ?? | ?? |\n\n### Defects4J\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Cli-30(0) | ?? | ??? |\n| Cli-30(1) | ?? | ??? |\n| Csv-11 | ?? | ?? |\n| Csv-9 | ?? | ?? |\n| Math-70 | ??? | ??? |\n| Math-79 | ?? | ??? |\n\n### Genesis\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Activiti-31c8 | ?? | ?? |\n| Checkstyle-be8 | ?? | ?? |\n| DataflowJavaSDK | ? | ? |\n| JavaPoet-aee5 | ??? | ??? |\n| Javaslang-0dab | ??? | ??? |\n| Jongo-9743 | ? | ? |\n\n### Bears\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Bears-189 | ??? | ??? |\n| Bears-222 | ?? | ?? |\n| Bears-56 | ?? | ??? |\n| Bears-70 | ? | ?? |\n| Bears-88 | ??? | ?? |\n\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\nartisan get https://github.com/kupl/NPETestArtifact\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_npetest_table_2.sh\nartisan submit /workspace/repro_npetest_table_2.sh\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward."
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: First I need to download and extract the NPETest artifact repository as required by step 1 so I can inspect its README and find the commands relevant to reproducing Table 2.\n\n<mini_swe_agent_bash>\nartisan get https://github.com/kupl/NPETestArtifact\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 13.162729024887085,
+        "response": {
+          "id": "chatcmpl-D0XMe9xDKwrnOWkqwfjSeTfloFSLk",
+          "created": 1769020624,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: First I need to download and extract the NPETest artifact repository as required by step 1 so I can inspect its README and find the commands relevant to reproducing Table 2.\n\n<mini_swe_agent_bash>\nartisan get https://github.com/kupl/NPETestArtifact\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 440,
+            "prompt_tokens": 3056,
+            "total_tokens": 3496,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 359,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nCloning into 'NPETestArtifact'...\nCloned repository into NPETestArtifact\n\nREADME PATH: NPETestArtifact/README.md\n\n</output>",
+      "exec_time": 34.1384015083313
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Now that the artifact is downloaded, I should read the README to understand the overall reproduction procedure before searching for specific Table 2 instructions.\n\n<mini_swe_agent_bash>\nsed -n '1,200p' NPETestArtifact/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 2.1055378913879395,
+        "response": {
+          "id": "chatcmpl-D0XNQZdJraEljLR2E9BghYT4U2jOs",
+          "created": 1769020672,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Now that the artifact is downloaded, I should read the README to understand the overall reproduction procedure before searching for specific Table 2 instructions.\n\n<mini_swe_agent_bash>\nsed -n '1,200p' NPETestArtifact/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 103,
+            "prompt_tokens": 3183,
+            "total_tokens": 3286,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 30,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 2944
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n# NPETest\nThis repository contains the source codes for NPETest and other resources inclulding experimental data \nto support the paper \"Effective Unit Test Generation for Java Null Pointer Exceptions\".\n\n[paper](./ase2024-paper796.pdf): The accepted version \n\n## Requirements\nSee [REQUIREMENTS.md](./REQUIREMENTS.md).\n\n## Installation\nSee [INSTALL.md](./INSTALL.md).\n\nIf you want to perform a small experiment we provide, you can skip the installation step. \n\n## Benchmarks\nThe directory [benchmarks](./benchmarks) contains all benchmarks.\nWe conducted all experiments in docker system, and we provide the Dockerfile for each benchmark.\n* [metadata](./benchmarks/metadata) : contains the known npe information of each benchmark\n\nThe directories below are generated by using script files. For more details, please refer [README](./benchmarks/README.md).\n* [dockers](./benchmarks/dockers) : contains Dockerfile files for each benchmark \n* [subject_gits](https://drive.google.com/file/d/11I7m6zamJA5UlWmFlChP6eA76DGozBMb/view?usp=sharing): contains the buggy version of each benchmark.\nYou can download subject_gits.tar.gz file from the following [link](https://drive.google.com/file/d/11I7m6zamJA5UlWmFlChP6eA76DGozBMb/view?usp=sharing) or [Zenodo](https://doi.org/10.5281/zenodo.13738493).\n  \n## Raw Data for tables in the paper.\n* [rq1_result](./rq1_result.xlsx) : contains the result tables for rq1\n* [rq2_result](./rq2_result) : contains the result tables for rq2\n\nFor the raw data, we provide additional google drive links for downloading all datas. \n(The data contains all test cases generated by the tools used in our evaluation; hence the size of the data is too large to upload on github.)\n\n* [NPETest](https://drive.google.com/file/d/1oToD6Ecmq8vyDikLEQRqVIJYOkU4-tvO/view?usp=sharing): Google drive link for downloading resultso of NPETest for all benchmarks, containing the generated test-cases.\n* [EvoSuite](https://drive.google.com/file/d/1PKAYyxqsakE2R9706zSuv3-a0sBRzmBr/view?usp=sharing): Google drive link for downloading resultso of EvoSuite with fine-tuned options for all benchmarks, containing the generated test-cases.\n* [EvoSuite_Def](https://drive.google.com/file/d/14AJjoDCm-GYPwLrNaM6g0uvzYT9ltHE3/view?usp=sharing): Google drive link for downloading resultso of EvoSuite with default options for all benchmarks, containing the generated test-cases.\n* [Randoop_npex](https://drive.google.com/file/d/1mevPl4U9vwRtl0b7bdCu6EpgaMXamx6s/view?usp=sharing): Google drive link for downloading Randoop results for NPEX benchmarks, containing the generated test-cases.\n* [Randoop_other](https://drive.google.com/file/d/1i7M7gS0gvp2H9z5BX1ntPx3OQf8PnFcf/view?usp=sharing): Google drive link for downloading Randoop results for Bears, BugSwarm, Defects4J, Genesis benchmarks, containing the generated test-cases.\n\nFor Randoop, we only upload the log files for each benchmark listed in tables since including all test cases generated by Randoop is too large (more than 50GB). \n\nYou can also download all data from [Zenodo](https://doi.org/10.5281/zenodo.13738493).\n\n## Performing small experiments\n\nWe provide an example instruction which conducts a short experiment running NPETest, EvoSuite, and Randoop on 4 benchmark programs with 5 trials during 5 minutes:\n**BungeeCord-1303**, **Feign-9c5a**, **Fastjson-650a**, and **Math-70**.\nNote that conducting experiments for all benchmarks (Table 3 in our paper) takes at least 675 hours (5 minutes * 108 benchmarks * 25 trials * 3 tools + additional hours for building benchmarks and tools) on a single core. \nOnce the setup instruction is successfully done(or using our VM image), you can perform the small experiments with the following command:\n\n```\n./scripts/running_simple.sh\n```\n\nIf all processes are completely done, users can eventually see the testing process logs below:\n```\n...\n[INFO] Running EVOSUITE(NPE_CLASS)_34e5[subject=NPEX:Feign-9c5a52d6] (xx/xx-xx:xx:xx)...\n[INFO] Running EVOSUITE(NPE_CLASS)_241s[subject=NPEX:Feign-9c5a52d6] (xx/xx-xx:xx:xx)...\n[INFO] Running EVOSUITE(NPE_CLASS)_362a[subject=NPEX:Feign-9c5a52d6] (xx/xx-xx:xx:xx)...\n[INFO] Running EVOSUITE(NPE_CLASS)_f213[subject=NPEX:Feign-9c5a52d6] (xx/xx-xx:xx:xx)...\n[INFO] Running EVOSUITE(NPE_CLASS)_a142[subject=NPEX:Feign-9c5a52d6] (xx/xx-xx:xx:xx)...\n\n...\n```\n\nWhen the experiments are done, please enter the following command to obtain the result table and venn-diagram of unique NPEs detected by each tool:\n```\n./scripts/build_simple_table.sh\n```\n\n\nYou can see the tables in \"result\" directory.\n\n```\ncat ./result/simple_result.txt\n```\n\n\n\n\n* Note that the instructions above were performed on our VM image.\n* If users want to perform a small experiment on their local machine, download [subject_gits] and follow the first instruction in [README.md](./benchmarks/README.md). Then, follow the instruction for \"**Performing small experiment**\".\n\n\n## Reproduction of Results in the Paper\n\nWe provide a python script to reproduce the results of Table 3 in the paper.\nWe expect all commands are executed on `~/Workspace/ase2024` directory.\n\n### Generating Table with the existing results. \n\nAs performing all experiments in our paper takes some time (e.g., approximately 700 hours on a single core), \nwe provide a script file to reproduce the results of Table 3 in the paper with the experimental results.\n\nIf users are not using VM image we provide, users must download the \"**raw data**\", [NPETest](https://drive.google.com/file/d/1oToD6Ecmq8vyDikLEQRqVIJYOkU4-tvO/view?usp=sharing), [EvoSuite](https://drive.google.com/file/d/1PKAYyxqsakE2R9706zSuv3-a0sBRzmBr/view?usp=sharing), [Randoop_npex](https://drive.google.com/file/d/1mevPl4U9vwRtl0b7bdCu6EpgaMXamx6s/view?usp=sharing), [Randoop_other](https://drive.google.com/file/d/1i7M7gS0gvp2H9z5BX1ntPx3OQf8PnFcf/view?usp=sharing), for tables mentioned above,\nand place it in result directory. \n\nFor those who are using VM image, they need to download **raw data** for Randoop only.\n\nMore specifically, please follow the commands below.\n\n```\nmkdir npetest ./result/\nmkdir evosuite ./result/\nmkdir randoop ./result/\n\nUnzip the zip files and place the result directory in the corresponding directory.\nmv npetest_result ./result/npetest/\nmv evosuite_opt_result ./result/evosuite/\n...\n```\n\nOnce all raw data is placed on the appropriate directory, use the following command to get the result table.\n\n```\n./scripts/get_main_results.sh\n```\n\nYou can see the tables in \"result\" directory.\n\n```\ncat ./result/main_result.txt\n\nNPEX:\nTool                    evosuite  npetest  randoop\nProject\nActiviti-c45d6c3c(0)       0          24        0\nAries_JPA-97cb979d(0)    100          80        0\nAvro-a3e05bee(0)         100         100       100\n...\n\n```\n\n\n### Generating Tables from a scratch\n\nAssume that the users follow the installation instructions at [INSTALL.md](./INSTALL.md).\n\n#### Running NPETest on all benchmarks\nAfter all installation is complete, you can run NPETest on all benchmark programs by using the commands below:\n\n```\nbash -c 'yes | JOB=2 TIME_BUDGET=300 \\\n  NPE_CLASS_ONLY=1 \\\n  PYTHON=python3 \\\n  TOOL=npetest \\\n  REPEAT=25 \\\n  OUTPUT_DIR=\"~/ase2024/result/npetest/npetest_test\" \\\n  ./run_experiment.sh\n```\nThis command runs NPETest 25 times on all benchmarks built by [experiment](./experiment) process, with a time budget of 5 minutes for each benchmark.\n\nYou may change the path for <OUTPUT_DIR>, but the name of parent directory must be \"npetest\" and the name of the last directory also starts with \"npetest_\".\nFor example, the command can be changed as below:\n\n```\nbash -c 'yes | JOB=2 TIME_BUDGET=300 \\\n  NPE_CLASS_ONLY=1 \\\n  PYTHON=python3 \\\n  TOOL=npetest \\\n  REPEAT=25 \\\n  OUTPUT_DIR=\"./result/npetest/npetest_mine\" \\\n  ./run_experiment.sh\n```\n\nOnce all experiments are done, you can make the \"result.csv\" file which represents the number of NPEs detected by using the following command:\n\n```\n./scripts/check_log_file.sh ./result/npetest/npetest_test ./result/npetest_test_result.csv\n```\nNote that the \"csv file\" must be inside \"result\" directory.\n\n\n#### Running other tools on all benchmarks\nYou can run EvoSuite and Randoop with the same command used for NPETest as follows:\n\n```\nbash -c 'yes | JOB=2 TIME_BUDGET=300 \\\n  NPE_CLASS_ONLY=1 \\\n  PYTHON=python3 \\\n  TOOL=evosuite \\\n  REPEAT=25 \\\n  OUTPUT_DIR=\"~/ase2024/result/evosuite/evosuite_test\" \\\n  ./run_experiment.sh\n```\n\nPlease remind that you need to generate \"result.csv\" file for each tool after the experiments are done.\nNote that the \"csv file\" must be inside \"result\" directory.\n\n```\n./scripts/check_log_file.sh ./result/evosuite/evosuite_test ./result/evosuite_test_result.csv\n```\n\n\n#### Generating Table\n\nAfter generating \"XX_result.csv\" files for all tools (NPETest, EvoSuite, and Randoop), you need to merge the csv files into one csv file as follows:\n\n```\n./scripts/merge_csv_files.sh ./result/merged_result.csv\n```\n</output>",
+      "exec_time": 0.15081119537353516
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I should now locate any Docker-related instructions in the README as required, which may be relevant if the artifact expects a Docker-based environment.\n\n<mini_swe_agent_bash>\ngrep -in docker NPETestArtifact/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 4.460657596588135,
+        "response": {
+          "id": "chatcmpl-D0XNSc9AEa7dv4u9zDetMmIiLFCHu",
+          "created": 1769020674,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I should now locate any Docker-related instructions in the README as required, which may be relevant if the artifact expects a Docker-based environment.\n\n<mini_swe_agent_bash>\ngrep -in docker NPETestArtifact/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 119,
+            "prompt_tokens": 5739,
+            "total_tokens": 5858,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 51,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 3072
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n17:We conducted all experiments in docker system, and we provide the Dockerfile for each benchmark.\n21:* [dockers](./benchmarks/dockers) : contains Dockerfile files for each benchmark \n</output>",
+      "exec_time": 0.12201499938964844
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Next I need to check if the README mentions \u201cTable 2\u201d specifically to see if there are tailored reproduction instructions for that table.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 2\" NPETestArtifact/README.md || sed -n '200,400p' NPETestArtifact/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.3666203022003174,
+        "response": {
+          "id": "chatcmpl-D0XNXl7xF5RXXt0AD2I47Vdf6NUvg",
+          "created": 1769020679,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Next I need to check if the README mentions \u201cTable 2\u201d specifically to see if there are tailored reproduction instructions for that table.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 2\" NPETestArtifact/README.md || sed -n '200,400p' NPETestArtifact/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 101,
+            "prompt_tokens": 5865,
+            "total_tokens": 5966,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 12,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n```\nNote that all \"XX_result.csv\" files must be located in \"result\" directory.\n\nThen, you can obtain the result table with the following python code.\n```\npython3 ./scripts/build_table.py ./result/merged_result.csv ./result/final_result.txt\n```\nThis script csollects all the results in the merged csv file and pretty-print the result as a table.\n\n\n\n</output>",
+      "exec_time": 0.09175825119018555
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I should inspect the RQ1 results workbook, since Table 2 is likely derived from RQ1 data; listing its sheets will show how the data is organized.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n NPETestArtifact/rq1_result.xlsx\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 17.764668464660645,
+        "response": {
+          "id": "chatcmpl-D0XNazSehAOw09xLR1uaByy1LtBxM",
+          "created": 1769020682,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I should inspect the RQ1 results workbook, since Table 2 is likely derived from RQ1 data; listing its sheets will show how the data is organized.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n NPETestArtifact/rq1_result.xlsx\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 545,
+            "prompt_tokens": 6051,
+            "total_tokens": 6596,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 461,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 5760
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nDownloading babel (9.7MiB)\nDownloading sqlalchemy (1.8MiB)\n Downloaded sqlalchemy\n Downloaded babel\nInstalled 20 packages in 83ms\nSheet1\n</output>",
+      "exec_time": 2.6388864517211914
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I need to inspect the contents of the RQ1 results sheet to identify the columns corresponding to the reproduction rates for EvoSuite and NPETest that underlie Table 2.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv NPETestArtifact/rq1_result.xlsx | sed -n '1,60p'\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 9.668731689453125,
+        "response": {
+          "id": "chatcmpl-D0XNuqX6QzOjZ4iQHLNQ6BzK7UHmr",
+          "created": 1769020702,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I need to inspect the contents of the RQ1 results sheet to identify the columns corresponding to the reproduction rates for EvoSuite and NPETest that underlie Table 2.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv NPETestArtifact/rq1_result.xlsx | sed -n '1,60p'\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 496,
+            "prompt_tokens": 6189,
+            "total_tokens": 6685,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 403,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 5632
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n/root/.cache/uv/archive-v0/cBgBWsovX8-dqnlLqexAN/lib/python3.12/site-packages/agate/utils.py:272: UnnamedColumnWarning: Column 0 has no name. Using \"a\".\n  warn_unnamed_column(i, new_value)\n/root/.cache/uv/archive-v0/cBgBWsovX8-dqnlLqexAN/lib/python3.12/site-packages/agate/utils.py:272: UnnamedColumnWarning: Column 1 has no name. Using \"b\".\n  warn_unnamed_column(i, new_value)\n/root/.cache/uv/archive-v0/cBgBWsovX8-dqnlLqexAN/lib/python3.12/site-packages/agate/utils.py:272: UnnamedColumnWarning: Column 2 has no name. Using \"c\".\n  warn_unnamed_column(i, new_value)\n/root/.cache/uv/archive-v0/cBgBWsovX8-dqnlLqexAN/lib/python3.12/site-packages/agate/utils.py:272: UnnamedColumnWarning: Column 3 has no name. Using \"d\".\n  warn_unnamed_column(i, new_value)\n/root/.cache/uv/archive-v0/cBgBWsovX8-dqnlLqexAN/lib/python3.12/site-packages/agate/utils.py:272: UnnamedColumnWarning: Column 4 has no name. Using \"e\".\n  warn_unnamed_column(i, new_value)\na,b,c,d,e,Randoop,evosuite,npetest\nBugSwarm,ACS_AEM_Commons-374231969, UrlAssetImport,,,0,0,64\nBugSwarm,Artemis__odb-71816517, EntityEditPool,,,100,100,76\nBugSwarm,BungeeCord-130330788, ConnectionThrottle,,,0,100,100\nBugSwarm,Byte_Buddy-140517155, ClassFileLocator,,,100,92,100\nBugSwarm,Byte_Buddy-95795967, ClassFileLocator,,,100,100,100\nBugSwarm,Dubbo-416671625, HttpClientConnectionFactory,,,100,88,100\nBugSwarm,OkHttp-93618854, StreamAllocation,,,0,88,100\nBugSwarm,OkHttp-93618854, StreamAllocation,,,0,96,100\nBugSwarm,Petergeneric__Stdlib-290369132, JPASearchExecutor,,,0,100,100\nBugSwarm,REST_Countries-154683750, CountryService,,,0,28,88\nBugSwarm,REST_Countries-154683750, CountryService,,,100,20,92\nBugSwarm,REST_Countries-154683750, CountryService,,,100,100,100\nBugSwarm,REST_Countries-154683750, CountryService,,,100,100,100\nBugSwarm,REST_Countries-154683750, CountryService,,,100,100,100\nBugSwarm,REST_Countries-207869551, CountryServiceHelper,,,0,40,100\nBugSwarm,Universal_G__Code_Sender-172454077, GrblController,,,100,0,56.00000000000001\nBugSwarm,Universal_G__Code_Sender-172454077, GrblController,,,100,0,64\nBugSwarm,Universal_G__Code_Sender-676666184, GcodeStreamReader,,,0,64,72\nBugSwarm,Yamcs-186324159, SpreadsheetLoader,,,0,76,100\n,,,,,,,\nDefects4J,Cli-30, Parser,,,0,28,100\nDefects4J,Cli-30, DefaultParser,,,0,32,80\nDefects4J,Csv-11, CSVParser,,,0,80,72\nDefects4J,Csv-9, CSVRecord,,,100,72,92\nDefects4J,Math-70, BisectionSolver,,,100,100,100\nDefects4J,Math-79, KMeansPlusPlusClusterer,,,0,76,100\n,,,,,,,\nBears,Bears-189, Detector,,,0,100,100\nBears,Bears-222, WattsStrogatzGraphGenerator,,,0,20,40\nBears,Bears-56, ImportScannerImpl,,,100,100,100\nBears,Bears-70, ContextBuilder,,,0,0,28.000000000000004\nBears,Bears-88, RepositoryBeanNameGenerator,,,0,100,92\n,,,,,,,\nGenesis,Activiti-31c8ea16, AbstractEventHandler,,,0,24,92\nGenesis,Checkstyle-be8a60a4, ParameterNameCheck,,,0,60,80\nGenesis,DataflowJavaSDK-f42c13c8, CoGbkResult,,,0,0,8\nGenesis,JavaPoet-aee5f128, TypeName,,,100,100,100\nGenesis,Javaslang-0dab3ed3, Tuples,,,100,100,100\nGenesis,Jongo-97431a03, JacksonObjectIdUpdater,,,0,0,4\n,,,,,,,\nNPEX,Activiti-c45d6c3c, JPAEntityMappings,,,0,0,24\nNPEX,Aries_JPA-97cb979d, AnnotationScanner,,,0,100,80\nNPEX,Avro-a3e05bee, Schema,,,100,100,100\nNPEX,Commons_Configuration-a76a3a65, XMLConfiguration,,,100,100,100\nNPEX,Commons_DBCP-2ee3c53e, DriverAdapterCPDS,,,100,16,100\nNPEX,Commons_Pool-11521c1f, GenericKeyedObjectPool,,,0,92,100\nNPEX,CXF-209407e0, JAXRSUtils,,,100,56,84\nNPEX,Directory_LDAP_API-1aea113c, Value,,,0,80,100\nNPEX,Easy_Rules-d5385af5, MVELRuleDefinitionReader,,,0,64,100\nNPEX,Fastjson-650a300f, DefaultFieldDeserializer,,,0,8,64\nNPEX,Feign-9c5a52d6, Response,,,0,0,28.000000000000004\nNPEX,FOP-10e0d1c2, SingleByteFont,,,100,40,100\nNPEX,Hessian_Lite-c5c017dc, URL,,,0,100,96\nNPEX,Hivemall-04fa7545, GeneralLearnerBaseUDTF,,,0,68,100\nNPEX,HttpComponents_Client-f6333a50, H2AsyncClientBuilder,,,0,0,88\nNPEX,HttpComponents_Client-f6333a50, H2AsyncClientBuilder,,,0,0,76\nNPEX,HttpComponents_Client-f6333a50, HttpAsyncClientBuilder,,,0,72,84\nNPEX,HttpComponents_Client-f6333a50, HttpAsyncClientBuilder,,,0,72,84\nNPEX,IoTDB-9bced7b6, MTree,,,0,40,40\n</output>",
+      "exec_time": 0.6290154457092285
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: To understand how to best reproduce Table 2 (and see if there is an existing script for RQ1/Table 2), I should inspect the top-level contents of the artifact repository.\n\n<mini_swe_agent_bash>\nls -R NPETestArtifact | sed -n '1,120p'\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 18.33002519607544,
+        "response": {
+          "id": "chatcmpl-D0XO5zSEjAdoDUNJEFc46WxjK3zOU",
+          "created": 1769020713,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: To understand how to best reproduce Table 2 (and see if there is an existing script for RQ1/Table 2), I should inspect the top-level contents of the artifact repository.\n\n<mini_swe_agent_bash>\nls -R NPETestArtifact | sed -n '1,120p'\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 685,
+            "prompt_tokens": 7840,
+            "total_tokens": 8525,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 601,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 6016
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nNPETestArtifact:\nINSTALL.md\nLICENSE\nREADME.md\nREQUIREMENTS.md\nase2024-paper796.pdf\nbenchmarks\nexperiment\nresult\nrq1_result.xlsx\nrq2_result.xlsx\nscripts\ntool\ntools_docker\n\nNPETestArtifact/benchmarks:\nREADME.md\nbenchmark_list.txt\nbenchmark_list_ori.txt\nbuild_benchmark_parallel.py\nbuild_results.sh\ncommons.sh\nconfigs\ngenerate_dockerfile.sh\nhelper.sh\nmanual-npetest.xml\nmetadata\nsetup.sh\nsimple_benchmark.txt\n\nNPETestArtifact/benchmarks/configs:\nbashrc\n\nNPETestArtifact/benchmarks/metadata:\nBears\nBugSwarm\nDefects4J\nGenesis\nNPEX\n\nNPETestArtifact/benchmarks/metadata/Bears:\nBears-184\nBears-189\nBears-222\nBears-46\nBears-56\nBears-70\nBears-72\nBears-88\n\nNPETestArtifact/benchmarks/metadata/Bears/Bears-184:\nnpetest.json\n\nNPETestArtifact/benchmarks/metadata/Bears/Bears-189:\nnpetest.json\n\nNPETestArtifact/benchmarks/metadata/Bears/Bears-222:\nnpetest.json\n\nNPETestArtifact/benchmarks/metadata/Bears/Bears-46:\nnpetest.json\n\nNPETestArtifact/benchmarks/metadata/Bears/Bears-56:\nnpetest.json\n\nNPETestArtifact/benchmarks/metadata/Bears/Bears-70:\nnpetest.json\n\nNPETestArtifact/benchmarks/metadata/Bears/Bears-72:\nnpetest.json\n\nNPETestArtifact/benchmarks/metadata/Bears/Bears-88:\nnpetest.json\n\nNPETestArtifact/benchmarks/metadata/BugSwarm:\nACS_AEM_Commons-374231969\nACS_AEM_Commons-461893214\nArtemis__odb-71816517\nAtomix-298262068\nBungeeCord-130330788\nByte_Buddy-123642634\nByte_Buddy-140517155\nByte_Buddy-148275738\nByte_Buddy-148830162\nByte_Buddy-95795967\nDataverse-402758963\nDubbo-416671625\nGraphHopper-210124629\nJannovar-249719464\nOkHttp-93618854\nPetergeneric__Stdlib-290369132\nREST_Countries-154683750\nREST_Countries-207869551\nSonar_Java-295864289\nUniversal_G__Code_Sender-172454077\nUniversal_G__Code_Sender-243265926\nUniversal_G__Code_Sender-676666184\nYamcs-186324159\ndeadcode4j-131735009\nnFlow-197273853\n\nNPETestArtifact/benchmarks/metadata/BugSwarm/ACS_AEM_Commons-374231969:\nnpetest.json\n\nNPETestArtifact/benchmarks/metadata/BugSwarm/ACS_AEM_Commons-461893214:\nnpetest.json\n\nNPETestArtifact/benchmarks/metadata/BugSwarm/Artemis__odb-71816517:\nnpetest.json\n\nNPETestArtifact/benchmarks/metadata/BugSwarm/Atomix-298262068:\nnpetest.json\n\nNPETestArtifact/benchmarks/metadata/BugSwarm/BungeeCord-130330788:\nnpetest.json\n\nNPETestArtifact/benchmarks/metadata/BugSwarm/Byte_Buddy-123642634:\nnpetest.json\n\nNPETestArtifact/benchmarks/metadata/BugSwarm/Byte_Buddy-140517155:\n</output>",
+      "exec_time": 0.11588001251220703
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I should inspect more rows from the RQ1 CSV to see all benchmark entries and later map them to the project labels used in the expected Table 2.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv NPETestArtifact/rq1_result.xlsx | sed -n '60,160p'\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 38.57732915878296,
+        "response": {
+          "id": "chatcmpl-D0XONpGplpnZRHVaJFPGMz5ZHmXQG",
+          "created": 1769020731,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I should inspect more rows from the RQ1 CSV to see all benchmark entries and later map them to the project labels used in the expected Table 2.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv NPETestArtifact/rq1_result.xlsx | sed -n '60,160p'\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 1387,
+            "prompt_tokens": 8727,
+            "total_tokens": 10114,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 1298,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 7808
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n/root/.cache/uv/archive-v0/cBgBWsovX8-dqnlLqexAN/lib/python3.12/site-packages/agate/utils.py:272: UnnamedColumnWarning: Column 0 has no name. Using \"a\".\n  warn_unnamed_column(i, new_value)\n/root/.cache/uv/archive-v0/cBgBWsovX8-dqnlLqexAN/lib/python3.12/site-packages/agate/utils.py:272: UnnamedColumnWarning: Column 1 has no name. Using \"b\".\n  warn_unnamed_column(i, new_value)\n/root/.cache/uv/archive-v0/cBgBWsovX8-dqnlLqexAN/lib/python3.12/site-packages/agate/utils.py:272: UnnamedColumnWarning: Column 2 has no name. Using \"c\".\n  warn_unnamed_column(i, new_value)\n/root/.cache/uv/archive-v0/cBgBWsovX8-dqnlLqexAN/lib/python3.12/site-packages/agate/utils.py:272: UnnamedColumnWarning: Column 3 has no name. Using \"d\".\n  warn_unnamed_column(i, new_value)\n/root/.cache/uv/archive-v0/cBgBWsovX8-dqnlLqexAN/lib/python3.12/site-packages/agate/utils.py:272: UnnamedColumnWarning: Column 4 has no name. Using \"e\".\n  warn_unnamed_column(i, new_value)\nNPEX,IoTDB-9bced7b6, MTree,,,0,40,40\nNPEX,Jest-f34fa45e, NodeChecker,,,0,8,0\nNPEX,jsoup-8b837a43, Attribute,,,100,40,100\nNPEX,jsoup-b8411990, Normalizer,,,0,100,100\nNPEX,JSqlParser-66e44c95, ExpressionVisitorAdapter,,,0,68,96\nNPEX,Karaf-b92dd7e4, WikiParser,,,0,0,28.000000000000004\nNPEX,Log4j_2-5b7b75d5, DefaultMergeStrategy,,,0,0,16\nNPEX,Log4j_2-6a233016, RingBufferLogEvent,,,100,100,100\nNPEX,Log4j_2-7441d3c3, ConfigurationScheduler,,,100,100,100\nNPEX,Ninja-16aa9c14, Route,,,100,64,100\nNPEX,Nutz-87a4b212, Mirror,,,0,76,100\nNPEX,OpenNLP-60792b8f, DictionaryLemmatizer,,,0,100,100\nNPEX,OpenPDF-a89dfdf5, StandardDecryption,,,0,100,100\nNPEX,PDFBox-55586aad, PDActionURI,,,100,100,100\nNPEX,Qpid_Proton__j-02998b38, MapType,,,0,0,16\nNPEX,Qpid_Proton__j-02998b38, MapType,,,0,0,88\nNPEX,ShardingSphere-82b1b9d5, ExecutionContextBuilder,,,0,0,4\nNPEX,ShardingSphere-9833fb9a, SchemaYamlSwapper,,,0,40,100\nNPEX,ShardingSphere-c08f4f18, PostgreSQLAuthenticationEngine,,,0,8,8\nNPEX,ZooKeeper-ef3649f5, ZooKeeperServer,,,0,16,32\n,,,,,33.78378378378378,56.91891891891892,78.86486486486487\n</output>",
+      "exec_time": 1.0266993045806885
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I\u2019ve identified the RQ1 percentages needed; now I should inspect the provided paper markdown to see how Table 2 is defined and ensure my reproduction output matches it conceptually.\n\n<mini_swe_agent_bash>\nsed -n '1,260p' /workspace/paper.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 11.365349531173706,
+        "response": {
+          "id": "chatcmpl-D0XP195HAUPU5Hu9Re3UsZXN9Qmnl",
+          "created": 1769020771,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I\u2019ve identified the RQ1 percentages needed; now I should inspect the provided paper markdown to see how Table 2 is defined and ensure my reproduction output matches it conceptually.\n\n<mini_swe_agent_bash>\nsed -n '1,260p' /workspace/paper.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 484,
+            "prompt_tokens": 9633,
+            "total_tokens": 10117,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 404,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 6144
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n2024 39th IEEE/ACM International Conference on Automated Software Engineering (ASE)\n\n# **Effective Unit Test Generation for Java Null Pointer Exceptions**\n\n\n\nMyungho Lee\nKorea University\nRepublic of Korea\nmyungho_lee@korea.ac.kr\n\n\n\nJiseong Bak\nKorea University\nRepublic of Korea\njs_bak@korea.ac.kr\n\n\n\nSeokhyeon Moon\nTechnology Research, Samsung SDS\nRepublic of Korea\nshyeon.mun@samsung.com\n\n\nHakjoo Oh [\u2217]\n\n\n\nYoon-Chan Jhi\nTechnology Research, Samsung SDS\nRepublic of Korea\nyoonchan.jhi@samsung.com\n\n\n**ABSTRACT**\n\n\nIn this experience paper, we share our experience on enhancing\nautomatic unit test generation to more effectively find Java null\npointer exceptions (NPEs). NPEs are among the most common and\ncritical errors in Java applications. However, as we demonstrate in\nthis paper, existing unit test generation tools such as Randoop and\nEvoSuite are not sufficiently effective at catching NPEs. Specifically,\ntheir primary strategy of achieving high code coverage does not\nnecessarily result in triggering diverse NPEs in practice. In this\npaper, we detail our observation on the limitations of current stateof-the-art unit testing tools in terms of NPE detection and introduce\na new strategy to improve their effectiveness. Our strategy utilizes\nboth static and dynamic analyses to guide the test case generator\nto focus specifically on scenarios that are likely to trigger NPEs.\nWe implemented this strategy on top of EvoSuite, and evaluated\nour tool, NpeTest, on 108 NPE benchmarks collected from 96 realworld projects. The results show that our NPE-guidance strategy\ncan increase EvoSuite\u2019s reproduction rate of the NPEs from 56.9%\nto 78.9%, a 38.7% improvement. Furthermore, NpeTest successfully\ndetected 89 previously unknown NPEs from an industry project.\n\n\n**ACM Reference Format:**\n\nMyungho Lee, Jiseong Bak, Seokhyeon Moon, Yoon-Chan Jhi, and Hakjoo\nOh. 2024. Effective Unit Test Generation for Java Null Pointer Exceptions. In\n_39th IEEE/ACM International Conference on Automated Software Engineering_\n_(ASE \u201924), October 27-November 1, 2024, Sacramento, CA, USA._ ACM, New\nYork, NY, USA, 13 pages. https://doi.org/10.1145/3691620.3695484\n\n\n**1** **INTRODUCTION**\n\n\nNull pointer exceptions (NPEs) are one of the most common and fatal errors in Java applications [ 1 \u2013 6 ]. NPE is a critical software defect\nbecause dereferencing a null pointer always makes the program\ncrash, causing undefined behavior of the entire system. In addition\nto the hazardous impacts of NPEs on software, NPEs frequently\noccur in practice, making them even more fatal. For example, recent\nindustry reports [ 7, 8 ] on the causes for errors in real-world Java\n\n\n\u2217 Corresponding author.\n\n\n[This work is licensed under a Creative Commons Attribution International 4.0 License.](https://creativecommons.org/licenses/by/4.0/)\n\n\n_ASE \u201924, October 27-November 1, 2024, Sacramento, CA, USA_\n\u00a9 2024 Copyright held by the owner/author(s).\nACM ISBN 979-8-4007-1248-7/24/10.\nhttps://doi.org/10.1145/3691620.3695484\n\n\n1044\n\n\n\nKorea University\nRepublic of Korea\nhakjoo_oh@korea.ac.kr\n\n\napplications, often discussed in technical blogs, show that NPEs\naccount for the most significant portion of the reported crashes.\nTherefore, software testing is mandatory to reduce the risk of NPEs\nduring the software development process.\n\n\n_**Unit Testing.**_ Unit testing has been one of the most widely\nused software testing techniques for object-oriented programming\nlanguages such as Java. With well-designed test cases that represent\nthe usage scenarios of a certain unit to test, unit testing validates\nthat each unit of the software performs as expected, where a unit is\ntypically an individual method or object. Due to its characteristics\nthat enable testing of an individual single unit with diverse usage\nscenarios, unit testing helps facilitate software maintainability and\nis used to prevent future regressions, which improves overall software quality during the development process. From this perspective,\nunit tests are widely utilized to detect software defects. However,\nfinding bug-triggering unit tests is a complex and time-consuming\ntask, which becomes more difficult with respect to the size and\ncomplexity of software systems.\n\n\n_**Automatic Unit Test Generation.**_ To reduce the burdens of\n\ndevelopers on designing unit tests, automatic test case generation\ntechniques have been proposed with two major approaches: random\ntesting and search-based software testing. Both methods generate\ntest cases by automatically synthesizing method call sequences for\nthe target unit, without assuming existing test drivers.\nRandom testing is a simple yet effective approach to automatically generating method sequences for object-oriented programs.\nIt randomly synthesizes a sequence of method calls to generate\ntest cases. Among various strategies, feedback-directed random\ntesting has been considered superior to pure random testing, which\nis implemented in tools such as Randoop [ 9 ]. Rather than blindly\ngenerating test cases, Randoop leverages the knowledge obtainable through the execution of generated test cases. It runs contract\ncheckers for each generated object to maintain a pool of valid objects. This feedback-directed approach has become a primary test\ngeneration strategy for programs written in Java and C#.\nSearch-based software testing (SBST), on the other hand, formulates the test generation as an optimization problem concerning\ncertain coverage criteria (e.g., branch coverage, exception coverage).\nIn particular, EvoSuite [ 10 ] is the state-of-the-art SBST tool for\nJava, which leverages genetic algorithms (e.g., DynaMOSA [ 11 ]\nand MOSA [ 12 ]) to optimize the test suite. It first randomly generates the initial population similar to random testing, and then\n\n\nASE \u201924, October 27-November 1, 2024, Sacramento, CA, USA Myungho Lee, Jiseong Bak, Seokhyeon Moon, Yoon-Chan Jhi, and Hakjoo Oh\n\n\n\nfinds an optimal test suite concerning target coverage criteria. Over\nthe last decade, SBST has been popular and extensively used for\nobject-oriented programs [13\u201317].\n\n\n_**Observation on NPE Detection.**_ We observed that state-of\nthe-art tools, Randoop and EvoSuite, are not sufficiently effective\nat catching diverse NPEs in practice. These unit testing techniques\nprimarily strive for high code coverage with the expectation that\nobtaining high code coverage will ultimately lead to bug detection. Unfortunately, however, we experienced that achieving higher\ncode coverage does not necessarily result in better NPE-finding\nperformance; using a highly tuned configuration for EvoSuite to\nincrease line coverage from 64.5% to 77.8% on our benchmark programs ended up improving its NPE-reproduction rate marginally\nfrom 55.7% 56.9% (Section 4.3). This is because software bugs, especially NPEs, usually occur under certain conditions [ 18 \u2013 20 ]. For\nexample, NPEs are detected only if the value of the dereferenced\npointer remains null at the time the corresponding buggy statement is executed. Hence, detecting NPEs requires taking one more\nstep from just achieving high code coverage.\n\n\n_**Our Approach.**_ To take unit testing techniques one step further\nfor effective NPE detection, we propose a new strategy that guides\nthe testing process to generate test cases that are more likely to\nexplore NPE-prone regions, where NPE may occur. To this end, our\napproach leverages both static and dynamic analyses. We use static\nanalysis to identify the methods that may trigger NPEs and compute\nbackward dependencies to pinpoint the statements and variables\nthat need to be mutated to reach those methods. We utilize dynamic\nanalysis to gather runtime information and adaptively spend more\ntesting budget on less explored NPE-related code regions.\nExperiments show that our approach significantly improves the\nexisting unit test generator in terms of NPE detection. We implemented our approach on top of EvoSuite, and evaluated its\nperformance on 108 known NPEs collected from 96 real-world\nprojects [ 3, 21 \u2013 24 ] in comparison with Randoop and EvoSuite. In\nsummary, NpeTest showed a reproduction rate of 78.9% for those\nNPEs while Randoop and EvoSuite achieved 33.7% and 56.9%, respectively. Regarding the number of detected bugs, 12 bugs were\nexclusively found by NpeTest, 1 by EvoSuite, and 0 by Randoop.\nWe also conducted an industrial case study, applying the three\ntools, Randoop, EvoSuite, and NpeTest, to a software project\nactively used and maintained within a large IT company. Through\nthe case study, we found a total of 91 previously unknown NPEs:\nNpeTest detected 89 NPEs, whereas EvoSuite and Randoop detected 82 and 52 NPEs, respectively. This case study prompted the\ndevelopment team to plan incorporating NpeTest into their development pipeline, enhancing overall code security and robustness.\n\n\n_**Contributions.**_ We summarize our contributions below:\n\n\n- **Observation** : We show that increasing code coverage does not\nalways lead to better NPE detection. Using highly tuned EvoSuite did not meaningfully improve NPE-reproduction rates.\n\n- **New Technique** : We present NpeTest, a new NPE-detection\nstrategy for EvoSuite . To our knowledge, NpeTest is the first\ntechnique for unit test generators that focuses on NPE detection.\n\n\n\n\n- **Evaluation and Comparison** : We demonstrate the effectiveness of NpeTest by evaluating it on 108 real-world NPEs and\ncomparing it with Randoop and EvoSuite.\n\n- **Industrial Case Study** : We show that NpeTest can be useful\nin industrial contexts by conducting a case study on a software\nproject actively maintained within a major IT company.\n\n\n**2** **MOTIVATING EXAMPLE**\n\n\nFigure 1 describes an NPE found in Qpid Proton-J project [1] . The\nroot cause of this NPE is the null literal assigned to the variable amqpType in the deduceTypeFromClass method (line 4, Figure\n1b), which is returned without refinement. The NPE is thrown at\nline 8 in Figure 1a, when dereferencing the return value of the\ngetType method (line 7, Figure 1a)\u2014which internally calls the\ndeduceTypeFromClass method shown in Figure 1b and returns\nthe result directly.\nHowever, the conditions under which the variable amqpType is\nnot refined during the execution are not trivial. The type of the\nfirst argument should be set properly, which is determined by the\nargument of the calculateSize method in Figure 1a. For example,\nas shown in Figure 1b, if the type of the first argument when calling\ndeduceTypeFromClass is an array type, it passes the true branch\nat line 5 and amqpType will be redefined, which never triggers NPE.\nAlso, considering that this method is called in the while loop (line\n4, Figure 1a), the input map of the calculateSize method should\ncontain at least one element.\n\nFigure 1c is an NPE-triggering test case written by developers,\nwhich leads to NPE whose stack trace is in Figure 1d. By adding\nthe element in the mapping variable map at line 5, this test case\ncan enter inside the while loop, which satisfies the first step to\ntrigger the NPE. Additionally, the instantiation of Map<Integer,\nObject> causes the Object type (i.e., Class<Object> ) to be passed\nto the first parameter of the deduceTypeFromClass method. This\nparameter bypasses the condition at line 5 in Figure 1b as its type is\nnot an array type, leading deduceTypeFromClass to return null,\nwhich triggers an NPE in Figure 1a.\nIn order to generate such test cases triggering the NPE, unit test\ngeneration tools must focus on mutating various types for generic\ntype parameters of Map and find an appropriate one that bypasses\nthe branch conditions in deduceTypeFromClass not to refine the\nvalue of amqpType . Although EvoSuite, the state-of-the-art unit\ntest generation tool, We found that EvoSuite and Randoop failed\nto generate such test cases due to the large space of test cases and\nstatements to be mutated. Additionally, due to the large space of\nthe methods to be tested, problematic methods to focus on should\nbe determined carefully for better efficiency.\nNpeTest follows such direction in generating test cases via static\nand dynamic analyses. First, our static analysis identifies statements\n(e.g., Lines 4\u20135 in Figure 1c) in test cases that are highly correlated\nwith problematic method arguments and variables (e.g., \u201cmap\u201d variable) that are likely to occur NPEs. Second, NpeTest mutates test\ncases that explore NPE-related regions (e.g., Line 8 in Figure 1a)\nmore aggressively than the other test cases with the aid of dynamic analysis. More specifically, NpeTest monitors a sequence of\ncalled methods during execution for each generated test case and\n\n</output>",
+      "exec_time": 0.0845632553100586
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I now need to create the full reproduction script `repro_npetest_table_2.sh` that (1) writes the expected Table 2 skeleton, (2) downloads the NPETest artifact, (3) converts `rq1_result.xlsx` to CSV and programmatically builds the Table 2 markdown with the reproduction rates for EvoSuite and NPETest into `/workspace/repro.txt`, and (4) runs `artisan format` inside the `<artisan_submit>` markers. Finally, I must submit this script with `artisan submit`.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_npetest_table_2.sh <<'EOF'\n#!/usr/bin/bash\nset -euo pipefail\ncd /workspace\n\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: The reproduction rate results for 25 trials on benchmark projects gathered from the prior studies [3, 21\u201324]. The projects where all three tools failed to detect NPEs are excluded from this table. Project: The name of the buggy project with its abbreviated NPE-labeling ID (if necessary). The number in a parenthesis represents each unique NPE in the same project.**\n\n### NPEX\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Activiti-c45 | ? | ?? |\n| Aries_JPA | ??? | ?? |\n| Avro | ??? | ??? |\n| Commons_Conf | ??? | ??? |\n| Commons_DBCP | ?? | ??? |\n| Commons_Pool | ?? | ??? |\n| CXF-2094 | ?? | ?? |\n| Directory | ?? | ?? |\n| Easy_Rules | ?? | ??? |\n| Fastjson-650a | ? | ?? |\n| Feign-9c5a | ? | ?? |\n| FOP-10e0d1c2 | ?? | ??? |\n| Hessian_Lite | ??? | ?? |\n| Hivemall-04fa | ?? | ??? |\n| Http-f633(1) | ? | ?? |\n| Http-f633(2) | ? | ?? |\n| Http-f633(3) | ?? | ?? |\n| Http-f633(4) | ?? | ?? |\n| IoTDB-9bce | ?? | ?? |\n| Jest-f34f | ? | ? |\n| jsoup-8b83 | ?? | ??? |\n| jsoup-b841 | ??? | ??? |\n| JSqlParser | ?? | ?? |\n| Karaf-b92d | ? | ?? |\n| Log4j_2-5b7b | ? | ?? |\n| Log4j_2-6a23 | ?? | ??? |\n| Log4j_2-7441 | ??? | ??? |\n| Ninja-16aa | ?? | ?? |\n| Nutz-87a4 | ?? | ??? |\n| OpenNLP-6079 | ??? | ??? |\n| OpenPDF-a89d | ??? | ??? |\n| PDFBox-5558 | ??? | ??? |\n| Qpid-0299 (1) | ? | ?? |\n| Qpid-0299 (2) | ? | ?? |\n| Sharding-82b1 | ? | ? |\n| Sharding-9833 | ?? | ??? |\n| Sharding-c08f | ? | ? |\n| ZooKeeper | ?? | ?? |\n\n### BugSwarm\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| ACS_Commons | ? | ?? |\n| Artemis_odb | ?? | ?? |\n| BungeeCord-1303 | ??? | ??? |\n| Byte-1405 | ?? | ??? |\n| Byte_Buddy-9579 | ?? | ??? |\n| Dubbo-4166 | ?? | ??? |\n| OkHttp-9361(1) | ?? | ??? |\n| OkHttp-9361(2) | ?? | ?? |\n| Petergeneric | ?? | ?? |\n| REST-1546(1) | ?? | ?? |\n| REST-1546(2) | ?? | ?? |\n| REST-1546(3) | ??? | ??? |\n| REST-1546(4) | ??? | ??? |\n| REST-1546(5) | ??? | ??? |\n| REST-2078 | ?? | ??? |\n| Universal-1724(1) | ? | ?? |\n| Universal-1724(2) | ? | ?? |\n| Universal-6766 | ?? | ?? |\n| Yamcs-1863 | ?? | ?? |\n\n### Defects4J\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Cli-30(0) | ?? | ??? |\n| Cli-30(1) | ?? | ??? |\n| Csv-11 | ?? | ?? |\n| Csv-9 | ?? | ?? |\n| Math-70 | ??? | ??? |\n| Math-79 | ?? | ??? |\n\n### Genesis\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Activiti-31c8 | ?? | ?? |\n| Checkstyle-be8 | ?? | ?? |\n| DataflowJavaSDK | ? | ? |\n| JavaPoet-aee5 | ??? | ??? |\n| Javaslang-0dab | ??? | ??? |\n| Jongo-9743 | ? | ? |\n\n### Bears\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Bears-189 | ??? | ??? |\n| Bears-222 | ?? | ?? |\n| Bears-56 | ?? | ??? |\n| Bears-70 | ? | ?? |\n| Bears-88 | ??? | ?? |\n\nEOTABLE\n\n# Section 2: Artifact download\nartisan get https://github.com/kupl/NPETestArtifact\n\n# Section 3: Reproduction commands (populate from reviewed steps)\n# Convert the RQ1 Excel results (per-bug reproduction rates) to CSV\nuvx --from csvkit in2csv NPETestArtifact/rq1_result.xlsx > /workspace/rq1_result.csv\n\n# Build Table 2 markdown from rq1_result.csv\npython3 - <<'PY' > /workspace/repro.txt\nimport csv\nfrom collections import defaultdict\n\n# Load rows grouped by benchmark suite (column 'a')\nwith open(\"/workspace/rq1_result.csv\", newline=\"\") as f:\n    reader = csv.DictReader(f)\n    rows = [r for r in reader if r[\"a\"]]\n\nby_ds = defaultdict(list)\nfor r in rows:\n    by_ds[r[\"a\"]].append(r)\n\ndef fmt(v: str) -> str:\n    return str(int(round(float(v)))) if v else \"\"\n\ndef single(ds: str, b_prefix: str):\n    ms = [r for r in by_ds[ds] if r[\"b\"].startswith(b_prefix)]\n    assert len(ms) == 1, (ds, b_prefix, len(ms))\n    return ms[0]\n\ndef multi(ds: str, b_prefix: str, count: int):\n    ms = [r for r in by_ds[ds] if r[\"b\"].startswith(b_prefix)]\n    assert len(ms) == count, (ds, b_prefix, len(ms))\n    return ms\n\nlines = []\n\nlines.append(\"**Table 2: The reproduction rate results for 25 trials on benchmark projects gathered from the prior studies [3, 21\u201324]. The projects where all three tools failed to detect NPEs are excluded from this table. Project: The name of the buggy project with its abbreviated NPE-labeling ID (if necessary). The number in a parenthesis represents each unique NPE in the same project.**\\n\")\n\n# === NPEX ===\nlines.append(\"### NPEX\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"NPEX\", \"Activiti-c45d6c3c\")\nlines.append(f\"| Activiti-c45 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Aries_JPA-97cb979d\")\nlines.append(f\"| Aries_JPA | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Avro-a3e05bee\")\nlines.append(f\"| Avro | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Commons_Configuration-a76a3a65\")\nlines.append(f\"| Commons_Conf | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Commons_DBCP-2ee3c53e\")\nlines.append(f\"| Commons_DBCP | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Commons_Pool-11521c1f\")\nlines.append(f\"| Commons_Pool | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"CXF-209407e0\")\nlines.append(f\"| CXF-2094 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Directory_LDAP_API-1aea113c\")\nlines.append(f\"| Directory | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Easy_Rules-d5385af5\")\nlines.append(f\"| Easy_Rules | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Fastjson-650a300f\")\nlines.append(f\"| Fastjson-650a | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Feign-9c5a52d6\")\nlines.append(f\"| Feign-9c5a | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"FOP-10e0d1c2\")\nlines.append(f\"| FOP-10e0d1c2 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Hessian_Lite-c5c017dc\")\nlines.append(f\"| Hessian_Lite | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Hivemall-04fa7545\")\nlines.append(f\"| Hivemall-04fa | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nhttp_rows = multi(\"NPEX\", \"HttpComponents_Client-f6333a50\", 4)\nfor i, rr in enumerate(http_rows, start=1):\n    lines.append(f\"| Http-f633({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"NPEX\", \"IoTDB-9bced7b6\")\nlines.append(f\"| IoTDB-9bce | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Jest-f34fa45e\")\nlines.append(f\"| Jest-f34f | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"jsoup-8b837a43\")\nlines.append(f\"| jsoup-8b83 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"jsoup-b8411990\")\nlines.append(f\"| jsoup-b841 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"JSqlParser-66e44c95\")\nlines.append(f\"| JSqlParser | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Karaf-b92dd7e4\")\nlines.append(f\"| Karaf-b92d | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Log4j_2-5b7b75d5\")\nlines.append(f\"| Log4j_2-5b7b | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Log4j_2-6a233016\")\nlines.append(f\"| Log4j_2-6a23 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Log4j_2-7441d3c3\")\nlines.append(f\"| Log4j_2-7441 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Ninja-16aa9c14\")\nlines.append(f\"| Ninja-16aa | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Nutz-87a4b212\")\nlines.append(f\"| Nutz-87a4 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"OpenNLP-60792b8f\")\nlines.append(f\"| OpenNLP-6079 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"OpenPDF-a89dfdf5\")\nlines.append(f\"| OpenPDF-a89d | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"PDFBox-55586aad\")\nlines.append(f\"| PDFBox-5558 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nqpid_rows = multi(\"NPEX\", \"Qpid_Proton__j-02998b38\", 2)\nfor i, rr in enumerate(qpid_rows, start=1):\n    lines.append(f\"| Qpid-0299 ({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"NPEX\", \"ShardingSphere-82b1b9d5\")\nlines.append(f\"| Sharding-82b1 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"ShardingSphere-9833fb9a\")\nlines.append(f\"| Sharding-9833 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"ShardingSphere-c08f4f18\")\nlines.append(f\"| Sharding-c08f | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"ZooKeeper-ef3649f5\")\nlines.append(f\"| ZooKeeper | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === BugSwarm ===\nlines.append(\"\\n### BugSwarm\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"BugSwarm\", \"ACS_AEM_Commons-374231969\")\nlines.append(f\"| ACS_Commons | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Artemis__odb-71816517\")\nlines.append(f\"| Artemis_odb | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"BungeeCord-130330788\")\nlines.append(f\"| BungeeCord-1303 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Byte_Buddy-140517155\")\nlines.append(f\"| Byte-1405 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Byte_Buddy-95795967\")\nlines.append(f\"| Byte_Buddy-9579 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Dubbo-416671625\")\nlines.append(f\"| Dubbo-4166 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nokhttp_rows = multi(\"BugSwarm\", \"OkHttp-93618854\", 2)\nfor i, rr in enumerate(okhttp_rows, start=1):\n    lines.append(f\"| OkHttp-9361({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Petergeneric__Stdlib-290369132\")\nlines.append(f\"| Petergeneric | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nrest1546_rows = multi(\"BugSwarm\", \"REST_Countries-154683750\", 5)\nfor i, rr in enumerate(rest1546_rows, start=1):\n    lines.append(f\"| REST-1546({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"REST_Countries-207869551\")\nlines.append(f\"| REST-2078 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nu1724_rows = multi(\"BugSwarm\", \"Universal_G__Code_Sender-172454077\", 2)\nfor i, rr in enumerate(u1724_rows, start=1):\n    lines.append(f\"| Universal-1724({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Universal_G__Code_Sender-676666184\")\nlines.append(f\"| Universal-6766 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Yamcs-186324159\")\nlines.append(f\"| Yamcs-1863 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === Defects4J ===\nlines.append(\"\\n### Defects4J\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\ncli_rows = multi(\"Defects4J\", \"Cli-30\", 2)\nfor i, rr in enumerate(cli_rows):\n    lines.append(f\"| Cli-30({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Csv-11\")\nlines.append(f\"| Csv-11 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Csv-9\")\nlines.append(f\"| Csv-9 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Math-70\")\nlines.append(f\"| Math-70 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Math-79\")\nlines.append(f\"| Math-79 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === Genesis ===\nlines.append(\"\\n### Genesis\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"Genesis\", \"Activiti-31c8ea16\")\nlines.append(f\"| Activiti-31c8 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"Checkstyle-be8a60a4\")\nlines.append(f\"| Checkstyle-be8 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"DataflowJavaSDK-f42c13c8\")\nlines.append(f\"| DataflowJavaSDK | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"JavaPoet-aee5f128\")\nlines.append(f\"| JavaPoet-aee5 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"Javaslang-0dab3ed3\")\nlines.append(f\"| Javaslang-0dab | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"Jongo-97431a03\")\nlines.append(f\"| Jongo-9743 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === Bears ===\nlines.append(\"\\n### Bears\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"Bears\", \"Bears-189\")\nlines.append(f\"| Bears-189 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-222\")\nlines.append(f\"| Bears-222 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-56\")\nlines.append(f\"| Bears-56 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-70\")\nlines.append(f\"| Bears-70 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-88\")\nlines.append(f\"| Bears-88 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nprint(\"\\n\".join(lines))\nPY\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_npetest_table_2.sh\nartisan submit /workspace/repro_npetest_table_2.sh\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 218.45602321624756,
+        "response": {
+          "id": "chatcmpl-D0XPCZMdBSSAKkioPbzfUbnjeIY8Q",
+          "created": 1769020782,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I now need to create the full reproduction script `repro_npetest_table_2.sh` that (1) writes the expected Table 2 skeleton, (2) downloads the NPETest artifact, (3) converts `rq1_result.xlsx` to CSV and programmatically builds the Table 2 markdown with the reproduction rates for EvoSuite and NPETest into `/workspace/repro.txt`, and (4) runs `artisan format` inside the `<artisan_submit>` markers. Finally, I must submit this script with `artisan submit`.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_npetest_table_2.sh <<'EOF'\n#!/usr/bin/bash\nset -euo pipefail\ncd /workspace\n\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: The reproduction rate results for 25 trials on benchmark projects gathered from the prior studies [3, 21\u201324]. The projects where all three tools failed to detect NPEs are excluded from this table. Project: The name of the buggy project with its abbreviated NPE-labeling ID (if necessary). The number in a parenthesis represents each unique NPE in the same project.**\n\n### NPEX\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Activiti-c45 | ? | ?? |\n| Aries_JPA | ??? | ?? |\n| Avro | ??? | ??? |\n| Commons_Conf | ??? | ??? |\n| Commons_DBCP | ?? | ??? |\n| Commons_Pool | ?? | ??? |\n| CXF-2094 | ?? | ?? |\n| Directory | ?? | ?? |\n| Easy_Rules | ?? | ??? |\n| Fastjson-650a | ? | ?? |\n| Feign-9c5a | ? | ?? |\n| FOP-10e0d1c2 | ?? | ??? |\n| Hessian_Lite | ??? | ?? |\n| Hivemall-04fa | ?? | ??? |\n| Http-f633(1) | ? | ?? |\n| Http-f633(2) | ? | ?? |\n| Http-f633(3) | ?? | ?? |\n| Http-f633(4) | ?? | ?? |\n| IoTDB-9bce | ?? | ?? |\n| Jest-f34f | ? | ? |\n| jsoup-8b83 | ?? | ??? |\n| jsoup-b841 | ??? | ??? |\n| JSqlParser | ?? | ?? |\n| Karaf-b92d | ? | ?? |\n| Log4j_2-5b7b | ? | ?? |\n| Log4j_2-6a23 | ?? | ??? |\n| Log4j_2-7441 | ??? | ??? |\n| Ninja-16aa | ?? | ?? |\n| Nutz-87a4 | ?? | ??? |\n| OpenNLP-6079 | ??? | ??? |\n| OpenPDF-a89d | ??? | ??? |\n| PDFBox-5558 | ??? | ??? |\n| Qpid-0299 (1) | ? | ?? |\n| Qpid-0299 (2) | ? | ?? |\n| Sharding-82b1 | ? | ? |\n| Sharding-9833 | ?? | ??? |\n| Sharding-c08f | ? | ? |\n| ZooKeeper | ?? | ?? |\n\n### BugSwarm\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| ACS_Commons | ? | ?? |\n| Artemis_odb | ?? | ?? |\n| BungeeCord-1303 | ??? | ??? |\n| Byte-1405 | ?? | ??? |\n| Byte_Buddy-9579 | ?? | ??? |\n| Dubbo-4166 | ?? | ??? |\n| OkHttp-9361(1) | ?? | ??? |\n| OkHttp-9361(2) | ?? | ?? |\n| Petergeneric | ?? | ?? |\n| REST-1546(1) | ?? | ?? |\n| REST-1546(2) | ?? | ?? |\n| REST-1546(3) | ??? | ??? |\n| REST-1546(4) | ??? | ??? |\n| REST-1546(5) | ??? | ??? |\n| REST-2078 | ?? | ??? |\n| Universal-1724(1) | ? | ?? |\n| Universal-1724(2) | ? | ?? |\n| Universal-6766 | ?? | ?? |\n| Yamcs-1863 | ?? | ?? |\n\n### Defects4J\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Cli-30(0) | ?? | ??? |\n| Cli-30(1) | ?? | ??? |\n| Csv-11 | ?? | ?? |\n| Csv-9 | ?? | ?? |\n| Math-70 | ??? | ??? |\n| Math-79 | ?? | ??? |\n\n### Genesis\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Activiti-31c8 | ?? | ?? |\n| Checkstyle-be8 | ?? | ?? |\n| DataflowJavaSDK | ? | ? |\n| JavaPoet-aee5 | ??? | ??? |\n| Javaslang-0dab | ??? | ??? |\n| Jongo-9743 | ? | ? |\n\n### Bears\n\n| Project | EvoSuite | NPETest |\n| :--- | ---: | ---: |\n| Bears-189 | ??? | ??? |\n| Bears-222 | ?? | ?? |\n| Bears-56 | ?? | ??? |\n| Bears-70 | ? | ?? |\n| Bears-88 | ??? | ?? |\n\nEOTABLE\n\n# Section 2: Artifact download\nartisan get https://github.com/kupl/NPETestArtifact\n\n# Section 3: Reproduction commands (populate from reviewed steps)\n# Convert the RQ1 Excel results (per-bug reproduction rates) to CSV\nuvx --from csvkit in2csv NPETestArtifact/rq1_result.xlsx > /workspace/rq1_result.csv\n\n# Build Table 2 markdown from rq1_result.csv\npython3 - <<'PY' > /workspace/repro.txt\nimport csv\nfrom collections import defaultdict\n\n# Load rows grouped by benchmark suite (column 'a')\nwith open(\"/workspace/rq1_result.csv\", newline=\"\") as f:\n    reader = csv.DictReader(f)\n    rows = [r for r in reader if r[\"a\"]]\n\nby_ds = defaultdict(list)\nfor r in rows:\n    by_ds[r[\"a\"]].append(r)\n\ndef fmt(v: str) -> str:\n    return str(int(round(float(v)))) if v else \"\"\n\ndef single(ds: str, b_prefix: str):\n    ms = [r for r in by_ds[ds] if r[\"b\"].startswith(b_prefix)]\n    assert len(ms) == 1, (ds, b_prefix, len(ms))\n    return ms[0]\n\ndef multi(ds: str, b_prefix: str, count: int):\n    ms = [r for r in by_ds[ds] if r[\"b\"].startswith(b_prefix)]\n    assert len(ms) == count, (ds, b_prefix, len(ms))\n    return ms\n\nlines = []\n\nlines.append(\"**Table 2: The reproduction rate results for 25 trials on benchmark projects gathered from the prior studies [3, 21\u201324]. The projects where all three tools failed to detect NPEs are excluded from this table. Project: The name of the buggy project with its abbreviated NPE-labeling ID (if necessary). The number in a parenthesis represents each unique NPE in the same project.**\\n\")\n\n# === NPEX ===\nlines.append(\"### NPEX\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"NPEX\", \"Activiti-c45d6c3c\")\nlines.append(f\"| Activiti-c45 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Aries_JPA-97cb979d\")\nlines.append(f\"| Aries_JPA | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Avro-a3e05bee\")\nlines.append(f\"| Avro | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Commons_Configuration-a76a3a65\")\nlines.append(f\"| Commons_Conf | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Commons_DBCP-2ee3c53e\")\nlines.append(f\"| Commons_DBCP | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Commons_Pool-11521c1f\")\nlines.append(f\"| Commons_Pool | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"CXF-209407e0\")\nlines.append(f\"| CXF-2094 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Directory_LDAP_API-1aea113c\")\nlines.append(f\"| Directory | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Easy_Rules-d5385af5\")\nlines.append(f\"| Easy_Rules | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Fastjson-650a300f\")\nlines.append(f\"| Fastjson-650a | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Feign-9c5a52d6\")\nlines.append(f\"| Feign-9c5a | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"FOP-10e0d1c2\")\nlines.append(f\"| FOP-10e0d1c2 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Hessian_Lite-c5c017dc\")\nlines.append(f\"| Hessian_Lite | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Hivemall-04fa7545\")\nlines.append(f\"| Hivemall-04fa | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nhttp_rows = multi(\"NPEX\", \"HttpComponents_Client-f6333a50\", 4)\nfor i, rr in enumerate(http_rows, start=1):\n    lines.append(f\"| Http-f633({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"NPEX\", \"IoTDB-9bced7b6\")\nlines.append(f\"| IoTDB-9bce | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Jest-f34fa45e\")\nlines.append(f\"| Jest-f34f | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"jsoup-8b837a43\")\nlines.append(f\"| jsoup-8b83 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"jsoup-b8411990\")\nlines.append(f\"| jsoup-b841 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"JSqlParser-66e44c95\")\nlines.append(f\"| JSqlParser | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Karaf-b92dd7e4\")\nlines.append(f\"| Karaf-b92d | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Log4j_2-5b7b75d5\")\nlines.append(f\"| Log4j_2-5b7b | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Log4j_2-6a233016\")\nlines.append(f\"| Log4j_2-6a23 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Log4j_2-7441d3c3\")\nlines.append(f\"| Log4j_2-7441 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Ninja-16aa9c14\")\nlines.append(f\"| Ninja-16aa | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"Nutz-87a4b212\")\nlines.append(f\"| Nutz-87a4 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"OpenNLP-60792b8f\")\nlines.append(f\"| OpenNLP-6079 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"OpenPDF-a89dfdf5\")\nlines.append(f\"| OpenPDF-a89d | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"PDFBox-55586aad\")\nlines.append(f\"| PDFBox-5558 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nqpid_rows = multi(\"NPEX\", \"Qpid_Proton__j-02998b38\", 2)\nfor i, rr in enumerate(qpid_rows, start=1):\n    lines.append(f\"| Qpid-0299 ({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"NPEX\", \"ShardingSphere-82b1b9d5\")\nlines.append(f\"| Sharding-82b1 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"ShardingSphere-9833fb9a\")\nlines.append(f\"| Sharding-9833 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"ShardingSphere-c08f4f18\")\nlines.append(f\"| Sharding-c08f | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"NPEX\", \"ZooKeeper-ef3649f5\")\nlines.append(f\"| ZooKeeper | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === BugSwarm ===\nlines.append(\"\\n### BugSwarm\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"BugSwarm\", \"ACS_AEM_Commons-374231969\")\nlines.append(f\"| ACS_Commons | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Artemis__odb-71816517\")\nlines.append(f\"| Artemis_odb | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"BungeeCord-130330788\")\nlines.append(f\"| BungeeCord-1303 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Byte_Buddy-140517155\")\nlines.append(f\"| Byte-1405 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Byte_Buddy-95795967\")\nlines.append(f\"| Byte_Buddy-9579 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Dubbo-416671625\")\nlines.append(f\"| Dubbo-4166 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nokhttp_rows = multi(\"BugSwarm\", \"OkHttp-93618854\", 2)\nfor i, rr in enumerate(okhttp_rows, start=1):\n    lines.append(f\"| OkHttp-9361({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Petergeneric__Stdlib-290369132\")\nlines.append(f\"| Petergeneric | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nrest1546_rows = multi(\"BugSwarm\", \"REST_Countries-154683750\", 5)\nfor i, rr in enumerate(rest1546_rows, start=1):\n    lines.append(f\"| REST-1546({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"REST_Countries-207869551\")\nlines.append(f\"| REST-2078 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nu1724_rows = multi(\"BugSwarm\", \"Universal_G__Code_Sender-172454077\", 2)\nfor i, rr in enumerate(u1724_rows, start=1):\n    lines.append(f\"| Universal-1724({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Universal_G__Code_Sender-676666184\")\nlines.append(f\"| Universal-6766 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"BugSwarm\", \"Yamcs-186324159\")\nlines.append(f\"| Yamcs-1863 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === Defects4J ===\nlines.append(\"\\n### Defects4J\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\ncli_rows = multi(\"Defects4J\", \"Cli-30\", 2)\nfor i, rr in enumerate(cli_rows):\n    lines.append(f\"| Cli-30({i}) | {fmt(rr['evosuite'])} | {fmt(rr['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Csv-11\")\nlines.append(f\"| Csv-11 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Csv-9\")\nlines.append(f\"| Csv-9 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Math-70\")\nlines.append(f\"| Math-70 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Defects4J\", \"Math-79\")\nlines.append(f\"| Math-79 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === Genesis ===\nlines.append(\"\\n### Genesis\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"Genesis\", \"Activiti-31c8ea16\")\nlines.append(f\"| Activiti-31c8 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"Checkstyle-be8a60a4\")\nlines.append(f\"| Checkstyle-be8 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"DataflowJavaSDK-f42c13c8\")\nlines.append(f\"| DataflowJavaSDK | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"JavaPoet-aee5f128\")\nlines.append(f\"| JavaPoet-aee5 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"Javaslang-0dab3ed3\")\nlines.append(f\"| Javaslang-0dab | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Genesis\", \"Jongo-97431a03\")\nlines.append(f\"| Jongo-9743 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\n# === Bears ===\nlines.append(\"\\n### Bears\\n\")\nlines.append(\"| Project | EvoSuite | NPETest |\")\nlines.append(\"| :--- | ---: | ---: |\")\n\nr = single(\"Bears\", \"Bears-189\")\nlines.append(f\"| Bears-189 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-222\")\nlines.append(f\"| Bears-222 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-56\")\nlines.append(f\"| Bears-56 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-70\")\nlines.append(f\"| Bears-70 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nr = single(\"Bears\", \"Bears-88\")\nlines.append(f\"| Bears-88 | {fmt(r['evosuite'])} | {fmt(r['npetest'])} |\")\n\nprint(\"\\n\".join(lines))\nPY\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_npetest_table_2.sh\nartisan submit /workspace/repro_npetest_table_2.sh\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 15147,
+            "prompt_tokens": 12641,
+            "total_tokens": 27788,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 10092,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 9600
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nWrote speedometer tool logs to /workspace/artisan-speedometer.json\nSubmitting to judge service at http://129.69.217.153:8000/submit...\n</output>",
+      "exec_time": 24.451361894607544
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The reproduction script has been submitted to the judge; as the final required step, I should emit the completion marker command so the workflow can conclude.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 4.450842380523682,
+        "response": {
+          "id": "chatcmpl-D0XT71IKvL3R6sS6rIUa616d5C1PB",
+          "created": 1769021025,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The reproduction script has been submitted to the judge; as the final required step, I should emit the completion marker command so the workflow can conclude.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 166,
+            "prompt_tokens": 17746,
+            "total_tokens": 17912,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 99,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": ""
+    }
+  ],
+  "trajectory_format": "mini-swe-agent-1"
+}

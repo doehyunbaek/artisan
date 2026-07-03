@@ -1,0 +1,54 @@
+#!/usr/bin/bash
+# Section 1: Expected table
+cat > /workspace/expected.md <<'EOTABLE'
+**Table 2: Method Exit Anomalies**
+
+| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |
+| ----------------- | --------------: | --------------: | -----------------: |
+| commons-cli       | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |
+| commons-text      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |
+| joda-money        | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |
+| jline-reader      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |
+| commons-validator | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |
+| cdk-data          | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |
+| spotify-web-api   |  ?,??? (??.??%) |    ??? (??.??%) |          ? (?.??%) |
+| commons-codec     | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |
+| jfreechart        | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |
+| dyn4j             | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |
+
+EOTABLE
+
+# Section 2: Artifact download
+artisan get https://zenodo.org/records/10505175
+
+# Section 3: Reproduction commands
+# Load the Intel/AMD getsankey image and start a long-running container.
+docker load -i getsankeyamd.tar
+docker run -d --init --name sankeyamd --entrypoint bash qinfendeheichi/getsankeyamd:v1 -c 'sleep infinity'
+
+# Run the RQ2 processing script inside the container; this prints the Table 2 data to stdout.
+docker exec sankeyamd /bin/bash --noprofile --norc -c "python RQ2Script.py" > /workspace/rq2_raw.txt 2>&1
+
+# Build the Markdown reproduction table from the fresh RQ2 output.
+cat > /workspace/repro.txt <<'EOT'
+**Table 2: Method Exit Anomalies**
+
+| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |
+| ----------------- | --------------: | --------------: | -----------------: |
+EOT
+
+awk '
+/^[a-z]/ {
+  name = $1
+  # Expected format:
+  # name total  failed_count ( failed_pct )  anomaly_count ( anomaly_pct )  source_count ( source_pct )
+  if (match($0, /^[^0-9]*[0-9,]+\s+([0-9,]+\s+\(\s*[0-9.]+%\))\s+([0-9,]+\s+\(\s*[0-9.]+%\))\s+([0-9,]+\s+\(\s*[0-9.]+%\))/, m)) {
+    printf("| %-16s | %14s | %14s | %17s |\n", name, m[1], m[2], m[3]);
+  }
+}
+' /workspace/rq2_raw.txt >> /workspace/repro.txt
+
+# Section 4: Formatting and submission block
+echo '<artisan_submit>'
+artisan format --expected /workspace/expected.md --repro /workspace/repro.txt
+echo '</artisan_submit>'

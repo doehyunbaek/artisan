@@ -1,0 +1,924 @@
+{
+  "info": {
+    "exit_status": "Submitted",
+    "submission": "",
+    "model_stats": {
+      "instance_cost": 0.2230775,
+      "api_calls": 15,
+      "llm_time": 252.32080554962158
+    },
+    "mini_version": "1.14.4",
+    "config": {
+      "agent": {
+        "system_template": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected.",
+        "instance_template": "Please reproduce the results reported in Table {{ table_index }} of the target paper.\n\n<expected_table>\n{{ expected_table }}\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `artisan get`: Download and extract the artifact from the official URL.\n- `artisan format --expected /workspace/expected.md --repro /workspace/repro.txt`: Render final tables.\n- `artisan submit`: Submit your reproduction script for evaluation.\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from {{ artifact_url }}.\n   - You MUST use`artisan get {{ artifact_url }}`.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table {{ table_index }}:\n   - `grep -in docker README.md`\n   - `grep -in \"Table {{ table_index }}\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_{{ artifact_name }}_table_{{ table_index }}.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n{{ expected_table }}\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\nartisan get {{ artifact_url }}\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh\nartisan submit /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward.",
+        "timeout_template": "The last command <command>{{action['action']}}</command> timed out and has been killed.\nThe output of the command was:\n<output>\n{{output}}\n</output>\nPlease try another command and make sure to avoid those requiring interactive input.\n",
+        "format_error_template": "Please always provide EXACTLY ONE action in <mini_swe_agent_bash>, found {{actions|length}} actions.\nIf you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\nwithout any other command.\nElse, please format your response exactly as follows:\n\n<response_example>\nHere are some thoughts about why you want to perform the action.\n\n<mini_swe_agent_bash>\n<action>\n</mini_swe_agent_bash>\n</response_example>\n",
+        "action_observation_template": "<returncode>{{output.returncode}}</returncode>\n{% if output.output | length < 100000 -%}\n<output>\n{{ output.output -}}\n</output>\n{%- else -%}\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning>\n{%- set elided_chars = output.output | length - 100000 -%}\n<output_head>\n{{ output.output[:5000] }}\n</output_head>\n<elided_chars>\n{{ elided_chars }} characters elided\n</elided_chars>\n<output_tail>\n{{ output.output[-5000:] }}\n</output_tail>\n{%- endif -%}\n",
+        "step_limit": 30.0,
+        "cost_limit": 1.0
+      },
+      "model": {
+        "model_name": "gpt-5.1-2025-11-13",
+        "model_kwargs": {
+          "drop_params": true,
+          "reasoning_effort": "medium"
+        },
+        "litellm_model_registry": null,
+        "set_cache_control": null
+      },
+      "environment": {
+        "image": "doehyunbaek1/artisan:c268b22",
+        "container_name": "agent-lasapp-t2-2f38",
+        "cwd": "/workspace",
+        "env": {
+          "PAGER": "cat",
+          "MANPAGER": "cat",
+          "LESS": "-R",
+          "PIP_PROGRESS_BAR": "off",
+          "TQDM_DISABLE": "1",
+          "MSWEA_SILENT_STARTUP": "1"
+        },
+        "forward_env": [],
+        "timeout": 28800,
+        "executable": "docker",
+        "run_args": [
+          "--rm",
+          "--privileged",
+          "-e",
+          "OPENAI_API_KEY",
+          "-e",
+          "MSWEA_SILENT_STARTUP",
+          "-v",
+          "/home/doehyunbaek/artisan/logs/artisan-gpt5.1-3ee0-without_output/lasapp/table_2/184833-653503:/workspace:rw",
+          "-e",
+          "ARTISAN_JUDGE_URL=http://129.69.217.153:8000/submit",
+          "-e",
+          "ARTISAN_MITM_URL=http://129.69.217.153:8082",
+          "-e",
+          "ARTISAN_CACHE_DIR=/root/.cache/artisan",
+          "-v",
+          "/home/doehyunbaek/.cache:/root/.cache/artisan",
+          "--group-add",
+          "999"
+        ],
+        "container_timeout": "8h",
+        "pull_timeout": 3000
+      },
+      "agent_type": "evaluation.agents.artisan.DefaultAgentWithLogs",
+      "model_type": "minisweagent.models.litellm_model.LitellmModel",
+      "environment_type": "minisweagent.environments.docker.DockerEnvironment"
+    },
+    "format": [],
+    "speedometer": [
+      {
+        "timestamp": "2026-01-21T18:54:43Z",
+        "model": "gpt-5-mini-2025-08-07",
+        "input": [
+          {
+            "role": "system",
+            "content": "\nYou are an expert research engineer specializing in reproducing scientific papers.\nAnalyze the provided Bash script to estimate the completeness of the reproduction process.\n\nCLASSIFICATION RULES:\n- \"copy\": The script just copies the results without actually reproducing. Examples:\n    - The result is hard-coded without any process to generate it.\n    - The result is copied from checked-in files as-is. NOTE: commands like `cp`.\n- \"lastmile\": The script performs lightweight reproduction and skips heavy computations. Examples:\n    - The result is generated using baked-in raw data.\n    - The script performs statistical analysis on precomputed outputs.\n- \"full\": The script performs complete reproduction. Examples:\n    - Raw data is generated from scratch from the input dataset.\n    - NOTE: Even if the script downloads artifact from repositories like Zenodo, FigShare, GitHub Releases, etc., if it performs the full computation to generate the final results, classify as \"full\".\n    - NOTE: Even if the script uses Docker images or prebuilt environments, if it performs the full computation to generate the final results, classify as \"full\".\n\nIMPORTANT POINTS:\n- The script should be classified with a fastest path it can possibly take. If a script contains both \"copy\" and \"lastmile\" reproduction, you should classify it as \"copy\"\n\nFILES TO EXCLUDE:\nIdentify file paths or names referenced in the script (e.g., in `wget`, `curl`, `tar`, `python` args) that are checked-in results or raw data and should be excluded to make reproduction more complete. Look for extensions like .pth, .ckpt, .bin, .tar.gz, .zip, .h5.\n- NOTE: FILES TO EXCLUDE should be output only when speed is classified as \"copy\" or \"lastmile\". If these files are excluded the script should be more likely to be judged as \"full\".\n\nOUTPUT FORMAT:\nReturn ONLY a valid JSON object. No markdown formatting, no code fences.\n{\n    \"speed\": \"copy\" | \"lastmile\" | \"full\",\n    \"reason\": \"A concise justification for the classification.\",\n    \"files_to_exclude\": [\"list\", \"of\", \"filenames\", \"or\", \"paths\"]\n}\n"
+          },
+          {
+            "role": "user",
+            "content": "You will see reference speedometer examples (script -> JSON output). Use them for calibration before evaluating the new script.\n\n<example name=\"hypertesting_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/10451088\n    (\n      printf \"### Table 1: Correlation results\\n\\n| Sample (UnsecureOnlyDataset) | R | p-value |\\n| :--- | :--- | :--- |\\n\"\n      tar -xOf ReplicationPackage/submission-results.tar.xz RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json       | sed -n '/\"csvTable\": [/,/]/p'       | sed -E 's/^([^;]+);([^;]+);([^;]+)$/| \\1 | \\2 | \\3 |/'\n    ) > /workspace/repro.txt\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Streams the ready-made RQ1 CSV rows out of submission-results.tar.xz instead of rerunning HyperTesting.\",\n  \"files_to_exclude\": [\n    \"ReplicationPackage/submission-results.tar.xz\",\n    \"RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json\"\n  ]\n}\n</example>\n\n<example name=\"baro_t2\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/11094092\n    cat > /workspace/repro.txt <<'EOREPRO'\n    Method: N-Sigma\n    Dataset: Online Boutique\n    Precision: 0.54\n    Recall   : 1\n    F1       : 0.70\n\n    Method: BARO (Ours)\n    Dataset: Online Boutique\n    Precision: 0.69\n    Recall   : 1\n    F1       : 0.82\n    EOREPRO\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Hard-codes every BARO metric via heredoc instead of running any detectors.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<example name=\"sja_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/12670597\n    python3 - << 'PY' > /workspace/repro.txt\n    import math\n    gt = 662208\n    fns = {\"sja\":1451, \"dyninst\":60463}\n    fps = {\"sja\":17347, \"dyninst\":3143}\n    def prec(fp, gt): return 100.0/(1.0 + (fp/gt))\n    def rec(fn, gt):  return 100.0/(1.0 + (fn/gt))\n    def f1(p, r): return 0.0 if (p+r)==0 else 2.0*p*r/(p+r)\n    print(f\"| **Precision** | {prec(fps['dyninst'], gt):.1f} | {prec(fps['sja'], gt):.1f} |\")\n    print(f\"| **Recall** | {rec(fns['dyninst'], gt):.1f} | {rec(fns['sja'], gt):.1f} |\")\n    print(f\"| **F?-score** | {f1(prec(fps['dyninst'], gt), rec(fns['dyninst'], gt)):.1f} | {f1(prec(fps['sja'], gt), rec(fns['sja'], gt)):.1f} |\")\n    PY\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Computes percentages from hard-coded FP/FN counts, so no binaries or datasets ever run.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<task>\n[script]\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Summary tables of evaluation results.**\n\n| Analysis               | PPL    | Total Programs | Warnings produced  |\n| ---------------------- | ------ | -------------: | ----------------:  |\n| Dependency Analysis    | Turing |            117 |                 6  |\n| Dependency Analysis    | PyMC   |             97 |                 2  |\n| Constraint Verifier    | Turing |            117 |                37  |\n| Constraint Verifier    | PyMC   |             97 |                32  |\n| HMC Assumption Checker | Gen    |              8 |                 7  |\n| Model-Guide Validator  | Pyro   |              8 |                 2  |\n\nEOTABLE\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/15857114\n# Section 3: Reproduction commands (populate from reviewed steps)\n\n# Load the prebuilt AMD64 Docker image and start a long-running container.\ndocker load -i lasapp-amd64.tar\ndocker run -d --init --entrypoint bash --name lasapp-amd64 --rm lasapp-amd64 -c 'sleep infinity'\n\n# Start language servers inside the container.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && ./scripts/start_servers.sh\"\n\n# Run Dependency Analysis and Constraint Verifier for Turing and PyMC, capturing logs.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_graph_and_constraints.py -ppl turing\" | tee /workspace/turing.log\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_graph_and_constraints.py -ppl pymc\"   | tee /workspace/pymc.log\n\n# Run HMC Assumption Checker for Gen.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_hmc.py\"   | tee /workspace/hmc.log\n\n# Run Model-Guide Validator for Pyro.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_guide.py\" | tee /workspace/guide.log\n\n# Parse Turing summary: \"Model Graph   Error Count: 6/117\" and \"Constraint    Error Count: 37/117\"\nturing_graph_line=$(grep \"Model Graph   Error Count\" /workspace/turing.log)\nturing_constraint_line=$(grep \"Constraint    Error Count\" /workspace/turing.log)\n\nturing_graph_counts=$(echo \"$turing_graph_line\" | awk -F':' '{print $2}')\nturing_graph_counts=${turing_graph_counts//[[:space:]]/}\nturing_graph_warnings=${turing_graph_counts%/*}\nturing_total=${turing_graph_counts#*/}\n\nturing_constraint_counts=$(echo \"$turing_constraint_line\" | awk -F':' '{print $2}')\nturing_constraint_counts=${turing_constraint_counts//[[:space:]]/}\nturing_constraint_warnings=${turing_constraint_counts%/*}\n\n# Parse PyMC summary: \"Model Graph   Error Count: 2/97\" and \"Constraint    Error Count: 32/97\"\npymc_graph_line=$(grep \"Model Graph   Error Count\" /workspace/pymc.log)\npymc_constraint_line=$(grep \"Constraint    Error Count\" /workspace/pymc.log)\n\npymc_graph_counts=$(echo \"$pymc_graph_line\" | awk -F':' '{print $2}')\npymc_graph_counts=${pymc_graph_counts//[[:space:]]/}\npymc_graph_warnings=${pymc_graph_counts%/*}\npymc_total=${pymc_graph_counts#*/}\n\npymc_constraint_counts=$(echo \"$pymc_constraint_line\" | awk -F':' '{print $2}')\npymc_constraint_counts=${pymc_constraint_counts//[[:space:]]/}\npymc_constraint_warnings=${pymc_constraint_counts%/*}\n\n# Parse HMC summary: line of form \"7 / 8 warnings.\"\nhmc_line=$(grep \"warnings.\" /workspace/hmc.log | tail -n 1)\nhmc_warnings=$(echo \"$hmc_line\" | awk '{print $1}')\nhmc_total=$(echo \"$hmc_line\" | awk '{print $3}')\n\n# Parse Model-Guide summary: line of form \"2 / 8 warnings.\"\nguide_line=$(grep \"warnings.\" /workspace/guide.log | tail -n 1)\nguide_warnings=$(echo \"$guide_line\" | awk '{print $1}')\nguide_total=$(echo \"$guide_line\" | awk '{print $3}')\n\n# Write the reproduced table to /workspace/repro.txt\ncat > /workspace/repro.txt <<EOTABLE\n**Table 2: Summary tables of evaluation results.**\n\n| Analysis               | PPL    | Total Programs | Warnings produced  |\n| ---------------------- | ------ | -------------: | ----------------:  |\n| Dependency Analysis    | Turing |            $turing_total |                 $turing_graph_warnings  |\n| Dependency Analysis    | PyMC   |             $pymc_total |                 $pymc_graph_warnings  |\n| Constraint Verifier    | Turing |            $turing_total |                 $turing_constraint_warnings  |\n| Constraint Verifier    | PyMC   |             $pymc_total |                 $pymc_constraint_warnings  |\n| HMC Assumption Checker | Gen    |              $hmc_total |                 $hmc_warnings  |\n| Model-Guide Validator  | Pyro   |              $guide_total |                 $guide_warnings  |\n\nEOTABLE\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n</task>\nReturn only the JSON object described above."
+          }
+        ],
+        "output": {
+          "speed": "full",
+          "reason": "Loads a prebuilt Docker image but then runs the repository\u2019s evaluation scripts inside the container (evaluate_graph_and_constraints.py, evaluate_hmc.py, evaluate_guide.py), generating logs that are parsed to produce the table \u2014 i.e., it executes the full analyses rather than copying precomputed results.",
+          "files_to_exclude": []
+        },
+        "duration_seconds": 7.632648468017578,
+        "cost_usd": 0.0014907499999999999,
+        "tokens": {
+          "input": 2739,
+          "cached_input": 0,
+          "output": 403,
+          "reasoning_output": 320,
+          "total": 3142
+        },
+        "reason": "submit_validation"
+      },
+      {
+        "timestamp": "2026-01-21T18:54:59Z",
+        "model": "gpt-5-mini-2025-08-07",
+        "input": [
+          {
+            "role": "system",
+            "content": "\nYou are an expert research engineer specializing in reproducing scientific papers.\nAnalyze the provided Bash script to estimate the completeness of the reproduction process.\n\nCLASSIFICATION RULES:\n- \"copy\": The script just copies the results without actually reproducing. Examples:\n    - The result is hard-coded without any process to generate it.\n    - The result is copied from checked-in files as-is. NOTE: commands like `cp`.\n- \"lastmile\": The script performs lightweight reproduction and skips heavy computations. Examples:\n    - The result is generated using baked-in raw data.\n    - The script performs statistical analysis on precomputed outputs.\n- \"full\": The script performs complete reproduction. Examples:\n    - Raw data is generated from scratch from the input dataset.\n    - NOTE: Even if the script downloads artifact from repositories like Zenodo, FigShare, GitHub Releases, etc., if it performs the full computation to generate the final results, classify as \"full\".\n    - NOTE: Even if the script uses Docker images or prebuilt environments, if it performs the full computation to generate the final results, classify as \"full\".\n\nIMPORTANT POINTS:\n- The script should be classified with a fastest path it can possibly take. If a script contains both \"copy\" and \"lastmile\" reproduction, you should classify it as \"copy\"\n\nFILES TO EXCLUDE:\nIdentify file paths or names referenced in the script (e.g., in `wget`, `curl`, `tar`, `python` args) that are checked-in results or raw data and should be excluded to make reproduction more complete. Look for extensions like .pth, .ckpt, .bin, .tar.gz, .zip, .h5.\n- NOTE: FILES TO EXCLUDE should be output only when speed is classified as \"copy\" or \"lastmile\". If these files are excluded the script should be more likely to be judged as \"full\".\n\nOUTPUT FORMAT:\nReturn ONLY a valid JSON object. No markdown formatting, no code fences.\n{\n    \"speed\": \"copy\" | \"lastmile\" | \"full\",\n    \"reason\": \"A concise justification for the classification.\",\n    \"files_to_exclude\": [\"list\", \"of\", \"filenames\", \"or\", \"paths\"]\n}\n"
+          },
+          {
+            "role": "user",
+            "content": "You will see reference speedometer examples (script -> JSON output). Use them for calibration before evaluating the new script.\n\n<example name=\"hypertesting_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/10451088\n    (\n      printf \"### Table 1: Correlation results\\n\\n| Sample (UnsecureOnlyDataset) | R | p-value |\\n| :--- | :--- | :--- |\\n\"\n      tar -xOf ReplicationPackage/submission-results.tar.xz RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json       | sed -n '/\"csvTable\": [/,/]/p'       | sed -E 's/^([^;]+);([^;]+);([^;]+)$/| \\1 | \\2 | \\3 |/'\n    ) > /workspace/repro.txt\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Streams the ready-made RQ1 CSV rows out of submission-results.tar.xz instead of rerunning HyperTesting.\",\n  \"files_to_exclude\": [\n    \"ReplicationPackage/submission-results.tar.xz\",\n    \"RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json\"\n  ]\n}\n</example>\n\n<example name=\"baro_t2\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/11094092\n    cat > /workspace/repro.txt <<'EOREPRO'\n    Method: N-Sigma\n    Dataset: Online Boutique\n    Precision: 0.54\n    Recall   : 1\n    F1       : 0.70\n\n    Method: BARO (Ours)\n    Dataset: Online Boutique\n    Precision: 0.69\n    Recall   : 1\n    F1       : 0.82\n    EOREPRO\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Hard-codes every BARO metric via heredoc instead of running any detectors.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<example name=\"sja_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/12670597\n    python3 - << 'PY' > /workspace/repro.txt\n    import math\n    gt = 662208\n    fns = {\"sja\":1451, \"dyninst\":60463}\n    fps = {\"sja\":17347, \"dyninst\":3143}\n    def prec(fp, gt): return 100.0/(1.0 + (fp/gt))\n    def rec(fn, gt):  return 100.0/(1.0 + (fn/gt))\n    def f1(p, r): return 0.0 if (p+r)==0 else 2.0*p*r/(p+r)\n    print(f\"| **Precision** | {prec(fps['dyninst'], gt):.1f} | {prec(fps['sja'], gt):.1f} |\")\n    print(f\"| **Recall** | {rec(fns['dyninst'], gt):.1f} | {rec(fns['sja'], gt):.1f} |\")\n    print(f\"| **F?-score** | {f1(prec(fps['dyninst'], gt), rec(fns['dyninst'], gt)):.1f} | {f1(prec(fps['sja'], gt), rec(fns['sja'], gt)):.1f} |\")\n    PY\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Computes percentages from hard-coded FP/FN counts, so no binaries or datasets ever run.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<task>\n[script]\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Summary tables of evaluation results.**\n\n| Analysis               | PPL    | Total Programs | Warnings produced  |\n| ---------------------- | ------ | -------------: | ----------------:  |\n| Dependency Analysis    | Turing |            117 |                 6  |\n| Dependency Analysis    | PyMC   |             97 |                 2  |\n| Constraint Verifier    | Turing |            117 |                37  |\n| Constraint Verifier    | PyMC   |             97 |                32  |\n| HMC Assumption Checker | Gen    |              8 |                 7  |\n| Model-Guide Validator  | Pyro   |              8 |                 2  |\n\nEOTABLE\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/15857114\n# Section 3: Reproduction commands (populate from reviewed steps)\n\n# Load the prebuilt AMD64 Docker image and start a long-running container.\ndocker load -i lasapp-amd64.tar\ndocker run -d --init --entrypoint bash --name lasapp-amd64 --rm lasapp-amd64 -c 'sleep infinity'\n\n# Start language servers inside the container.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && ./scripts/start_servers.sh\"\n\n# Run Dependency Analysis and Constraint Verifier for Turing and PyMC, capturing logs.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_graph_and_constraints.py -ppl turing\" | tee /workspace/turing.log\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_graph_and_constraints.py -ppl pymc\"   | tee /workspace/pymc.log\n\n# Run HMC Assumption Checker for Gen.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_hmc.py\"   | tee /workspace/hmc.log\n\n# Run Model-Guide Validator for Pyro.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_guide.py\" | tee /workspace/guide.log\n\n# Parse Turing summary: \"Model Graph   Error Count: 6/117\" and \"Constraint    Error Count: 37/117\"\nturing_graph_line=$(grep \"Model Graph   Error Count\" /workspace/turing.log)\nturing_constraint_line=$(grep \"Constraint    Error Count\" /workspace/turing.log)\n\nturing_graph_counts=$(echo \"$turing_graph_line\" | awk -F':' '{print $2}')\nturing_graph_counts=${turing_graph_counts//[[:space:]]/}\nturing_graph_warnings=${turing_graph_counts%/*}\nturing_total=${turing_graph_counts#*/}\n\nturing_constraint_counts=$(echo \"$turing_constraint_line\" | awk -F':' '{print $2}')\nturing_constraint_counts=${turing_constraint_counts//[[:space:]]/}\nturing_constraint_warnings=${turing_constraint_counts%/*}\n\n# Parse PyMC summary: \"Model Graph   Error Count: 2/97\" and \"Constraint    Error Count: 32/97\"\npymc_graph_line=$(grep \"Model Graph   Error Count\" /workspace/pymc.log)\npymc_constraint_line=$(grep \"Constraint    Error Count\" /workspace/pymc.log)\n\npymc_graph_counts=$(echo \"$pymc_graph_line\" | awk -F':' '{print $2}')\npymc_graph_counts=${pymc_graph_counts//[[:space:]]/}\npymc_graph_warnings=${pymc_graph_counts%/*}\npymc_total=${pymc_graph_counts#*/}\n\npymc_constraint_counts=$(echo \"$pymc_constraint_line\" | awk -F':' '{print $2}')\npymc_constraint_counts=${pymc_constraint_counts//[[:space:]]/}\npymc_constraint_warnings=${pymc_constraint_counts%/*}\n\n# Parse HMC summary: line of form \"7 / 8 warnings.\"\nhmc_line=$(grep \"warnings.\" /workspace/hmc.log | tail -n 1)\nhmc_warnings=$(echo \"$hmc_line\" | awk '{print $1}')\nhmc_total=$(echo \"$hmc_line\" | awk '{print $3}')\n\n# Parse Model-Guide summary: line of form \"2 / 8 warnings.\"\nguide_line=$(grep \"warnings.\" /workspace/guide.log | tail -n 1)\nguide_warnings=$(echo \"$guide_line\" | awk '{print $1}')\nguide_total=$(echo \"$guide_line\" | awk '{print $3}')\n\n# Write the reproduced table to /workspace/repro.txt\ncat > /workspace/repro.txt <<EOTABLE\n**Table 2: Summary tables of evaluation results.**\n\n| Analysis               | PPL    | Total Programs | Warnings produced  |\n| ---------------------- | ------ | -------------: | ----------------:  |\n| Dependency Analysis    | Turing |            $turing_total |                 $turing_graph_warnings  |\n| Dependency Analysis    | PyMC   |             $pymc_total |                 $pymc_graph_warnings  |\n| Constraint Verifier    | Turing |            $turing_total |                 $turing_constraint_warnings  |\n| Constraint Verifier    | PyMC   |             $pymc_total |                 $pymc_constraint_warnings  |\n| HMC Assumption Checker | Gen    |              $hmc_total |                 $hmc_warnings  |\n| Model-Guide Validator  | Pyro   |              $guide_total |                 $guide_warnings  |\n\nEOTABLE\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n</task>\nReturn only the JSON object described above."
+          }
+        ],
+        "output": {
+          "speed": "full",
+          "reason": "Although it loads a prebuilt Docker image, the script runs the evaluation scripts inside the container to generate logs and parses those outputs to produce the table \u2014 it executes the full reproduction pipeline rather than copying precomputed results.",
+          "files_to_exclude": []
+        },
+        "duration_seconds": 6.496247053146362,
+        "cost_usd": 0.00118355,
+        "tokens": {
+          "input": 2739,
+          "cached_input": 1792,
+          "output": 451,
+          "reasoning_output": 384,
+          "total": 3190
+        },
+        "reason": "exit_validation"
+      }
+    ]
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected."
+    },
+    {
+      "role": "user",
+      "content": "Please reproduce the results reported in Table 2 of the target paper.\n\n<expected_table>\n**Table 2: Summary tables of evaluation results.**\n\n| Analysis               | PPL    | Total Programs | Warnings produced  |\n| ---------------------- | ------ | -------------: | ----------------:  |\n| Dependency Analysis    | Turing |            ??? |                 ?  |\n| Dependency Analysis    | PyMC   |             ?? |                 ?  |\n| Constraint Verifier    | Turing |            ??? |                 ?? |\n| Constraint Verifier    | PyMC   |             ?? |                 ?? |\n| HMC Assumption Checker | Gen    |              ? |                 ?  |\n| Model-Guide Validator  | Pyro   |              ? |                 ?  |\n\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `artisan get`: Download and extract the artifact from the official URL.\n- `artisan format --expected /workspace/expected.md --repro /workspace/repro.txt`: Render final tables.\n- `artisan submit`: Submit your reproduction script for evaluation.\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from https://zenodo.org/records/15857114.\n   - You MUST use`artisan get https://zenodo.org/records/15857114`.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table 2:\n   - `grep -in docker README.md`\n   - `grep -in \"Table 2\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_lasapp_table_2.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_lasapp_table_2.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Summary tables of evaluation results.**\n\n| Analysis               | PPL    | Total Programs | Warnings produced  |\n| ---------------------- | ------ | -------------: | ----------------:  |\n| Dependency Analysis    | Turing |            ??? |                 ?  |\n| Dependency Analysis    | PyMC   |             ?? |                 ?  |\n| Constraint Verifier    | Turing |            ??? |                 ?? |\n| Constraint Verifier    | PyMC   |             ?? |                 ?? |\n| HMC Assumption Checker | Gen    |              ? |                 ?  |\n| Model-Guide Validator  | Pyro   |              ? |                 ?  |\n\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\nartisan get https://zenodo.org/records/15857114\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_lasapp_table_2.sh\nartisan submit /workspace/repro_lasapp_table_2.sh\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward."
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Begin by downloading and extracting the artifact from the provided Zenodo URL so I can inspect the contents and locate instructions for reproducing Table 2.\n\n<mini_swe_agent_bash>\nartisan get https://zenodo.org/records/15857114\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 6.209378242492676,
+        "response": {
+          "id": "chatcmpl-D0XXqKd4SPd4ORl1JeiVe4C7ebMXn",
+          "created": 1769021318,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Begin by downloading and extracting the artifact from the provided Zenodo URL so I can inspect the contents and locate instructions for reproducing Table 2.\n\n<mini_swe_agent_bash>\nartisan get https://zenodo.org/records/15857114\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 198,
+            "prompt_tokens": 1277,
+            "total_tokens": 1475,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 126,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning><output_head>\n\nDownloading lasapp-arm64.tar 0% (65536/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (131072/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (196608/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (262144/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (327680/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (393216/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (458752/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (524288/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (589824/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (655360/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (720896/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (786432/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (851968/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (917504/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (983040/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (1048576/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (1114112/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (1179648/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (1245184/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (1310720/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (1376256/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (1441792/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (1507328/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (1572864/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (1638400/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (1703936/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (1769472/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (1835008/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (1900544/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (1966080/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (2031616/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (2097152/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (2162688/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (2228224/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (2293760/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (2359296/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (2424832/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (2490368/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (2555904/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (2621440/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (2686976/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (2752512/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (2818048/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (2883584/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (2949120/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3014656/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3080192/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3145728/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3211264/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3276800/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3342336/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3407872/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3473408/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3538944/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3604480/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3670016/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3735552/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3801088/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3866624/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3932160/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (3997696/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (4063232/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (4128768/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (4194304/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (4259840/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (4325376/444457472 bytes)\nDownloading lasapp-arm64.tar 0% (4390912/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (4456448/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (4521984/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (4587520/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (4653056/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (4718592/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (4784128/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (4849664/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (4915200/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (4980736/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (5046272/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (5111808/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (5177344/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (5242880/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (5308416/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (5373952/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (5439488/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (5505024/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (5570560/444457472 bytes)\nDownloading lasapp-arm64.tar 1% (5636096/444457472 bytes)\nDownloading lasapp-arm64.ta\n</output_head>\n<elided_chars>\n780415 characters elided\n</elided_chars>\n<output_tail>\npp-amd64.tar 99% (501284864/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (501350400/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (501415936/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (501481472/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (501547008/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (501612544/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (501678080/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (501743616/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (501809152/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (501874688/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (501940224/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502005760/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502071296/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502136832/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502202368/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502267904/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502333440/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502398976/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502464512/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502530048/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502595584/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502661120/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502726656/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502792192/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502857728/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502923264/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (502988800/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (503054336/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (503119872/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (503185408/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (503250944/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (503316480/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (503382016/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (503447552/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (503513088/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (503578624/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (503644160/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (503709696/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (503775232/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (503840768/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (503906304/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (503971840/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (504037376/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (504102912/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (504168448/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (504233984/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (504299520/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (504365056/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (504430592/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (504496128/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (504561664/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (504627200/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (504692736/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (504758272/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (504823808/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (504889344/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (504954880/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (505020416/505087488 bytes)\nDownloading lasapp-amd64.tar 99% (505085952/505087488 bytes)\nDownloading lasapp-amd64.tar 100% (505087488/505087488 bytes)\n\nDownloading lasapp-main.zip 17% (65536/378046 bytes)\nDownloading lasapp-main.zip 34% (131072/378046 bytes)\nDownloading lasapp-main.zip 52% (196608/378046 bytes)\nDownloading lasapp-main.zip 69% (262144/378046 bytes)\nDownloading lasapp-main.zip 86% (327680/378046 bytes)\nDownloading lasapp-main.zip 100% (378046/378046 bytes)\n\nDownloading LASAPP_supplementary_material.pdf 9% (65536/712963 bytes)\nDownloading LASAPP_supplementary_material.pdf 18% (131072/712963 bytes)\nDownloading LASAPP_supplementary_material.pdf 27% (196608/712963 bytes)\nDownloading LASAPP_supplementary_material.pdf 36% (262144/712963 bytes)\nDownloading LASAPP_supplementary_material.pdf 45% (327680/712963 bytes)\nDownloading LASAPP_supplementary_material.pdf 55% (393216/712963 bytes)\nDownloading LASAPP_supplementary_material.pdf 64% (458752/712963 bytes)\nDownloading LASAPP_supplementary_material.pdf 73% (524288/712963 bytes)\nDownloading LASAPP_supplementary_material.pdf 82% (589824/712963 bytes)\nDownloading LASAPP_supplementary_material.pdf 91% (655360/712963 bytes)\nDownloading LASAPP_supplementary_material.pdf 100% (712963/712963 bytes)\nSaved to lasapp-arm64.tar (444457472 bytes)\n\nSaved to lasapp-amd64.tar (505087488 bytes)\n\nSaved to lasapp-main.zip (378046 bytes)\n\nSaved to LASAPP_supplementary_material.pdf (712963 bytes)\n\nREADME PATH: lasapp-main/lasapp-main/README.md\n\n\n</output_tail>",
+      "exec_time": 35.36239814758301
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Inspect the beginning of the README to understand the artifact structure and locate instructions for reproducing Table 2.\n\n<mini_swe_agent_bash>\nhead -n 80 lasapp-main/lasapp-main/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 4.072179555892944,
+        "response": {
+          "id": "chatcmpl-D0XYVZ6u6RI99grwSkEucn2ePBWgi",
+          "created": 1769021359,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Inspect the beginning of the README to understand the artifact structure and locate instructions for reproducing Table 2.\n\n<mini_swe_agent_bash>\nhead -n 80 lasapp-main/lasapp-main/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 174,
+            "prompt_tokens": 4697,
+            "total_tokens": 4871,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 108,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n<img width=600px, src=\"lasapp_logo.png\">\n\n# Language-Agnostic Static Analysis of Probabilistic Programs\n\nReplication package for [ASE2024 paper](https://dl.acm.org/doi/pdf/10.1145/3691620.3695031) with the same name.\n\nOverview:\n```\n.  \n\u251c\u2500\u2500 evaluation/                                     # Probabilistic Program Benchmark Dataset\n\u2502     \u251c\u2500\u2500 gen/                                      # 8 Gen.jl programs with discontinuous density\n\u2502     \u251c\u2500\u2500 pymc/                                     # 97 PyMC programs sourced from [pymc-resources]\n\u2502     \u251c\u2500\u2500 pyro/                                     # 8 Pyro programs with model-guide pairs sourced from [wonyeol]\n\u2502     \u2514\u2500\u2500 turing/                                   # 117 Turing.jl programs sourced from [SR2TuringPluto.jl] and [TuringTutorials]\n\u2502\n\u251c\u2500\u2500 experiments/                                    # Scripts to reproduce results of paper\n\u2502     \u251c\u2500\u2500 examples/                                 # Some probabilistic programs featured as examples in the paper tranlsated to several PPLs\n\u2502     \u251c\u2500\u2500 evaluate_graph_and_constraints.py         # Script to reproduce Dependency Analysis and Constraint Verifier experiments for PyMC and Turing\n\u2502     \u251c\u2500\u2500 evaluate_guide.py                         # Script to reproduce Model-Guide Validator experiment for Pyro\n\u2502     \u2514\u2500\u2500 evaluate_hmc.py                           # Script to reproduce HMC Assumption Checker for Gen\n\u2502\n\u251c\u2500\u2500 scripts/                                        # Scripts to start, stop, and test language servers\n\u2502     \u251c\u2500\u2500 start_servers.sh                          # Start Python and Julia language server\n\u2502     \u251c\u2500\u2500 stop_servers.sh                           # Stop Python and Julia language server\n\u2502     \u2514\u2500\u2500 test_servers.sh                           # Test Python and Julia language server\n\u2502\n\u251c\u2500\u2500 src/                                            # LASAPP source code\n\u2502     \u251c\u2500\u2500 jl/                                       # Julia language server\n\u2502     \u2502     \u251c\u2500\u2500 analysis/                           # Julia classical analysis backend\n\u2502     \u2502     \u251c\u2500\u2500 ast/                                # AST utilities\n\u2502     \u2502     \u251c\u2500\u2500 ppls/                               # Julia PPL bindings\n\u2502     \u2502     \u2502     \u251c\u2500\u2500 distributions.jl              # Distributions.jl distribution backend\n\u2502     \u2502     \u2502     \u251c\u2500\u2500 gen.jl                        # Gen.jl bindings\n\u2502     \u2502     \u2502     \u2514\u2500\u2500 turing.jl                     # Turing.jl bindings\n\u2502     \u2502     \u2514\u2500\u2500 test/                               # Unit tests\n\u2502     \u2514\u2500\u2500 py/                                       # Python language server\n\u2502     \u2502     \u251c\u2500\u2500 analysis/                           # Python classical analysis backend\n\u2502     \u2502     \u251c\u2500\u2500 ast_utils/                          # AST utilities\n\u2502     \u2502     \u251c\u2500\u2500 ppls/                               # Python PPL bindings\n\u2502     \u2502     \u2502     \u251c\u2500\u2500 beanmachine.py                # BeanMachine bindings\n\u2502     \u2502     \u2502     \u251c\u2500\u2500 pymc.py                       # PyMC bindings\n\u2502     \u2502     \u2502     \u251c\u2500\u2500 pyro.py                       # Pyro bindings\n\u2502     \u2502     \u2502     \u2514\u2500\u2500 torch_distributions.py        # PyTorch distributions backend\n\u2502     \u2502     \u2514\u2500\u2500 test/                               # Unit tests\n\u2502     \u2514\u2500\u2500 static/                                   # Static analysis front-end\n\u2502           \u251c\u2500\u2500 analysis/                           # Python classical analysis backend\n\u2502           \u2502     \u251c\u2500\u2500 constraint_verification.py    # Parameter Constraint Verifier (Section 4.4)\n\u2502           \u2502     \u251c\u2500\u2500 guide_validation.py           # Model-Guide Validator (Section 4.5)\n\u2502           \u2502     \u251c\u2500\u2500 hmc_assumption_checker.py     # HMC Assumptions Checker (Section 4.3)\n\u2502           \u2502     \u2514\u2500\u2500 model_graph.py                # Statistical Dependency Analysis (Section 4.2)\n\u2502           \u251c\u2500\u2500 lassap/                             # LASAPP framework front-end\n\u2502           \u2514\u2500\u2500 test/                               # Unit tests\n\u2502 \n\u251c\u2500\u2500 Dockerfile                                      # File for building Docker image  \n\u2514\u2500\u2500 main.py                                         # Script to apply any analysis to probabilstic program in file\n```\n\nData sources:\n- [[pymc-resources]](https://github.com/pymc-devs/pymc-resources/tree/a5f993653e467da11e9fc4ec682e96d59b880102)\n- [[wonyeol]](https://github.com/wonyeol/static-analysis-for-support-match/tree/850fb58ec5ce2f5e82262c2a9bfc067b799297c1/tests/pyro_examples)\n- [[SR2TuringPluto.jl]](https://github.com/StatisticalRethinkingJulia/SR2TuringPluto.jl/tree/75072280947a45f030bd45a62710c558d60a2a80)\n- [[TuringTutorials]](https://github.com/TuringLang/TuringTutorials/tree/8515a567321adf1531974dd14eb29c00eea05648)\n\n## Setup\n\nNo special hardware is needed for installation.\n\nRecommendations:\n- Hardware: >= 3.5 GHZ dual core CPU, >= 8 GB RAM, and >= 10 GB storage\n- OS: unix-based operating system\n- Installation with Docker\n\n### Docker Installation\n\nInstall [docker](https://www.docker.com).\n\nBuild the lasapp image (this may take several minutes):\n```\ndocker build -t lasapp .\n```\n</output>",
+      "exec_time": 0.09148645401000977
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Locate all Docker-related instructions in the README so I can follow the prescribed containerized workflow for reproducing Table 2.\n\n<mini_swe_agent_bash>\ngrep -in docker lasapp-main/lasapp-main/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 4.238616943359375,
+        "response": {
+          "id": "chatcmpl-D0XYZx8UWLtTlj4J63oYPDocMArrt",
+          "created": 1769021363,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Locate all Docker-related instructions in the README so I can follow the prescribed containerized workflow for reproducing Table 2.\n\n<mini_swe_agent_bash>\ngrep -in docker lasapp-main/lasapp-main/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 207,
+            "prompt_tokens": 5928,
+            "total_tokens": 6135,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 139,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 4608
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n54:\u251c\u2500\u2500 Dockerfile                                      # File for building Docker image  \n71:- Installation with Docker\n73:### Docker Installation\n75:Install [docker](https://www.docker.com).\n79:docker build -t lasapp .\n81:If the build was successful, run the docker image:\n83:docker run -it --name lasapp --rm lasapp\n86:Alternatively, you can load the docker image provided at [Zenodo](https://doi.org/10.5281/zenodo.13347681) with\n88:docker load -i lasapp-amd64.tar\n89:docker load -i lasapp-arm64.tar\n91:depending on your system, which was saved with (Docker version 28.3.0)\n93:docker buildx build --platform linux/amd64 -t lasapp-amd64 .\n94:docker image save lasapp-amd64 > lasapp-amd64.tar\n95:docker buildx build --platform linux/arm64 -t lasapp-arm64 .\n96:docker image save lasapp-arm64 > lasapp-arm64.tar\n100:docker run -it --name lasapp-amd64 --rm lasapp-amd64\n101:docker run -it --name lasapp-arm64 --rm lasapp-arm64\n247:docker cp lasapp:/LASAPP/tmp/model.gv.pdf . && open model.gv.pdf\n</output>",
+      "exec_time": 0.08176326751708984
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Search the README for any instructions specifically referencing \u201cTable 2\u201d so I can identify the exact reproduction commands needed.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 2\" lasapp-main/lasapp-main/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 7.476161241531372,
+        "response": {
+          "id": "chatcmpl-D0XYd2wVYkfnJrxxdTyBlX8tlp4aj",
+          "created": 1769021367,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Search the README for any instructions specifically referencing \u201cTable 2\u201d so I can identify the exact reproduction commands needed.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 2\" lasapp-main/lasapp-main/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 289,
+            "prompt_tokens": 6302,
+            "total_tokens": 6591,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 218,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n193:## Reproducing the Results of the Paper (Section 5 / Table 2)\n</output>",
+      "exec_time": 0.09262919425964355
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: View the README section around the \u201cReproducing the Results of the Paper (Section 5 / Table 2)\u201d heading to find the concrete commands for recreating Table 2.\n\n<mini_swe_agent_bash>\nsed -n '193,260p' lasapp-main/lasapp-main/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 2.320206642150879,
+        "response": {
+          "id": "chatcmpl-D0XYlPZhmDetnGQkfGWOYO5tmKZ0D",
+          "created": 1769021375,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: View the README section around the \u201cReproducing the Results of the Paper (Section 5 / Table 2)\u201d heading to find the concrete commands for recreating Table 2.\n\n<mini_swe_agent_bash>\nsed -n '193,260p' lasapp-main/lasapp-main/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 134,
+            "prompt_tokens": 6409,
+            "total_tokens": 6543,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 48,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 6272
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n## Reproducing the Results of the Paper (Section 5 / Table 2)\nStart the language servers and verify that they are running.\n```\n# start language servers if not started already\n./scripts/start_servers.sh\n```\n### Evaluation\n\nStatistical Dependency Analysis (Model Graph) and Parameter Constraint Analysis\n```\npython3 experiments/evaluate_graph_and_constraints.py -ppl turing\n```\nThis will perfrom the Statistical Dependency Analysis and the Parameter Constraint Verifier for 117 Turing programs.  \nFor each program, the result will be printed: Everything is ok = correct, Warnings produced = unsupported.  \nAt the end, the summary counts are reported.\n\n```\npython3 experiments/evaluate_graph_and_constraints.py -ppl pymc\n```\nPerforms the same experiment for 97 PyMC programs.\n\nHMC Assumption Analysis\n```\npython3 experiments/evaluate_hmc.py\n```\nPerforms the HMC Assumption Checker for 8 Gen programs.  \nFor each program, the result will be printed: Everything is ok = false negative, Warnings produced = true positive.  \n\n\nModel-Guide Validation Analysis\n```\npython3 experiments/evaluate_guide.py\n```\nPerforms the Model-Guide Validation Validator for 8 Pyro programs.  \nFor each program, the result will be printed: Everything is ok = true negative, Warnings produced = true positive.  \n\nNote: With the model graph analysis we have identified a bug in <a href=\"evaluation/turing/statistical_rethinking_2/chapter_14_6.jl\">chapter_14_6.jl</a>.\n\n### Some additional examples\n\n#### Motivating example (Figure 3): Catching discrete variables.\n```\npython3 main.py experiments/examples/motivating_turing.jl -a hmc\npython3 main.py experiments/examples/motivating_beanmachine.py -a hmc\npython3 main.py experiments/examples/motivating_pyro.py -a hmc\n```\nAlso available for `gen`, and `pymc`.\n\n#### Model graph extraction (Figure 6):\n```\npython3 main.py experiments/examples/pedestrian_turing.jl -a graph\n```\nCheck out the plot by running on the host machine:\n```\ndocker cp lasapp:/LASAPP/tmp/model.gv.pdf . && open model.gv.pdf\n```\nAlso available for `gen`, `pyro`.\n\n#### HMC Assumption Checking for Pedestrian Model:\n```\npython3 main.py experiments/examples/pedestrian_pyro.py -a hmc\n```\nAlso available for `gen`, `turing`, and `beanmachine`.\n\n#### Parameter Constraint Verification (Figure 7):\n```\npython3 main.py experiments/examples/constraint_gen.jl -a constraint\n```\n</output>",
+      "exec_time": 0.08738398551940918
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Load the prebuilt AMD64 Docker image from the downloaded tarball so I can run the analyses inside the container as prescribed by the README.\n\n<mini_swe_agent_bash>\ndocker load -i lasapp-amd64.tar\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 10.912546873092651,
+        "response": {
+          "id": "chatcmpl-D0XYo0lRmexDdmEQ9bQrTuc9z4wMQ",
+          "created": 1769021378,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Load the prebuilt AMD64 Docker image from the downloaded tarball so I can run the analyses inside the container as prescribed by the README.\n\n<mini_swe_agent_bash>\ndocker load -i lasapp-amd64.tar\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 263,
+            "prompt_tokens": 7081,
+            "total_tokens": 7344,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 195,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 5888
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nLoaded image: lasapp-amd64:latest\n</output>",
+      "exec_time": 23.604382514953613
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Start the AMD64 LASAPP container in detached mode with a bash entrypoint that just sleeps, so I can later exec into it to run the evaluation scripts.\n\n<mini_swe_agent_bash>\ndocker run -d --init --entrypoint bash --name lasapp-amd64 --rm lasapp-amd64 -c 'sleep infinity'\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.376125812530518,
+        "response": {
+          "id": "chatcmpl-D0XZMcxRhujjQWG25Rd0FmdnwkK4n",
+          "created": 1769021412,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Start the AMD64 LASAPP container in detached mode with a bash entrypoint that just sleeps, so I can later exec into it to run the evaluation scripts.\n\n<mini_swe_agent_bash>\ndocker run -d --init --entrypoint bash --name lasapp-amd64 --rm lasapp-amd64 -c 'sleep infinity'\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 283,
+            "prompt_tokens": 7176,
+            "total_tokens": 7459,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 192,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 7040
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n24660d42dfbe8646de1f0e81f7c940cfa47d9f0e62e56b4e534db6a04f5e72b8\n</output>",
+      "exec_time": 4.364953279495239
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Start the language servers inside the running container using the provided script, as required before running any of the evaluation experiments.\n\n<mini_swe_agent_bash>\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && ./scripts/start_servers.sh\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.816378355026245,
+        "response": {
+          "id": "chatcmpl-D0XZWKMWkXfff8eSDSvZm17mc9iom",
+          "created": 1769021422,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Start the language servers inside the running container using the provided script, as required before running any of the evaluation experiments.\n\n<mini_swe_agent_bash>\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && ./scripts/start_servers.sh\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 140,
+            "prompt_tokens": 7327,
+            "total_tokens": 7467,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 57,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 7168
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n</output>",
+      "exec_time": 0.2435157299041748
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Run the Statistical Dependency Analysis and Parameter Constraint Verifier for the 117 Turing programs inside the container to obtain the summary counts needed for the Turing rows of Table 2.\n\n<mini_swe_agent_bash>\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_graph_and_constraints.py -ppl turing\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.297467470169067,
+        "response": {
+          "id": "chatcmpl-D0XZazpYdQP4utyfDdTIYD8gyOuhz",
+          "created": 1769021426,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Run the Statistical Dependency Analysis and Parameter Constraint Verifier for the 117 Turing programs inside the container to obtain the summary counts needed for the Turing rows of Table 2.\n\n<mini_swe_agent_bash>\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_graph_and_constraints.py -ppl turing\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 291,
+            "prompt_tokens": 7426,
+            "total_tokens": 7717,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 186,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 6400
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_02_1.jl\u001b[0m\nModel: m2_0\nPossible constraint violation in \"W ~ Binomial(\u001b[101mW + L\u001b[0m, p)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: constraint violation warning, because of function inputs W, L\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_04_1_1.jl\u001b[0m\nModel: model_height1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_04_1_2.jl\u001b[0m\nModel: m4_2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_04_1_3.jl\u001b[0m\nModel: m4_3\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_04_2_1.jl\u001b[0m\nModel: height_regr_model\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_04_2_2.jl\u001b[0m\nModel: height_regr_model_exp1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_04_2_3.jl\u001b[0m\nModel: height_regr_model_N\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_04_2_4.jl\u001b[0m\nModel: height_regr_m2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_04_2_5.jl\u001b[0m\nModel: height_regr_m3\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_04_3_1.jl\u001b[0m\nModel: model_splines\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_04_3_2.jl\u001b[0m\nModel: model_splines_matrix\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_05_1_1.jl\u001b[0m\nModel: m5_1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_05_1_2.jl\u001b[0m\nModel: m5_2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_05_1_3.jl\u001b[0m\nModel: m5_3\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_05_1_4.jl\u001b[0m\nModel: m5_4\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_05_1_5.jl\u001b[0m\nModel: m5_3A\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_05_2_1.jl\u001b[0m\nModel: model_m5_5_draft\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_05_2_2.jl\u001b[0m\nModel: model_m5_5\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_05_2_3.jl\u001b[0m\nModel: model_m5_6\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_05_2_4.jl\u001b[0m\nModel: model_m5_7\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_05_3_1.jl\u001b[0m\nModel: model_m5_8\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_05_3_2.jl\u001b[0m\nModel: model_m5_9\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_05_3_3.jl\u001b[0m\nModel: model_m5_10\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_06_01.jl\u001b[0m\nModel: model_m6_1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_06_02.jl\u001b[0m\nModel: model_m6_2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_06_03.jl\u001b[0m\nModel: model_m6_3\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_06_04.jl\u001b[0m\nModel: model_m6_4\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_06_05.jl\u001b[0m\nModel: model_m6_5\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_06_06.jl\u001b[0m\nModel: model_m6_6\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_06_07.jl\u001b[0m\nModel: model_m6_7\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_06_08.jl\u001b[0m\nModel: model_m6_8\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_06_09.jl\u001b[0m\nModel: model_m6_9\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_06_10.jl\u001b[0m\nModel: model_m6_10\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_06_11.jl\u001b[0m\nModel: model_m6_11\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_06_12.jl\u001b[0m\nModel: model_m6_12\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_07_1_1.jl\u001b[0m\nModel: model_m7_1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_07_1_2.jl\u001b[0m\nModel: model_m7_2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_07_1_3.jl\u001b[0m\nModel: model_m7_n\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_07_1_4.jl\u001b[0m\nModel: model_m7_6\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_07_2_1.jl\u001b[0m\nModel: model_m7_1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_08_1.jl\u001b[0m\nModel: model_m8_1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_08_2.jl\u001b[0m\nModel: model_m8_1a\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_08_3.jl\u001b[0m\nModel: model_m8_2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_08_4.jl\u001b[0m\nModel: model_m8_3\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_08_5.jl\u001b[0m\nModel: m8_4\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_08_6.jl\u001b[0m\nModel: m8_5\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_09_1.jl\u001b[0m\nModel: model_m8_3\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_09_2.jl\u001b[0m\nModel: model_m9_1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_09_3.jl\u001b[0m\nModel: model_m9_2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_09_4.jl\u001b[0m\nModel: model_m9_3\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_09_5.jl\u001b[0m\nModel: model_m9_4\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_09_6.jl\u001b[0m\nModel: model_m9_5\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_01.jl\u001b[0m\nModel: ppl11_1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_02.jl\u001b[0m\nModel: ppl11_2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_03.jl\u001b[0m\nModel: m11_3\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_04.jl\u001b[0m\nModel: m11_4\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_05.jl\u001b[0m\nModel: m11_5\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_06.jl\u001b[0m\nModel: m11_6\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_07.jl\u001b[0m\nModel: m11_7\nPossible constraint violation in \"admit[i] ~ Binomial(\u001b[101mapplications[i]\u001b[0m, p[i])\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: constraint violation due to function input\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_08.jl\u001b[0m\nModel: model_m11_8\nPossible constraint violation in \"admit[i] ~ Binomial(\u001b[101mapplications[i]\u001b[0m, p[i])\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: constraint violation due to function input\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_09.jl\u001b[0m\nModel: m11_8\nPossible constraint violation in \"admit[i] ~ Binomial(\u001b[101mapplications[i]\u001b[0m, p[i])\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: constraint violation due to function input\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_10.jl\u001b[0m\nModel: m11_9\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_11.jl\u001b[0m\nModel: m11_10\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_12.jl\u001b[0m\nModel: m11_11\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_13.jl\u001b[0m\nModel: m11_12\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_14.jl\u001b[0m\nModel: m11_13\nCould not verify constraint in \"career ~ Categorical(\u001b[101mp\u001b[0m)\":\n    Parameter p of Categorical distribution has constraint simplex which could not be verified.\n\n# NOTE: constraint violation due to softmax - simplex (multivariate)\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_15.jl\u001b[0m\nModel: m11_14\nCould not verify constraint in \"career[i] ~ Categorical(\u001b[101mp\u001b[0m)\":\n    Parameter p of Categorical distribution has constraint simplex which could not be verified.\n\n# NOTE: unroll loops to remove spurious edge career[i] -> career[i]\n# NOTE: constraint violation due to softmax - simplex (multivariate)\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_16.jl\u001b[0m\nModel: m_binom\nPossible constraint violation in \" admit ~ Binomial(\u001b[101mapplications\u001b[0m, p)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: constraint violation due to function input\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_11_17.jl\u001b[0m\nModel: m_pois\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_12_1.jl\u001b[0m\nModel: m12_1\nCould not find properties for  A ~ BetaBinomial2(N, p\u0304, \u03b8)\nCould not verify constraints in \" A ~ BetaBinomial2(N, p\u0304, \u03b8)\":\n    Could not infer properties of distribution Unknown-BetaBinomial2.\n\n# NOTE: constraint violation due to unknown BetaBinomial2\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_12_2.jl\u001b[0m\nModel: m12_2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_12_3.jl\u001b[0m\nModel: m12_3\nCould not find properties for y .~ ZIPoisson(\u03bb, p)\nCould not verify constraints in \"y .~ ZIPoisson(\u03bb, p)\":\n    Could not infer properties of distribution Unknown-ZIPoisson.\n\n# NOTE: Constraint violation due to unknown ZIPoisson\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_12_4.jl\u001b[0m\nModel: m12_4\nCould not verify constraint in \"R .~ OrderedLogistic(0, \u001b[101mcutpoints\u001b[0m)\":\n    Parameter c of OrderedLogistic distribution has constraint Ordered which could not be verified.\n\n# NOTE: OrderedLogistic\n# NOTE: Constraint violation due to unknown OrderedLogistic\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_12_5.jl\u001b[0m\nModel: m12_5\nCould not verify constraint in \"R[i] ~ OrderedLogistic(phi[i], \u001b[101mcutpoints\u001b[0m)\":\n    Parameter c of OrderedLogistic distribution has constraint Ordered which could not be verified.\n\n# NOTE: unroll loops to remove spurious edge R[i] -> R[i]\n# NOTE: Constraint violation due to unknown OrderedLogistic\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_12_6.jl\u001b[0m\nServer error: ErrorException(\"Found forbidden scope node in call argument: SubString{String}[\\\"i -> delta[1:i]\\\"].\")\nServer error: ErrorException(\"Found forbidden scope node in call argument: SubString{String}[\\\"i -> delta[1:i]\\\"].\")\n# NOTE: unroll loops to remove spurious edge R[i] -> R[i]\n# NOTE: fails to build syntax tree due to lambda\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_12_7.jl\u001b[0m\nModel: m12_7\nCould not verify constraint in \"R[i] ~ OrderedLogistic(phi[i], \u001b[101mcutpoints\u001b[0m)\":\n    Parameter c of OrderedLogistic distribution has constraint Ordered which could not be verified.\n\n# NOTE: unroll loops to remove spurious edge R[i] -> R[i]\n# NOTE: Constraint violation due to unknown OrderedLogistic\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_13_1.jl\u001b[0m\nModel: m13_1\nPossible constraint violation in \" S ~ Binomial(\u001b[101mN\u001b[0m, p)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: constraint violation due to function input\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_13_2.jl\u001b[0m\nModel: m13_2\nPossible constraint violation in \" S ~ Binomial(\u001b[101mN\u001b[0m, p)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: constraint violation due to function input\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_13_3.jl\u001b[0m\nModel: m13_3\nPossible constraint violation in \" Si ~ Binomial(\u001b[101mNi\u001b[0m, p)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: constraint violation due to function input\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_13_4.jl\u001b[0m\nModel: m13_4\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_13_5.jl\u001b[0m\nModel: m13_5\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_13_6.jl\u001b[0m\nModel: m13_6\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_13_7.jl\u001b[0m\nModel: m13_7\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_13_8.jl\u001b[0m\nModel: m13_7nc\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_13_9.jl\u001b[0m\nModel: m13_4nc\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_14_1.jl\u001b[0m\nModel: m14_1\nPossible constraint violation in \"ab ~ filldist(MvNormal([a,b], \u001b[101m\u03a3\u001b[0m), 20)\":\n    Parameter covariance of MultivariateNormal distribution has constraint [0, inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: unroll loops to remove spurious edge wait[i] -> wait[i]\n# NOTE: constraint violation due to multivariate covariance matrix\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_14_2.jl\u001b[0m\nModel: m14_2\nPossible constraint violation in \"\u03c1_actor ~ LKJ(\u001b[101mtid_len\u001b[0m, 2)\":\n    Parameter size of LKJCholesky distribution has constraint [1, ..., inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"alpha ~ filldist(MvNormal(zeros(tid_len), \u001b[101m\u03a3_actor\u001b[0m), act_len)\":\n    Parameter covariance of MultivariateNormal distribution has constraint [0, inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"\u03c1_block ~ LKJ(\u001b[101mtid_len\u001b[0m, 2)\":\n    Parameter size of LKJCholesky distribution has constraint [1, ..., inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"beta ~ filldist(MvNormal(zeros(tid_len), \u001b[101m\u03a3_block\u001b[0m), blk_len)\":\n    Parameter covariance of MultivariateNormal distribution has constraint [0, inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: unroll loops to remove spurious edge L[i] -> L[i]\n# NOTE: constraint violation due to multivariate covariance matrix\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_14_3.jl\u001b[0m\nModel: m14_3\nServer error: ErrorException(\"Encountered unsupported node (. (call cholesky (call Symmetric \u03c1_block)) (quote L)) with kind .\")\n# NOTE: unroll loops to remove spurious edge L[i] -> L[i]\n# NOTE: constraint violation due to member access cholesky().L\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_14_4.jl\u001b[0m\nModel: m14_4\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_14_5.jl\u001b[0m\nModel: m14_5\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_14_6.jl\u001b[0m\nModel: m14_6\nPossible constraint violation in \"WE[i] ~ MvNormal([\u03bcW[i], \u03bcE[i]], \u001b[101m\u03a3\u001b[0m)\":\n    Parameter covariance of MultivariateNormal distribution has constraint [0, inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: unroll loops to remove spurious edge WE[i] -> WE[i]\n# NOTE: constraint violation due to multivariate covariance matrix\n# NOTE: Bug found\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/statistical_rethinking_2/chapter_14_7.jl\u001b[0m\nModel: m14_7\nServer error: ErrorException(\"Encountered unsupported node (. (call cholesky (call Symmetric \u03c1_d)) (quote L)) with kind .\")\n# NOTE: unroll loops to remove spurious edge giftsAB[i] -> giftsAB[i]\n# NOTE: unroll loops to remove spurious edge giftsAB[i] -> giftsBA[i]\n# NOTE: constraint violation due to member access cholesky().L\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/00-introduction.jl\u001b[0m\nModel: coinflip\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/01-gaussian-mixture-model.jl\u001b[0m\nServer error: AssertionError(\"Unsupported expression on rhs of assignment (comprehension (generator (call MvNormal (call Fill \u03bc\u2096 D) I) (= \u03bc\u2096 \u03bc)))\")\nServer error: AssertionError(\"Unsupported expression on rhs of assignment (comprehension (generator (call MvNormal (call Fill \u03bc\u2096 D) I) (= \u03bc\u2096 \u03bc)))\")\n# NOTE: does not parse due to generator\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/02-logisitic-regression.jl\u001b[0m\nModel: logistic_regression\nPossible constraint violation in \"intercept ~ Normal(0, \u001b[101m\u03c3\u001b[0m)\":\n    Parameter scale of Normal distribution has constraint [0.0, inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"student ~ Normal(0, \u001b[101m\u03c3\u001b[0m)\":\n    Parameter scale of Normal distribution has constraint [0.0, inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"balance ~ Normal(0, \u001b[101m\u03c3\u001b[0m)\":\n    Parameter scale of Normal distribution has constraint [0.0, inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"income ~ Normal(0, \u001b[101m\u03c3\u001b[0m)\":\n    Parameter scale of Normal distribution has constraint [0.0, inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: constraint violation due to function input\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/04-bayesian-neural-network.jl\u001b[0m\nModel: bayes_nn\nPossible constraint violation in \"ts[i] ~ Bernoulli(\u001b[101mpreds[i]\u001b[0m)\":\n    Parameter p of Bernoulli distribution has constraint [0.0, 1.0], but values are estimated to be in [-inf, inf].\n\n# NOTE: unroll loops to remove spurious edge ts[i] -> ts[i]\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/04-hidden-markov-model.jl\u001b[0m\nModel: BayesHmm\nCould not mask support as interval for T[i] ~ Dirichlet(ones(K) / K)\nServer error: MethodError(Base.reduce_empty, (min, Float64), 0x0000000000008470)\n# NOTE: loop unrolling fails, because s[i - 1], or we make loop unroller more sophisticated\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/05_linear-regression.jl\u001b[0m\nModel: linear_regression\nCould not mask support as interval for \u03c3\u00b2 ~ truncated(Normal(0, 100); lower=0)\nPossible constraint violation in \" y ~ MvNormal(mu, \u001b[101m\u03c3\u00b2 * I\u001b[0m)\":\n    Parameter covariance of MultivariateNormal distribution has constraint [0, inf], but values are estimated to be in [-inf, inf].\n\n\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/06_infinite-mixture-model_1.jl\u001b[0m\nModel: two_model\nCould not verify constraint in \"z ~ Categorical(\u001b[101m[\u03c01, \u03c02]\u001b[0m)\":\n    Parameter p of Categorical distribution has constraint simplex which could not be verified.\n\n\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/06_infinite-mixture-model_2.jl\u001b[0m\nServer error: ErrorException(\"Found forbidden scope node in call argument: SubString{String}[\\\"k -> sum(z .== k)\\\"].\")\nServer error: ErrorException(\"Found forbidden scope node in call argument: SubString{String}[\\\"k -> sum(z .== k)\\\"].\")\n# NOTE: Unsupported lambda\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/07_poisson-regression.jl\u001b[0m\nModel: poisson_regression\nPossible constraint violation in \"b0 ~ Normal(0, \u001b[101m\u03c3\u00b2\u001b[0m)\":\n    Parameter scale of Normal distribution has constraint [0.0, inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"b1 ~ Normal(0, \u001b[101m\u03c3\u00b2\u001b[0m)\":\n    Parameter scale of Normal distribution has constraint [0.0, inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"b2 ~ Normal(0, \u001b[101m\u03c3\u00b2\u001b[0m)\":\n    Parameter scale of Normal distribution has constraint [0.0, inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"b3 ~ Normal(0, \u001b[101m\u03c3\u00b2\u001b[0m)\":\n    Parameter scale of Normal distribution has constraint [0.0, inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: constraint violation due to function input\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/08_multinomial-logistic-regression.jl\u001b[0m\nModel: logistic_regression\nPossible constraint violation in \"intercept_versicolor ~ Normal(0, \u001b[101m\u03c3\u001b[0m)\":\n    Parameter scale of Normal distribution has constraint [0.0, inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"intercept_virginica ~ Normal(0, \u001b[101m\u03c3\u001b[0m)\":\n    Parameter scale of Normal distribution has constraint [0.0, inf], but values are estimated to be in [-inf, inf].\n\nCould not verify constraint in \"y[i] ~ Categorical(\u001b[101mv\u001b[0m)\":\n    Parameter p of Categorical distribution has constraint simplex which could not be verified.\n\n\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/09_variational-inference_1.jl\u001b[0m\nModel: model\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/09_variational-inference_2.jl\u001b[0m\nServer error: AssertionError(\"kind(call) == K\\\"call\\\"\")\nServer error: AssertionError(\"kind(call) == K\\\"call\\\"\")\n# NOTE: sample in return\n# NOTE: generic type in function signature\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/10_bayesian-differential-equations_1.jl\u001b[0m\nModel: fitlv\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/10_bayesian-differential-equations_2.jl\u001b[0m\nModel: fitlv2\nServer error: ErrorException(\"Encountered unsupported node (. predicted (quote u)) with kind .\")\n\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/10_bayesian-differential-equations_3.jl\u001b[0m\nModel: fitlv_dde\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/10_bayesian-differential-equations_4.jl\u001b[0m\nModel: fitlv_sensealg\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/10_bayesian-differential-equations_5.jl\u001b[0m\nModel: fitlv_sde\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/11_probabilistic-pca_1.jl\u001b[0m\nServer error: ErrorException(\"Found forbidden scope node in call argument: SubString{String}[\\\"MvNormal(m, Eye(N)) for m in eachcol(genes_mean')\\\"].\")\nServer error: ErrorException(\"Found forbidden scope node in call argument: SubString{String}[\\\"MvNormal(m, Eye(N)) for m in eachcol(genes_mean')\\\"].\")\n# NOTE: sample in return\n# NOTE: generator\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/11_probabilistic-pca_2.jl\u001b[0m\nServer error: ErrorException(\"Found forbidden scope node in call argument: SubString{String}[\\\"MvNormal(m, 1.0 / sqrt(tau)) for m in eachcol(mu)\\\"].\")\nServer error: ErrorException(\"Found forbidden scope node in call argument: SubString{String}[\\\"MvNormal(m, 1.0 / sqrt(tau)) for m in eachcol(mu)\\\"].\")\n# NOTE: sample in return\n# NOTE: generator\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/12_gplvm_1.jl\u001b[0m\nModel: pPCA\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/12_gplvm_2.jl\u001b[0m\nModel: GPLVM_linear\nCould not find properties for \u03b1 ~ MvLogNormal(MvNormal(Zeros(K), I))\nCould not verify constraints in \"\u03b1 ~ MvLogNormal(MvNormal(Zeros(K), I))\":\n    Could not infer properties of distribution Unknown-MvLogNormal.\n\nPossible constraint violation in \"Y ~ filldist(MvNormal(mu, \u001b[101mcov(gpz)\u001b[0m), D)\":\n    Parameter covariance of MultivariateNormal distribution has constraint [0, inf], but values are estimated to be in [-inf, inf].\n\n\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/12_gplvm_3.jl\u001b[0m\nModel: GPLVM\nCould not find properties for \u03b1 ~ MvLogNormal(MvNormal(Zeros(K), I))\nCould not verify constraints in \"\u03b1 ~ MvLogNormal(MvNormal(Zeros(K), I))\":\n    Could not infer properties of distribution Unknown-MvLogNormal.\n\nPossible constraint violation in \"Y ~ filldist(MvNormal(mu, \u001b[101mcov(gpz)\u001b[0m), D)\":\n    Parameter covariance of MultivariateNormal distribution has constraint [0, inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: MvLogNormal\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/13_seasonal_time_series.jl\u001b[0m\nModel: decomp_model\nCould not mask support as interval for \u03c3 ~ truncated(Normal(0, 0.1); lower=0)\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/14_minituring.jl\u001b[0m\nModel: turing_m\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/turing/turing_tutorials/15_gaussian_processes.jl\u001b[0m\nModel: putting_model\nCould not find properties for f_latent ~ f(d, jitter)\nCould not find properties for y ~ product_distribution(Binomial.(n, logistic.(f_latent)))\nCould not verify constraints in \"f_latent ~ f(d, jitter)\":\n    Could not infer properties of distribution Unknown-f.\n\nCould not verify constraints in \"y ~ product_distribution(Binomial.(n, logistic.(f_latent)))\":\n    Could not infer properties of distribution Unknown-product_distribution.\n\n\n\u001b[91mWarnings produced\u001b[0m\n\n\nModel Graph   Error Count: 6/117\nConstraint    Error Count: 37/117\nin 23.71 seconds.\n</output>",
+      "exec_time": 24.62501811981201
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Run the Statistical Dependency Analysis and Parameter Constraint Verifier for the 97 PyMC programs to get the corresponding summary counts for Table 2.\n\n<mini_swe_agent_bash>\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_graph_and_constraints.py -ppl pymc\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 13.846143007278442,
+        "response": {
+          "id": "chatcmpl-D0Xa4bJYyH7OmNsCllIdx90seFPzw",
+          "created": 1769021456,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Run the Statistical Dependency Analysis and Parameter Constraint Verifier for the 97 PyMC programs to get the corresponding summary counts for Table 2.\n\n<mini_swe_agent_bash>\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_graph_and_constraints.py -ppl pymc\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 817,
+            "prompt_tokens": 16253,
+            "total_tokens": 17070,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 720,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 7424
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/ExtrasensoryPerception_1.py\u001b[0m\nModel: model1\nPossible constraint violation in \"yd = pm.MvNormal(\"yd\", mu=mu, tau=\u001b[101mtau1\u001b[0m, observed=y)\":\n    Parameter precision of MultivariateNormal distribution has constraint [0, inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot verify matrix constraint `matrix_inverse(cov)`\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/ExtrasensoryPerception_2.py\u001b[0m\nModel: model2\nPossible constraint violation in \"thetai = pm.MvNormal(\"thetai\", mu=mu, tau=\u001b[101mtau1\u001b[0m, shape=(n, n2))\":\n    Parameter precision of MultivariateNormal distribution has constraint [0, inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot verify matrix constraint `matrix_inverse(cov)`\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/ExtrasensoryPerception_3.py\u001b[0m\nModel: model3\nPossible constraint violation in \"thetai = pm.MvNormal(\"thetai\", mu=mu, tau=\u001b[101mtau1\u001b[0m, shape=(n, n2))\":\n    Parameter precision of MultivariateNormal distribution has constraint [0, inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot verify matrix constraint `matrix_inverse(cov)`\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/HeuristicDecisionMaking_1.py\u001b[0m\nModel: model1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/HeuristicDecisionMaking_2.py\u001b[0m\nModel: model2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/HeuristicDecisionMaking_3.py\u001b[0m\nModel: model3\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/HeuristicDecisionMaking_4.py\u001b[0m\nModel: model4\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/MemoryRetention_1.py\u001b[0m\nModel: model1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/MemoryRetention_2.py\u001b[0m\nModel: model1_\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/MemoryRetention_3.py\u001b[0m\nModel: model2_\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/MemoryRetention_4.py\u001b[0m\nModel: model3\nNodes missing:\n{'\"alpha\"', '\"beta\"'}\nEdges missing:\n{('\"beta\"', '\"kij_ppc\"'), ('\"lambdaa\"', '\"alpha\"'), ('\"alpha\"', '\"kij_ppc\"'), ('\"lambdab\"', '\"beta\"'), ('\"mub\"', '\"beta\"'), ('\"beta\"', '\"thetaj\"'), ('\"mua\"', '\"alpha\"'), ('\"alpha\"', '\"thetaj\"')}\nWrong edges:\n{('\"lambdab\"', '\"kij_ppc\"'), ('\"mua\"', '\"thetaj\"'), ('\"mub\"', '\"kij_ppc\"'), ('\"mua\"', '\"kij_ppc\"'), ('\"lambdaa\"', '\"thetaj\"'), ('\"lambdab\"', '\"thetaj\"'), ('\"mub\"', '\"thetaj\"'), ('\"lambdaa\"', '\"kij_ppc\"')}\nPossible constraint violation in \"kij = pm.Binomial(\"kij\", p=\u001b[101mthetaj\u001b[0m, n=n, observed=k2)\":\n    Parameter p of Binomial distribution has constraint [0.0, 1.0], but values are estimated to be in [-inf, 1.0].\n\n# NOTE: fails due to BoundedNormal, aribtrary distribution expression\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/MultinomialProcessingTrees_1.py\u001b[0m\nModel: model1\nCould not verify constraint in \"kobs = pm.Multinomial(\"kobs\", p=\u001b[101m[t1, t2, t3, t4]\u001b[0m, n=kshared.sum(), observed=kshared)\":\n    Parameter p of Multinomial distribution has constraint Simplex which could not be verified.\n\nPossible constraint violation in \"kobs = pm.Multinomial(\"kobs\", p=[t1, t2, t3, t4], n=\u001b[101mkshared.sum()\u001b[0m, observed=kshared)\":\n    Parameter n of Multinomial distribution has constraint [1, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot verify simplex constraint\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/MultinomialProcessingTrees_2.py\u001b[0m\nModel: model2\nCould not find properties for wishart = pm.WishartBartlett(\"wishart\", S=np.eye(p), nu=nu)\nCould not verify constraints in \"wishart = pm.WishartBartlett(\"wishart\", S=np.eye(p), nu=nu)\":\n    Could not infer properties of distribution Unknown-WishartBartlett.\n\nPossible constraint violation in \"delta = pm.MvNormal(\"delta\", mu=np.zeros(Nt), cov=\u001b[101mcov\u001b[0m, shape=(Nsubj, p))\":\n    Parameter covariance of MultivariateNormal distribution has constraint [0, inf], but values are estimated to be in [-inf, inf].\n\nCould not verify constraint in \"kobs = pm.Multinomial(\"kobs\", p=\u001b[101mp_.T\u001b[0m, n=Nitem, observed=kshared)\":\n    Parameter p of Multinomial distribution has constraint Simplex which could not be verified.\n\n# NOTE: pymc graph adds \"wishart_c\" -> \"wishart\" and '\"wishart_z\" -> \"wishart\" edges because of WishartBartlett parametrisation\n# NOTE: cannot verify simplex constraint\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/MultinomialProcessingTrees_3.py\u001b[0m\nModel: modelk\nCould not verify constraint in \"kobs = pm.Multinomial(\"kobs\", p=\u001b[101mp_.T\u001b[0m, n=Nitem, observed=kall[2])\":\n    Parameter p of Multinomial distribution has constraint Simplex which could not be verified.\n\n# NOTE: cannot verify simplex constraint\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/NumberConceptDevelopment_1.py\u001b[0m\nModel: model1\nCould not mask support as interval for pi = pm.Dirichlet(\"pi\", a=np.ones(gn), shape=gn)\nCould not verify constraint in \"zi = pm.Categorical(\"zi\", p=\u001b[101mnp.ones(nz) / nz\u001b[0m, shape=ns)\":\n    Parameter p of Categorical distribution has constraint simplex which could not be verified.\n\nCould not verify constraint in \"aij = pm.Categorical(\"aij\", p=\u001b[101mpi_ij\u001b[0m, observed=ga_obs[valid_ind])\":\n    Parameter p of Categorical distribution has constraint simplex which could not be verified.\n\n# NOTE: cannot verify simplex constraint\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/NumberConceptDevelopment_2.py\u001b[0m\nModel: model2\nCould not mask support as interval for pi = pm.Dirichlet(\"pi\", a=np.ones(fn), shape=fn)\nCould not verify constraint in \"zi = pm.Categorical(\"zi\", p=\u001b[101mnp.ones(nz) / nz\u001b[0m, shape=ns)\":\n    Parameter p of Categorical distribution has constraint simplex which could not be verified.\n\nCould not verify constraint in \"aij = pm.Categorical(\"aij\", p=\u001b[101mpi_ij\u001b[0m, observed=fa_obs[valid_ind2])\":\n    Parameter p of Categorical distribution has constraint simplex which could not be verified.\n\n# NOTE: cannot verify simplex constraint\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/NumberConceptDevelopment_3.py\u001b[0m\nModel: model3\nCould not mask support as interval for pi_g = pm.Dirichlet(\"pi_g\", a=np.ones(gn), shape=gn)\nCould not mask support as interval for pi_f = pm.Dirichlet(\"pi_f\", a=np.ones(fn), shape=fn)\nCould not verify constraint in \"zi = pm.Categorical(\"zi\", p=\u001b[101mnp.ones(nz) / nz\u001b[0m, shape=ns)\":\n    Parameter p of Categorical distribution has constraint simplex which could not be verified.\n\nCould not verify constraint in \"agij = pm.Categorical(\"ag_ij\", p=\u001b[101mpig_ij\u001b[0m, observed=ga_obs[valid_ind1])\":\n    Parameter p of Categorical distribution has constraint simplex which could not be verified.\n\nCould not verify constraint in \"afij = pm.Categorical(\"af_ij\", p=\u001b[101mpif_ij\u001b[0m, observed=fa_obs[valid_ind2])\":\n    Parameter p of Categorical distribution has constraint simplex which could not be verified.\n\n# NOTE: cannot verify simplex constraint\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/PsychophysicalFunctions_1.py\u001b[0m\nModel: model1\nPossible constraint violation in \"rij_ = pm.Binomial(\"rij\", p=thetaij, n=\u001b[101mnij\u001b[0m, observed=rij)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot infer constraints for input nij\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/PsychophysicalFunctions_2.py\u001b[0m\nModel: model2b\nPossible constraint violation in \"rij_ = pm.Binomial(\"rij\", p=thetaij, n=\u001b[101mnij\u001b[0m, observed=rij)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot infer constraints for input nij\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/PsychophysicalFunctions_3.py\u001b[0m\nModel: model2b_\nPossible constraint violation in \"rij_ = pm.Binomial(\"rij\", p=thetaij, n=\u001b[101mnij\u001b[0m, observed=rij)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot infer constraints for input nij\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/SignalDetectionTheory_1.py\u001b[0m\nModel: model1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/SignalDetectionTheory_2.py\u001b[0m\nModel: model2i\nPossible constraint violation in \"hi = pm.Binomial(\"hi\", p=thetah, n=\u001b[101ms1\u001b[0m, observed=h1)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"fi = pm.Binomial(\"fi\", p=thetaf, n=\u001b[101mn1\u001b[0m, observed=f1)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot infer constraints for input s1, n1\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/SignalDetectionTheory_3.py\u001b[0m\nModel: model2d\nPossible constraint violation in \"hi = pm.Binomial(\"hi\", p=thetah, n=\u001b[101ms2\u001b[0m, observed=h2)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"fi = pm.Binomial(\"fi\", p=thetaf, n=\u001b[101mn2\u001b[0m, observed=f2)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot infer constraints for input s2, n2\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/SignalDetectionTheory_4.py\u001b[0m\nModel: model3i\nPossible constraint violation in \"hi = pm.Binomial(\"hi\", p=thetah, n=\u001b[101ms1\u001b[0m, observed=h1)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"fi = pm.Binomial(\"fi\", p=thetaf, n=\u001b[101mn1\u001b[0m, observed=f1)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot infer constraints for input s1, n1\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/SignalDetectionTheory_5.py\u001b[0m\nModel: model3d\nPossible constraint violation in \"hi = pm.Binomial(\"hi\", p=thetah, n=\u001b[101ms2\u001b[0m, observed=h2)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"fi = pm.Binomial(\"fi\", p=thetaf, n=\u001b[101mn2\u001b[0m, observed=f2)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot infer constraints for input s2, n2\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/SignalDetectionTheory_6.py\u001b[0m\nModel: model4i\nPossible constraint violation in \"hi = pm.Binomial(\"hi\", p=thetah, n=\u001b[101ms1\u001b[0m, observed=h1)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"fi = pm.Binomial(\"fi\", p=thetaf, n=\u001b[101mn1\u001b[0m, observed=f1)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot infer constraints for input s1, n1\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/SignalDetectionTheory_7.py\u001b[0m\nModel: model4d\nPossible constraint violation in \"hi = pm.Binomial(\"hi\", p=thetah, n=\u001b[101ms2\u001b[0m, observed=h2)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"fi = pm.Binomial(\"fi\", p=thetaf, n=\u001b[101mn2\u001b[0m, observed=f2)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot infer constraints for input s2, n2\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/TheBARTModelofRiskTaking_1.py\u001b[0m\nModel: model1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/TheBARTModelofRiskTaking_2.py\u001b[0m\nModel: model2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/TheGCMModelofCategorization_1.py\u001b[0m\nModel: model1\nPossible constraint violation in \"yi = pm.Binomial(\"yi\", p=\u001b[101mri\u001b[0m, n=t, observed=y)\":\n    Parameter p of Binomial distribution has constraint [0.0, 1.0], but values are estimated to be in [-inf, inf].\n\n# NOTE: normalisation cannot be correctly computed with interval arithmetic\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/TheGCMModelofCategorization_2.py\u001b[0m\nModel: model2\nPossible constraint violation in \"yi = pm.Binomial(\"yi\", p=\u001b[101mri\u001b[0m, n=nstim, observed=y2)\":\n    Parameter p of Binomial distribution has constraint [0.0, 1.0], but values are estimated to be in [-inf, inf].\n\n# NOTE: normalisation cannot be correctly computed with interval arithmetic\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/TheGCMModelofCategorization_3.py\u001b[0m\nModel: model3\nPossible constraint violation in \"yi = pm.Binomial(\"yi\", p=\u001b[101mri\u001b[0m, n=nstim, observed=y2)\":\n    Parameter p of Binomial distribution has constraint [0.0, 1.0], but values are estimated to be in [-inf, inf].\n\n# NOTE: normalisation cannot be correctly computed with interval arithmetic\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/TheSIMPLEModelofMemory_1.py\u001b[0m\nModel: simple1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/TheSIMPLEModelofMemory_2.py\u001b[0m\nModel: simple1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/TheSIMPLEModelofMemory_3.py\u001b[0m\nModel: simple2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/CaseStudies/TheSIMPLEModelofMemory_4.py\u001b[0m\nModel: simple2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ModelSelection/ComparingBinomialRates_1.py\u001b[0m\nModel: model1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ModelSelection/ComparingBinomialRates_2.py\u001b[0m\nModel: modelAE\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ModelSelection/ComparingBinomialRates_3.py\u001b[0m\nModel: model2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ModelSelection/ComparingBinomialRates_4.py\u001b[0m\nModel: model3\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ModelSelection/ComparingBinomialRates_5.py\u001b[0m\nModel: model4\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ModelSelection/ComparingBinomialRates_6.py\u001b[0m\nModel: model5\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ModelSelection/ComparingGaussianMeans_1.py\u001b[0m\nModel: model1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ModelSelection/ComparingGaussianMeans_2.py\u001b[0m\nModel: model2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ModelSelection/ComparingGaussianMeans_3.py\u001b[0m\nModel: model3\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Binomial_1.py\u001b[0m\nModel: model1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Binomial_2.py\u001b[0m\nModel: model2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Binomial_3.py\u001b[0m\nModel: model3\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Binomial_4.py\u001b[0m\nModel: model_obs\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Binomial_5.py\u001b[0m\nModel: model5\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Binomial_6.py\u001b[0m\nModel: model6\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Binomial_7.py\u001b[0m\nModel: model6_\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/DataAnalysis_1.py\u001b[0m\nModel: model1\nPossible constraint violation in \"yd = pm.MvNormal(\"yd\", mu=mu, cov=\u001b[101mcov\u001b[0m, observed=y, shape=2)\":\n    Parameter covariance of MultivariateNormal distribution has constraint [0, inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot verify covariance constraint\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/DataAnalysis_2.py\u001b[0m\nModel: model2\nPossible constraint violation in \"yd = pm.MvNormal(\"yd\", mu=mu, cov=\u001b[101mcov\u001b[0m, shape=(n1, n2))\":\n    Parameter covariance of MultivariateNormal distribution has constraint [0, inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot verify covariance constraint\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/DataAnalysis_3.py\u001b[0m\nModel: model3\nPossible constraint violation in \"yd = pm.Multinomial(\"yd\", n=\u001b[101my.sum()\u001b[0m, p=[pi1, pi2, pi3, pi4], observed=y)\":\n    Parameter n of Multinomial distribution has constraint [1, ..., inf], but values are estimated to be in [-inf, inf].\n\nCould not verify constraint in \"yd = pm.Multinomial(\"yd\", n=y.sum(), p=\u001b[101m[pi1, pi2, pi3, pi4]\u001b[0m, observed=y)\":\n    Parameter p of Multinomial distribution has constraint Simplex which could not be verified.\n\n# NOTE: cannot verify simplex constraint\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/DataAnalysis_4.py\u001b[0m\nModel: model4\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/DataAnalysis_5.py\u001b[0m\nModel: model5\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/DataAnalysis_6.py\u001b[0m\nModel: model7\nServer error: {'type': 'IndexError', 'args': ['list index out of range'], 'message': 'list index out of range'}\nServer error: {'type': 'IndexError', 'args': ['list index out of range'], 'message': 'list index out of range'}\n# NOTE: DensityDist\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Gaussian_1.py\u001b[0m\nModel: model1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Gaussian_2.py\u001b[0m\nModel: model2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Gaussian_3.py\u001b[0m\nModel: model3\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Latent-mixtureModels_1.py\u001b[0m\nModel: model1\nPossible constraint violation in \"ki = pm.Binomial(\"ki\", p=\u001b[101mtheta\u001b[0m, n=n, observed=k)\":\n    Parameter p of Binomial distribution has constraint [0.0, 1.0], but values are estimated to be in [0.0, 1.5].\n\n# NOTE: over approximates  tt.eq(zi, 1) + tt.eq(zi, 0) as [0,2]\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Latent-mixtureModels_2.py\u001b[0m\nModel: model2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Latent-mixtureModels_3.py\u001b[0m\nModel: model3\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Latent-mixtureModels_4.py\u001b[0m\nModel: model4\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Latent-mixtureModels_5.py\u001b[0m\nModel: model5\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Latent-mixtureModels_6.py\u001b[0m\nModel: model6\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BCM/ParameterEstimation/Latent-mixtureModels_7.py\u001b[0m\nModel: model7\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_02_1.py\u001b[0m\nModel: model_1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_02_2.py\u001b[0m\nModel: model_2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_02_3.py\u001b[0m\nModel: model_2_bad\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_02_4.py\u001b[0m\nModel: model_3\nPossible constraint violation in \"obs = pm.Binomial('observed', n=births, p=\u001b[101mtheta\u001b[0m, observed=fem_births)\":\n    Parameter p of Binomial distribution has constraint [0.0, 1.0], but values are estimated to be in [-inf, inf].\n\n# NOTE: pymc model graph gets this wrong, because of stochastic branching\n# NOTE: cannot do interval arithmetic through function calls yet (RDs)\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_02_5.py\u001b[0m\nModel: poisson_model\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_02_6.py\u001b[0m\nModel: poisson_model_2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_03_1.py\u001b[0m\nModel: model_1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_03_2.py\u001b[0m\nModel: model_3\nPossible constraint violation in \"post = pm.Multinomial('post', n=\u001b[101mobs.sum()\u001b[0m, p=[theta1, theta2, theta3], observed=obs)\":\n    Parameter n of Multinomial distribution has constraint [1, ..., inf], but values are estimated to be in [-inf, inf].\n\nCould not verify constraint in \"post = pm.Multinomial('post', n=obs.sum(), p=\u001b[101m[theta1, theta2, theta3]\u001b[0m, observed=obs)\":\n    Parameter p of Multinomial distribution has constraint Simplex which could not be verified.\n\n# NOTE: simplex constraint cannot be verified with intervals\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_03_3.py\u001b[0m\nModel: model_4\nCould not mask support as interval for theta = pm.Dirichlet('theta', a=np.ones_like(obs))\nPossible constraint violation in \"theta = pm.Dirichlet('theta', a=\u001b[101mnp.ones_like(obs)\u001b[0m)\":\n    Parameter alpha of Dirichlet distribution has constraint [0.0, inf], but values are estimated to be in [-inf, inf].\n\nPossible constraint violation in \"post = pm.Multinomial('post', n=\u001b[101mobs.sum()\u001b[0m, p=theta, observed=obs)\":\n    Parameter n of Multinomial distribution has constraint [1, ..., inf], but values are estimated to be in [-inf, inf].\n\nCould not verify constraint in \"post = pm.Multinomial('post', n=obs.sum(), p=\u001b[101mtheta\u001b[0m, observed=obs)\":\n    Parameter p of Multinomial distribution has constraint Simplex which could not be verified.\n\n# NOTE: simplex constraint cannot be verified with intervals\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_03_4.py\u001b[0m\nModel: model_5\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_05_1.py\u001b[0m\nModel: model_1\nPossible constraint violation in \"y = pm.Binomial('y', n=\u001b[101mrat_tumor[:, 1]\u001b[0m, p=theta, observed=rat_tumor[:, 0])\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: cannot infer constraint from input\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_05_2.py\u001b[0m\nModel: model_10\nPossible constraint violation in \"p = pm.Binomial('y', p=theta, observed=rat_tumor[:,0], n=\u001b[101mrat_tumor[:,1]\u001b[0m)\":\n    Parameter n of Binomial distribution has constraint [0, ..., inf], but values are estimated to be in [-inf, inf].\n\n# NOTE: pymc graph has edge for potential, 'ab' -> 'p(a, b)'\n# NOTE: cannot infer constraint from input\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_05_3.py\u001b[0m\nModel: model_2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_05_4.py\u001b[0m\nModel: model_3\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_05_5.py\u001b[0m\nModel: model_4\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_05_6.py\u001b[0m\nModel: model_5\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_05_7.py\u001b[0m\nModel: model_6\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_06_1.py\u001b[0m\nModel: model_1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_06_2.py\u001b[0m\nModel: model_2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_07_1.py\u001b[0m\nModel: model_1\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_07_2.py\u001b[0m\nModel: model_1_log\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_07_3.py\u001b[0m\nModel: model_trans\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_07_4.py\u001b[0m\nModel: model_2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_07_5.py\u001b[0m\nModel: model_2_log\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/BDA3/chap_07_6.py\u001b[0m\nModel: model_trans_2\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/Bayes_Rules/Chapter 6_1.py\u001b[0m\nModel: beta_binomal_model\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/Bayes_Rules/Chapter 6_2.py\u001b[0m\nModel: gamma_poisson_model\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/Bayes_Rules/Chapter 8 Posterior Inference & Prediction_1.py\u001b[0m\nModel: model\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pymc/Bayes_Rules/Chapter 9 Simple Normal Regression_1.py\u001b[0m\nModel: simple_normal_model\n\u001b[92mEverything is ok\u001b[0m\n\n\nModel Graph   Error Count: 2/97\nConstraint    Error Count: 32/97\nin 13.88 seconds.\n</output>",
+      "exec_time": 14.435075283050537
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Run the HMC Assumption Checker experiment inside the container to obtain the total number of Gen programs analyzed and the count of warnings, which will fill the HMC row of Table 2.\n\n<mini_swe_agent_bash>\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_hmc.py\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 48.40363049507141,
+        "response": {
+          "id": "chatcmpl-D0XaWpXHbUQjwaYP4p7uP8YhUZY6X",
+          "created": 1769021484,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Run the HMC Assumption Checker experiment inside the container to obtain the total number of Gen programs analyzed and the count of warnings, which will fill the HMC row of Table 2.\n\n<mini_swe_agent_bash>\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_hmc.py\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 2471,
+            "prompt_tokens": 24548,
+            "total_tokens": 27019,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 2370,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 7296
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n\u001b[95m## evaluation/gen/binary_classify.jl\u001b[0m\n 1: RandomControlDependentWarning: Random variable \"{:loss} ~ normal(-sqrt(loss), 1)\" is control dependent on following variables:\n        beta[k] = {:beta => k} ~ normal(0, 1)\n    Random control dependencies may cause discontinuities in the posterior distribution, which are challenging for HMC/NUTS.\n\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/gen/capture_recapture.jl\u001b[0m\nNo HMC warnings.\n# NOTE: cannot detect that floor is discontinuous\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/gen/gmm.jl\u001b[0m\n 1: ContinuousDistributionViolation: Distribution type violation in \"z = {:z => i} ~ categorical(w)\":\n    Categorical distribution is discrete, which is not supported by HMC/NUTS.\n\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/gen/heavytail_piecewise.jl\u001b[0m\n 1: RandomControlDependentWarning: Random variable \"y ~ uniform_continuous(0, 1/upper)\" is control dependent on following variables:\n        x[i] = {:x => i} ~ uniform_continuous(-6,6)\n    Random control dependencies may cause discontinuities in the posterior distribution, which are challenging for HMC/NUTS.\n\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/gen/pedestrian.jl\u001b[0m\n 1: RandomControlDependentWarning: Random variable \"step = {:step=>t} ~ uniform_continuous(-1, 1)\" is control dependent on following variables:\n        start ~ uniform_continuous(0,3)\n        step = {:step=>t} ~ uniform_continuous(-1, 1)\n    Random control dependencies may cause discontinuities in the posterior distribution, which are challenging for HMC/NUTS.\n\n 2: RandomControlDependentWarning: Random variable \"end_distance ~ normal(distance, 0.1)\" is control dependent on following variables:\n        start ~ uniform_continuous(0,3)\n        step = {:step=>t} ~ uniform_continuous(-1, 1)\n    Random control dependencies may cause discontinuities in the posterior distribution, which are challenging for HMC/NUTS.\n\n 3: DefinitionInWhileLoopWarning: Random variable \"step = {:step=>t} ~ uniform_continuous(-1, 1)\" appears in while loop body.\n    This may lead to an unbounded number of random variables which is not supported by HMC/NUTS.\n\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/gen/random_control_flow.jl\u001b[0m\n 1: RandomControlDependentWarning: Random variable \"{:b => i} ~ normal(i, 1)\" is control dependent on following variables:\n        a ~ uniform_continuous(-1,1)\n    Random control dependencies may cause discontinuities in the posterior distribution, which are challenging for HMC/NUTS.\n\n 2: StochasticForLoopRangeWarning: Random variable \"{:b => i} ~ normal(i, 1)\" appears in for loop with potentially stochastic range \" i in 0:m\".\n    This may lead to an unbounded number of random variables which is not supported by HMC/NUTS.\n\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/gen/simple.jl\u001b[0m\n 1: RandomControlDependentWarning: Random variable \"step = {:s => i} ~ normal(0.,1)\" is control dependent on following variables:\n        q = {:q} ~ normal(0,1)\n        step = {:s => i} ~ normal(0.,1)\n    Random control dependencies may cause discontinuities in the posterior distribution, which are challenging for HMC/NUTS.\n\n 2: RandomControlDependentWarning: Random variable \"diff ~ normal(q-s, 1)\" is control dependent on following variables:\n        q = {:q} ~ normal(0,1)\n        step = {:s => i} ~ normal(0.,1)\n    Random control dependencies may cause discontinuities in the posterior distribution, which are challenging for HMC/NUTS.\n\n 3: DefinitionInWhileLoopWarning: Random variable \"step = {:s => i} ~ normal(0.,1)\" appears in while loop body.\n    This may lead to an unbounded number of random variables which is not supported by HMC/NUTS.\n\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/gen/stochastic_support.jl\u001b[0m\n 1: RandomControlDependentWarning: Random variable \"z1 ~ normal(-5, 2)\" is control dependent on following variables:\n        z0 ~ normal(0, 2)\n    Random control dependencies may cause discontinuities in the posterior distribution, which are challenging for HMC/NUTS.\n\n 2: RandomControlDependentWarning: Random variable \"y1 ~ normal(z1, 2)\" is control dependent on following variables:\n        z0 ~ normal(0, 2)\n    Random control dependencies may cause discontinuities in the posterior distribution, which are challenging for HMC/NUTS.\n\n 3: RandomControlDependentWarning: Random variable \"z2 ~ normal(5, 2)\" is control dependent on following variables:\n        z0 ~ normal(0, 2)\n    Random control dependencies may cause discontinuities in the posterior distribution, which are challenging for HMC/NUTS.\n\n 4: RandomControlDependentWarning: Random variable \"z3 ~ normal(z2, 2)\" is control dependent on following variables:\n        z0 ~ normal(0, 2)\n    Random control dependencies may cause discontinuities in the posterior distribution, which are challenging for HMC/NUTS.\n\n 5: RandomControlDependentWarning: Random variable \"y1 ~ normal(z3, 2)\" is control dependent on following variables:\n        z0 ~ normal(0, 2)\n    Random control dependencies may cause discontinuities in the posterior distribution, which are challenging for HMC/NUTS.\n\n 6: MissingInBranchWarning: Random variable with name :z1 is not defined in program branch.\n    If condition  z0 < 0 may be stochastic and random variable is not defined in else branch.\n\n 7: MultipleDefinitionsWarning: Multiple definitions (2) for random variable with name :y1.\n\n 8: MissingInBranchWarning: Random variable with name :z2 is not defined in program branch.\n    If condition  z0 < 0 may be stochastic and random variable is not defined in if branch.\n\n 9: MissingInBranchWarning: Random variable with name :z3 is not defined in program branch.\n    If condition  z0 < 0 may be stochastic and random variable is not defined in if branch.\n\n\u001b[91mWarnings produced\u001b[0m\n\n7 / 8 warnings.\nin 0.90 seconds.\n</output>",
+      "exec_time": 1.2193031311035156
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Run the Model-Guide Validator experiment for the 8 Pyro programs inside the container to obtain the number of programs and how many produced warnings, completing the data needed for Table 2.\n\n<mini_swe_agent_bash>\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_guide.py\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 21.26033663749695,
+        "response": {
+          "id": "chatcmpl-D0XbKLglCMl4VoHwDYiYAVLj1uJ0B",
+          "created": 1769021534,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Run the Model-Guide Validator experiment for the 8 Pyro programs inside the container to obtain the number of programs and how many produced warnings, completing the data needed for Table 2.\n\n<mini_swe_agent_bash>\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_guide.py\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 1118,
+            "prompt_tokens": 26148,
+            "total_tokens": 27266,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 1017,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 16128
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n\u001b[95m## evaluation/pyro/air.py\u001b[0m\n\u001b[1mCheck Proposal (model << guide)\u001b[0m\n\u001b[1mCheck SVI (guide << model)\u001b[0m\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pyro/br.py\u001b[0m\n\u001b[1mCheck Proposal (model << guide)\u001b[0m\n\u001b[1mCheck SVI (guide << model)\u001b[0m\n1.: GlobalAbsoluteContinuityViolation:\n Density of guide greater than 0 does not imply density of model greater than 0 (Counterexample: ['sigma' = -1]).\n2.: AbsoluteContinuityViolation:\nSampling 'sigma' in guide does not imply sampling in model (Counterexample: ['sigma' = -1]).\n3.: SupportIntervalMismatch for 'sigma' at True \u2227 True:\nSupport of guide rv sigma = pyro.sample(\"sigma\", dist.Normal(sigma_loc, torch.tensor(0.05))) is not subset of support of model rv sigma = pyro.sample(\"sigma\", dist.Uniform(0., 10.)) ((-inf, inf) vs [0.0, 10.0])\n# NOTE: sigma has Normal distribution in guide, but uniform(0,10) distribution in model\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pyro/csis.py\u001b[0m\n\u001b[1mCheck Proposal (model << guide)\u001b[0m\n\u001b[1mCheck SVI (guide << model)\u001b[0m\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pyro/dmm.py\u001b[0m\n\u001b[1mCheck Proposal (model << guide)\u001b[0m\n\u001b[1mCheck SVI (guide << model)\u001b[0m\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pyro/lda.py\u001b[0m\n\u001b[1mCheck Proposal (model << guide)\u001b[0m\n1.: AbsoluteContinuityViolation:\nSampling 'word_topics' in model does not imply sampling in guide (No sample statement in guide).\n2.: SupportTypeMismatch for 'doc_topics' at True \u2227 True:\nSupport type of model rv doc_topics = pyro.sample(\"doc_topics\", dist.Dirichlet(topic_weights)) is not equal to type of guide rv doc_topics = pyro.sample(\"doc_topics\", dist.Delta(doc_topics_w).to_event(1)) (or could not be inferred).\n\u001b[1mCheck SVI (guide << model)\u001b[0m\n1.: GlobalAbsoluteContinuityViolation:\n Density of guide greater than 0 does not imply density of model greater than 0 (Counterexample: ['topic_weights' = 0, 'word_topics' = -1]).\n2.: SupportTypeMismatch for 'doc_topics' at True \u2227 True:\nSupport type of guide rv doc_topics = pyro.sample(\"doc_topics\", dist.Delta(doc_topics_w).to_event(1)) is not equal to type of model rv doc_topics = pyro.sample(\"doc_topics\", dist.Dirichlet(topic_weights)) (or could not be inferred).\n# NOTE: doc_topics has Delta distribution in guide, but Dirichlet distribution in model\n# NOTE: word_topics is missing from guide\n\u001b[91mWarnings produced\u001b[0m\n\n\u001b[95m## evaluation/pyro/sgdef.py\u001b[0m\n\u001b[1mCheck Proposal (model << guide)\u001b[0m\n\u001b[1mCheck SVI (guide << model)\u001b[0m\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pyro/ssvae.py\u001b[0m\n\u001b[1mCheck Proposal (model << guide)\u001b[0m\n\u001b[1mCheck SVI (guide << model)\u001b[0m\n\u001b[92mEverything is ok\u001b[0m\n\n\u001b[95m## evaluation/pyro/vae.py\u001b[0m\n\u001b[1mCheck Proposal (model << guide)\u001b[0m\n\u001b[1mCheck SVI (guide << model)\u001b[0m\n\u001b[92mEverything is ok\u001b[0m\n\n2 / 8 warnings.\nin 2.71 seconds.\n</output>",
+      "exec_time": 3.1478800773620605
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Inspect the expected table template to match its formatting and know exactly how to structure the reproduced results in /workspace/repro.txt.\n\n<mini_swe_agent_bash>\ncat /workspace/expected.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 18.36536741256714,
+        "response": {
+          "id": "chatcmpl-D0XbifqXJmGT5CIPQVnLhmWJyjpOK",
+          "created": 1769021558,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Inspect the expected table template to match its formatting and know exactly how to structure the reproduced results in /workspace/repro.txt.\n\n<mini_swe_agent_bash>\ncat /workspace/expected.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 1004,
+            "prompt_tokens": 27188,
+            "total_tokens": 28192,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 943,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 24448
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n**Table 2: Summary tables of evaluation results.**\n\n| Analysis               | PPL    | Total Programs | Warnings produced  |\n| ---------------------- | ------ | -------------: | ----------------:  |\n| Dependency Analysis    | Turing |            ??? |                 ?  |\n| Dependency Analysis    | PyMC   |             ?? |                 ?  |\n| Constraint Verifier    | Turing |            ??? |                 ?? |\n| Constraint Verifier    | PyMC   |             ?? |                 ?? |\n| HMC Assumption Checker | Gen    |              ? |                 ?  |\n| Model-Guide Validator  | Pyro   |              ? |                 ?  |\n</output>",
+      "exec_time": 0.07598471641540527
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Create the `repro_lasapp_table_2.sh` script that (1) writes the fully specified expected Table 2, (2) downloads the artifact, (3) loads and runs the Docker-based experiments to regenerate the summary counts, parses their outputs to extract totals and warning counts, writes the reproduced table to `/workspace/repro.txt`, and (4) runs `artisan format` and submits the script for evaluation.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_lasapp_table_2.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Summary tables of evaluation results.**\n\n| Analysis               | PPL    | Total Programs | Warnings produced  |\n| ---------------------- | ------ | -------------: | ----------------:  |\n| Dependency Analysis    | Turing |            117 |                 6  |\n| Dependency Analysis    | PyMC   |             97 |                 2  |\n| Constraint Verifier    | Turing |            117 |                37  |\n| Constraint Verifier    | PyMC   |             97 |                32  |\n| HMC Assumption Checker | Gen    |              8 |                 7  |\n| Model-Guide Validator  | Pyro   |              8 |                 2  |\n\nEOTABLE\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/15857114\n# Section 3: Reproduction commands (populate from reviewed steps)\n\n# Load the prebuilt AMD64 Docker image and start a long-running container.\ndocker load -i lasapp-amd64.tar\ndocker run -d --init --entrypoint bash --name lasapp-amd64 --rm lasapp-amd64 -c 'sleep infinity'\n\n# Start language servers inside the container.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && ./scripts/start_servers.sh\"\n\n# Run Dependency Analysis and Constraint Verifier for Turing and PyMC, capturing logs.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_graph_and_constraints.py -ppl turing\" | tee /workspace/turing.log\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_graph_and_constraints.py -ppl pymc\"   | tee /workspace/pymc.log\n\n# Run HMC Assumption Checker for Gen.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_hmc.py\"   | tee /workspace/hmc.log\n\n# Run Model-Guide Validator for Pyro.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_guide.py\" | tee /workspace/guide.log\n\n# Parse Turing summary: \"Model Graph   Error Count: 6/117\" and \"Constraint    Error Count: 37/117\"\nturing_graph_line=$(grep \"Model Graph   Error Count\" /workspace/turing.log)\nturing_constraint_line=$(grep \"Constraint    Error Count\" /workspace/turing.log)\n\nturing_graph_counts=$(echo \"$turing_graph_line\" | awk -F':' '{print $2}')\nturing_graph_counts=${turing_graph_counts//[[:space:]]/}\nturing_graph_warnings=${turing_graph_counts%/*}\nturing_total=${turing_graph_counts#*/}\n\nturing_constraint_counts=$(echo \"$turing_constraint_line\" | awk -F':' '{print $2}')\nturing_constraint_counts=${turing_constraint_counts//[[:space:]]/}\nturing_constraint_warnings=${turing_constraint_counts%/*}\n\n# Parse PyMC summary: \"Model Graph   Error Count: 2/97\" and \"Constraint    Error Count: 32/97\"\npymc_graph_line=$(grep \"Model Graph   Error Count\" /workspace/pymc.log)\npymc_constraint_line=$(grep \"Constraint    Error Count\" /workspace/pymc.log)\n\npymc_graph_counts=$(echo \"$pymc_graph_line\" | awk -F':' '{print $2}')\npymc_graph_counts=${pymc_graph_counts//[[:space:]]/}\npymc_graph_warnings=${pymc_graph_counts%/*}\npymc_total=${pymc_graph_counts#*/}\n\npymc_constraint_counts=$(echo \"$pymc_constraint_line\" | awk -F':' '{print $2}')\npymc_constraint_counts=${pymc_constraint_counts//[[:space:]]/}\npymc_constraint_warnings=${pymc_constraint_counts%/*}\n\n# Parse HMC summary: line of form \"7 / 8 warnings.\"\nhmc_line=$(grep \"warnings.\" /workspace/hmc.log | tail -n 1)\nhmc_warnings=$(echo \"$hmc_line\" | awk '{print $1}')\nhmc_total=$(echo \"$hmc_line\" | awk '{print $3}')\n\n# Parse Model-Guide summary: line of form \"2 / 8 warnings.\"\nguide_line=$(grep \"warnings.\" /workspace/guide.log | tail -n 1)\nguide_warnings=$(echo \"$guide_line\" | awk '{print $1}')\nguide_total=$(echo \"$guide_line\" | awk '{print $3}')\n\n# Write the reproduced table to /workspace/repro.txt\ncat > /workspace/repro.txt <<EOTABLE\n**Table 2: Summary tables of evaluation results.**\n\n| Analysis               | PPL    | Total Programs | Warnings produced  |\n| ---------------------- | ------ | -------------: | ----------------:  |\n| Dependency Analysis    | Turing |            $turing_total |                 $turing_graph_warnings  |\n| Dependency Analysis    | PyMC   |             $pymc_total |                 $pymc_graph_warnings  |\n| Constraint Verifier    | Turing |            $turing_total |                 $turing_constraint_warnings  |\n| Constraint Verifier    | PyMC   |             $pymc_total |                 $pymc_constraint_warnings  |\n| HMC Assumption Checker | Gen    |              $hmc_total |                 $hmc_warnings  |\n| Model-Guide Validator  | Pyro   |              $guide_total |                 $guide_warnings  |\n\nEOTABLE\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_lasapp_table_2.sh\nartisan submit /workspace/repro_lasapp_table_2.sh\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 93.07924914360046,
+        "response": {
+          "id": "chatcmpl-D0Xc12b4ojlUaAs4rTLW60i7Rbi3T",
+          "created": 1769021577,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Create the `repro_lasapp_table_2.sh` script that (1) writes the fully specified expected Table 2, (2) downloads the artifact, (3) loads and runs the Docker-based experiments to regenerate the summary counts, parses their outputs to extract totals and warning counts, writes the reproduced table to `/workspace/repro.txt`, and (4) runs `artisan format` and submits the script for evaluation.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_lasapp_table_2.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Summary tables of evaluation results.**\n\n| Analysis               | PPL    | Total Programs | Warnings produced  |\n| ---------------------- | ------ | -------------: | ----------------:  |\n| Dependency Analysis    | Turing |            117 |                 6  |\n| Dependency Analysis    | PyMC   |             97 |                 2  |\n| Constraint Verifier    | Turing |            117 |                37  |\n| Constraint Verifier    | PyMC   |             97 |                32  |\n| HMC Assumption Checker | Gen    |              8 |                 7  |\n| Model-Guide Validator  | Pyro   |              8 |                 2  |\n\nEOTABLE\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/15857114\n# Section 3: Reproduction commands (populate from reviewed steps)\n\n# Load the prebuilt AMD64 Docker image and start a long-running container.\ndocker load -i lasapp-amd64.tar\ndocker run -d --init --entrypoint bash --name lasapp-amd64 --rm lasapp-amd64 -c 'sleep infinity'\n\n# Start language servers inside the container.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && ./scripts/start_servers.sh\"\n\n# Run Dependency Analysis and Constraint Verifier for Turing and PyMC, capturing logs.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_graph_and_constraints.py -ppl turing\" | tee /workspace/turing.log\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_graph_and_constraints.py -ppl pymc\"   | tee /workspace/pymc.log\n\n# Run HMC Assumption Checker for Gen.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_hmc.py\"   | tee /workspace/hmc.log\n\n# Run Model-Guide Validator for Pyro.\ndocker exec lasapp-amd64 /bin/bash --noprofile --norc -c \"cd /LASAPP && python3 experiments/evaluate_guide.py\" | tee /workspace/guide.log\n\n# Parse Turing summary: \"Model Graph   Error Count: 6/117\" and \"Constraint    Error Count: 37/117\"\nturing_graph_line=$(grep \"Model Graph   Error Count\" /workspace/turing.log)\nturing_constraint_line=$(grep \"Constraint    Error Count\" /workspace/turing.log)\n\nturing_graph_counts=$(echo \"$turing_graph_line\" | awk -F':' '{print $2}')\nturing_graph_counts=${turing_graph_counts//[[:space:]]/}\nturing_graph_warnings=${turing_graph_counts%/*}\nturing_total=${turing_graph_counts#*/}\n\nturing_constraint_counts=$(echo \"$turing_constraint_line\" | awk -F':' '{print $2}')\nturing_constraint_counts=${turing_constraint_counts//[[:space:]]/}\nturing_constraint_warnings=${turing_constraint_counts%/*}\n\n# Parse PyMC summary: \"Model Graph   Error Count: 2/97\" and \"Constraint    Error Count: 32/97\"\npymc_graph_line=$(grep \"Model Graph   Error Count\" /workspace/pymc.log)\npymc_constraint_line=$(grep \"Constraint    Error Count\" /workspace/pymc.log)\n\npymc_graph_counts=$(echo \"$pymc_graph_line\" | awk -F':' '{print $2}')\npymc_graph_counts=${pymc_graph_counts//[[:space:]]/}\npymc_graph_warnings=${pymc_graph_counts%/*}\npymc_total=${pymc_graph_counts#*/}\n\npymc_constraint_counts=$(echo \"$pymc_constraint_line\" | awk -F':' '{print $2}')\npymc_constraint_counts=${pymc_constraint_counts//[[:space:]]/}\npymc_constraint_warnings=${pymc_constraint_counts%/*}\n\n# Parse HMC summary: line of form \"7 / 8 warnings.\"\nhmc_line=$(grep \"warnings.\" /workspace/hmc.log | tail -n 1)\nhmc_warnings=$(echo \"$hmc_line\" | awk '{print $1}')\nhmc_total=$(echo \"$hmc_line\" | awk '{print $3}')\n\n# Parse Model-Guide summary: line of form \"2 / 8 warnings.\"\nguide_line=$(grep \"warnings.\" /workspace/guide.log | tail -n 1)\nguide_warnings=$(echo \"$guide_line\" | awk '{print $1}')\nguide_total=$(echo \"$guide_line\" | awk '{print $3}')\n\n# Write the reproduced table to /workspace/repro.txt\ncat > /workspace/repro.txt <<EOTABLE\n**Table 2: Summary tables of evaluation results.**\n\n| Analysis               | PPL    | Total Programs | Warnings produced  |\n| ---------------------- | ------ | -------------: | ----------------:  |\n| Dependency Analysis    | Turing |            $turing_total |                 $turing_graph_warnings  |\n| Dependency Analysis    | PyMC   |             $pymc_total |                 $pymc_graph_warnings  |\n| Constraint Verifier    | Turing |            $turing_total |                 $turing_constraint_warnings  |\n| Constraint Verifier    | PyMC   |             $pymc_total |                 $pymc_constraint_warnings  |\n| HMC Assumption Checker | Gen    |              $hmc_total |                 $hmc_warnings  |\n| Model-Guide Validator  | Pyro   |              $guide_total |                 $guide_warnings  |\n\nEOTABLE\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_lasapp_table_2.sh\nartisan submit /workspace/repro_lasapp_table_2.sh\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 5618,
+            "prompt_tokens": 27404,
+            "total_tokens": 33022,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 4143,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 26112
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nWrote speedometer tool logs to /workspace/artisan-speedometer.json\nSubmitting to judge service at http://129.69.217.153:8000/submit...\n</output>",
+      "exec_time": 16.840232849121094
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The reproduction script has been authored and submitted; to finalize the task per the workflow instructions, I now mark completion without performing further actions.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 7.64701771736145,
+        "response": {
+          "id": "chatcmpl-D0Xdnm4Q8Tj9WyYp560Sxu9M5DUzY",
+          "created": 1769021687,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The reproduction script has been authored and submitted; to finalize the task per the workflow instructions, I now mark completion without performing further actions.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 205,
+            "prompt_tokens": 28930,
+            "total_tokens": 29135,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 140,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 27136
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": ""
+    }
+  ],
+  "trajectory_format": "mini-swe-agent-1"
+}

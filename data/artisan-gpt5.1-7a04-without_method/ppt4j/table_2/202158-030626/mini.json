@@ -1,0 +1,864 @@
+{
+  "info": {
+    "exit_status": "Submitted",
+    "submission": "",
+    "model_stats": {
+      "instance_cost": 0.395047,
+      "api_calls": 14,
+      "llm_time": 259.3325560092926
+    },
+    "mini_version": "1.14.4",
+    "config": {
+      "agent": {
+        "system_template": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected.",
+        "instance_template": "Please reproduce the results reported in Table {{ table_index }} of the target paper.\n\n<expected_table>\n{{ expected_table }}\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `artisan get`: Download and extract the artifact from the official URL.\n- `artisan format --expected /workspace/expected.md --repro /workspace/repro.txt`: Render final tables.\n- `artisan submit`: Submit your reproduction script for evaluation.\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from {{ artifact_url }}.\n   - You MUST use`artisan get {{ artifact_url }}`.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table {{ table_index }}:\n   - `grep -in docker README.md`\n   - `grep -in \"Table {{ table_index }}\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_{{ artifact_name }}_table_{{ table_index }}.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n{{ expected_table }}\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\nartisan get {{ artifact_url }}\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh\nartisan submit /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward.",
+        "timeout_template": "The last command <command>{{action['action']}}</command> timed out and has been killed.\nThe output of the command was:\n<output>\n{{output}}\n</output>\nPlease try another command and make sure to avoid those requiring interactive input.\n",
+        "format_error_template": "Please always provide EXACTLY ONE action in <mini_swe_agent_bash>, found {{actions|length}} actions.\nIf you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\nwithout any other command.\nElse, please format your response exactly as follows:\n\n<response_example>\nHere are some thoughts about why you want to perform the action.\n\n<mini_swe_agent_bash>\n<action>\n</mini_swe_agent_bash>\n</response_example>\n",
+        "action_observation_template": "<returncode>{{output.returncode}}</returncode>\n{% if output.output | length < 100000 -%}\n<output>\n{{ output.output -}}\n</output>\n{%- else -%}\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning>\n{%- set elided_chars = output.output | length - 100000 -%}\n<output_head>\n{{ output.output[:5000] }}\n</output_head>\n<elided_chars>\n{{ elided_chars }} characters elided\n</elided_chars>\n<output_tail>\n{{ output.output[-5000:] }}\n</output_tail>\n{%- endif -%}\n",
+        "step_limit": 30.0,
+        "cost_limit": 1.0
+      },
+      "model": {
+        "model_name": "gpt-5.1-2025-11-13",
+        "model_kwargs": {
+          "drop_params": true,
+          "reasoning_effort": "medium"
+        },
+        "litellm_model_registry": null,
+        "set_cache_control": null
+      },
+      "environment": {
+        "image": "doehyunbaek1/artisan:c268b22",
+        "container_name": "agent-ppt4j-t2-198e",
+        "cwd": "/workspace",
+        "env": {
+          "PAGER": "cat",
+          "MANPAGER": "cat",
+          "LESS": "-R",
+          "PIP_PROGRESS_BAR": "off",
+          "TQDM_DISABLE": "1",
+          "MSWEA_SILENT_STARTUP": "1"
+        },
+        "forward_env": [],
+        "timeout": 28800,
+        "executable": "docker",
+        "run_args": [
+          "--rm",
+          "--privileged",
+          "-e",
+          "OPENAI_API_KEY",
+          "-e",
+          "MSWEA_SILENT_STARTUP",
+          "-v",
+          "/home/doehyunbaek/artisan/logs/artisan-gpt5.1-7a04-without_method/ppt4j/table_2/202158-030626:/workspace:rw",
+          "-e",
+          "ARTISAN_JUDGE_URL=http://129.69.217.153:8000/submit",
+          "-e",
+          "ARTISAN_MITM_URL=http://129.69.217.153:8082",
+          "-e",
+          "ARTISAN_CACHE_DIR=/root/.cache/artisan",
+          "-v",
+          "/home/doehyunbaek/.cache:/root/.cache/artisan",
+          "--group-add",
+          "999"
+        ],
+        "container_timeout": "8h",
+        "pull_timeout": 3000
+      },
+      "agent_type": "evaluation.agents.artisan.DefaultAgentWithLogs",
+      "model_type": "minisweagent.models.litellm_model.LitellmModel",
+      "environment_type": "minisweagent.environments.docker.DockerEnvironment"
+    },
+    "format": [
+      {
+        "timestamp": "2026-01-21T22:52:48Z",
+        "model": "gpt-5-mini-2025-08-07",
+        "input": [
+          {
+            "role": "system",
+            "content": "\nYou format results into GitHub-flavored Markdown tables.\n\nCRITICAL TEMPLATE RULE:\nReturn a table that is IDENTICAL to the provided expected table except that\nevery placeholder question mark (?) is replaced by exactly one decimal digit\n(0-9). One ? => one digit. A pattern like \"??.??\" means two digits, a dot,\ntwo digits. A pattern like \"?,???,???\" means digits in those exact slots with\ncommas preserved. Do NOT add, remove, or move pipes |, spaces, commas, dots,\npercent signs %, header separators, or rows. Do NOT alter any cell that\ncontains no ? characters. Preserve capitalization and ordering exactly.\n\nDATA FILLING:\nDerive each replaced digit sequence from ONLY the reproduction text. Never\ninvent new rows or columns. If a numeric value must be rounded to fit the\nnumber of ? placeholders, ROUND HALF AWAY FROM ZERO to the needed precision\nand then emit exactly one digit per ?.\n\nSTRICT DIGIT COUNT / NO EXTRA PADDING:\n- Never add extra leading zeros unless the placeholder pattern itself forces\n    them (e.g. a pattern like 0? or 00? would, but a plain ??.?? must not turn\n    11.5 into 011.5).\n- A block of consecutive ? represents an unconstrained-length number segment\n    with exactly that many digits \u2013 do NOT left-pad or right-pad with zeros to\n    \"help\"; emit the natural digits after rounding/truncation.\n- Do not fabricate trailing zeros after decimals unless a ? requires them.\n\nTHOUSANDS SEPARATORS:\nOnly output commas where commas already appear among the ? placeholders.\nNever insert a new comma into a placeholder run that lacks one.\n\nPERCENT SIGNS:\nRetain % if and only if it exists in the expected template cell. Never add a\nnew % sign to a cell without one and never remove an existing %.\n\nLESS-THAN THRESHOLDS (\"<0.1\", \"<0.01\", etc.):\n- Some cells encode \"smaller than display precision\" using patterns like\n    \"<?.?%\", \"<0.0?%\", or \"<0.01\". In these cells:\n  - Always preserve the literal \"<\" exactly where it appears in the template.\n  - The ? characters still represent digits to be filled.\n- When the reproduction already contains a \"<\"-style value (e.g., \"<0.1%\",\n    \"<0.01\"), copy its digits into the ? slots of the matching template cell\n    so that the final text keeps the \"<\" and the same numeric threshold.\n- When the reproduction shows a zero value (e.g., \"0.0%\", \"0.00%\") but the\n    expected template uses a \"<\" with d decimal places (e.g., \"<?.?%\",\n    \"<0.0?\"), interpret this as \"less than the smallest non-zero value at that\n    precision\" and:\n    - Emit \"<0.\" + (d-1 zeros) + \"1\" (for d decimal digits).\n      Examples:\n      - Template \"<?.?%\"  (1 decimal)  -> \"<0.1%\"\n      - Template \"<0.0?%\" (2 decimals) -> \"<0.01%\"\n- You may reuse digits that already appear anywhere in the reproduction text,\n    but you must NOT introduce new digit symbols that never appear in the\n    reproduction at all.\n\nOUTPUT FORMAT:\nOnly output the final table. No prose. No explanations. No code fences. No\nsurrounding text.\n"
+          },
+          {
+            "role": "user",
+            "content": "You will see example pairs of (reproduction \u2192 expected \u2192 output). Use them as guidance.\n\n<example 1>\n[reproduction]\nMetrics Report\n---\nA = 12\nB = 34\n[expected]\nIntro line\n| A | B |\n| --- | --- |\n| ?? | ?? |\n[output]\nIntro line\n| A | B |\n| --- | --- |\n| 12 | 34 |\n</example 1>\n\n<example 2>\n[reproduction]\nRun results for 'text' category:\n  - Col1 value: 123.45\n  - Col2 value: 67\n\nRun results for 'more' category:\n  - Col1 value: 0.001\n  - Col2 value: 999\n[expected]\nSome intro line 123 stays (not a table row)\n| Col1 | Col2 | Col3 |\n| --- | --- | --- |\n| ???.?? | ?? | text |\n| ?.??? | ??? | more |\n[output]\nSome intro line 123 stays (not a table row)\n| Col1 | Col2 | Col3 |\n| --- | --- | --- |\n| 123.45 | 67 | text |\n| 0.001 | 999 | more |\n</example 2>\n\n<example 3>\n[reproduction]\nExperiment summary\n------------------\nStrategy Alpha:\n  - affected cases: 0.0% of all runs\n  - time saved: 0.0% of total time\n\nStrategy Beta:\n  - affected cases: 3.4% of all runs\n  - time saved: 0.03% of total time\n[expected]\n| Strategy | Affected runs | Time saved |\n| -------- | ------------: | ---------: |\n| Alpha    |        <?.?%  |   <0.0?%  |\n| Beta     |        ?.?%   |    0.0?%  |\n[output]\n| Strategy | Affected runs | Time saved |\n| -------- | ------------: | ---------: |\n| Alpha    |        <0.1%  |   <0.01%  |\n| Beta     |         3.4%  |    0.03%  |\n</example 3>\n\n<task>\n[reproduction]\n**Table 2: Test results on the dataset**\n\n| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\n| ---------- | ------ | ---------------: | ----: | -----: | ----: |\n| PPT4J      | **D1** |            100% |  100% |   100% |  100% |\n|            | **D2** |           98.5% |  100% |  97.0% | 98.5% |\n[expected]\n**Table 2: Test results on the dataset**\n\n| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\n| ---------- | ------ | ---------------: | ----: | -----: | ----: |\n| PPT4J      | **D1** |             ???% |  ???% |   ???% |  ???% |\n|            | **D2** |            ??.?% |  ???% |  ??.?% | ??.?% |\n</task>\nOutput only the final table."
+          }
+        ],
+        "output": "**Table 2: Test results on the dataset**\n\n| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\n| ---------- | ------ | ---------------: | ----: | -----: | ----: |\n| PPT4J      | **D1** |             100% |  100% |   100% |  100% |\n|            | **D2** |            98.5% |  100% |  97.0% | 98.5% |",
+        "duration_seconds": 9.767505884170532,
+        "cost_usd": 0.001625,
+        "tokens": {
+          "input": 1444,
+          "cached_input": 0,
+          "output": 632,
+          "reasoning_output": 512,
+          "total": 2076
+        },
+        "reason": "submit_validation"
+      },
+      {
+        "timestamp": "2026-01-21T23:26:40Z",
+        "model": "cached",
+        "input": [
+          {
+            "role": "system",
+            "content": "\nYou format results into GitHub-flavored Markdown tables.\n\nCRITICAL TEMPLATE RULE:\nReturn a table that is IDENTICAL to the provided expected table except that\nevery placeholder question mark (?) is replaced by exactly one decimal digit\n(0-9). One ? => one digit. A pattern like \"??.??\" means two digits, a dot,\ntwo digits. A pattern like \"?,???,???\" means digits in those exact slots with\ncommas preserved. Do NOT add, remove, or move pipes |, spaces, commas, dots,\npercent signs %, header separators, or rows. Do NOT alter any cell that\ncontains no ? characters. Preserve capitalization and ordering exactly.\n\nDATA FILLING:\nDerive each replaced digit sequence from ONLY the reproduction text. Never\ninvent new rows or columns. If a numeric value must be rounded to fit the\nnumber of ? placeholders, ROUND HALF AWAY FROM ZERO to the needed precision\nand then emit exactly one digit per ?.\n\nSTRICT DIGIT COUNT / NO EXTRA PADDING:\n- Never add extra leading zeros unless the placeholder pattern itself forces\n    them (e.g. a pattern like 0? or 00? would, but a plain ??.?? must not turn\n    11.5 into 011.5).\n- A block of consecutive ? represents an unconstrained-length number segment\n    with exactly that many digits \u2013 do NOT left-pad or right-pad with zeros to\n    \"help\"; emit the natural digits after rounding/truncation.\n- Do not fabricate trailing zeros after decimals unless a ? requires them.\n\nTHOUSANDS SEPARATORS:\nOnly output commas where commas already appear among the ? placeholders.\nNever insert a new comma into a placeholder run that lacks one.\n\nPERCENT SIGNS:\nRetain % if and only if it exists in the expected template cell. Never add a\nnew % sign to a cell without one and never remove an existing %.\n\nLESS-THAN THRESHOLDS (\"<0.1\", \"<0.01\", etc.):\n- Some cells encode \"smaller than display precision\" using patterns like\n    \"<?.?%\", \"<0.0?%\", or \"<0.01\". In these cells:\n  - Always preserve the literal \"<\" exactly where it appears in the template.\n  - The ? characters still represent digits to be filled.\n- When the reproduction already contains a \"<\"-style value (e.g., \"<0.1%\",\n    \"<0.01\"), copy its digits into the ? slots of the matching template cell\n    so that the final text keeps the \"<\" and the same numeric threshold.\n- When the reproduction shows a zero value (e.g., \"0.0%\", \"0.00%\") but the\n    expected template uses a \"<\" with d decimal places (e.g., \"<?.?%\",\n    \"<0.0?\"), interpret this as \"less than the smallest non-zero value at that\n    precision\" and:\n    - Emit \"<0.\" + (d-1 zeros) + \"1\" (for d decimal digits).\n      Examples:\n      - Template \"<?.?%\"  (1 decimal)  -> \"<0.1%\"\n      - Template \"<0.0?%\" (2 decimals) -> \"<0.01%\"\n- You may reuse digits that already appear anywhere in the reproduction text,\n    but you must NOT introduce new digit symbols that never appear in the\n    reproduction at all.\n\nOUTPUT FORMAT:\nOnly output the final table. No prose. No explanations. No code fences. No\nsurrounding text.\n"
+          },
+          {
+            "role": "user",
+            "content": "You will see example pairs of (reproduction \u2192 expected \u2192 output). Use them as guidance.\n\n<example 1>\n[reproduction]\nMetrics Report\n---\nA = 12\nB = 34\n[expected]\nIntro line\n| A | B |\n| --- | --- |\n| ?? | ?? |\n[output]\nIntro line\n| A | B |\n| --- | --- |\n| 12 | 34 |\n</example 1>\n\n<example 2>\n[reproduction]\nRun results for 'text' category:\n  - Col1 value: 123.45\n  - Col2 value: 67\n\nRun results for 'more' category:\n  - Col1 value: 0.001\n  - Col2 value: 999\n[expected]\nSome intro line 123 stays (not a table row)\n| Col1 | Col2 | Col3 |\n| --- | --- | --- |\n| ???.?? | ?? | text |\n| ?.??? | ??? | more |\n[output]\nSome intro line 123 stays (not a table row)\n| Col1 | Col2 | Col3 |\n| --- | --- | --- |\n| 123.45 | 67 | text |\n| 0.001 | 999 | more |\n</example 2>\n\n<example 3>\n[reproduction]\nExperiment summary\n------------------\nStrategy Alpha:\n  - affected cases: 0.0% of all runs\n  - time saved: 0.0% of total time\n\nStrategy Beta:\n  - affected cases: 3.4% of all runs\n  - time saved: 0.03% of total time\n[expected]\n| Strategy | Affected runs | Time saved |\n| -------- | ------------: | ---------: |\n| Alpha    |        <?.?%  |   <0.0?%  |\n| Beta     |        ?.?%   |    0.0?%  |\n[output]\n| Strategy | Affected runs | Time saved |\n| -------- | ------------: | ---------: |\n| Alpha    |        <0.1%  |   <0.01%  |\n| Beta     |         3.4%  |    0.03%  |\n</example 3>\n\n<task>\n[reproduction]\n**Table 2: Test results on the dataset**\n\n| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\n| ---------- | ------ | ---------------: | ----: | -----: | ----: |\n| PPT4J      | **D1** |            100% |  100% |   100% |  100% |\n|            | **D2** |           98.5% |  100% |  97.0% | 98.5% |\n[expected]\n**Table 2: Test results on the dataset**\n\n| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\n| ---------- | ------ | ---------------: | ----: | -----: | ----: |\n| PPT4J      | **D1** |             ???% |  ???% |   ???% |  ???% |\n|            | **D2** |            ??.?% |  ???% |  ??.?% | ??.?% |\n</task>\nOutput only the final table."
+          }
+        ],
+        "output": "**Table 2: Test results on the dataset**\n\n| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\n| ---------- | ------ | ---------------: | ----: | -----: | ----: |\n| PPT4J      | **D1** |             100% |  100% |   100% |  100% |\n|            | **D2** |            98.5% |  100% |  97.0% | 98.5% |",
+        "duration_seconds": 0.0,
+        "cost_usd": 0.0,
+        "tokens": {
+          "input": null,
+          "cached_input": null,
+          "output": null,
+          "reasoning_output": null,
+          "total": null
+        },
+        "reason": "exit_validation"
+      }
+    ],
+    "speedometer": []
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected."
+    },
+    {
+      "role": "user",
+      "content": "Please reproduce the results reported in Table 2 of the target paper.\n\n<expected_table>\n**Table 2: Test results on the dataset**\n\n| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\n| ---------- | ------ | ---------------: | ----: | -----: | ----: |\n| PPT4J      | **D1** |             ???% |  ???% |   ???% |  ???% |\n|            | **D2** |            ??.?% |  ???% |  ??.?% | ??.?% |\n\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `artisan get`: Download and extract the artifact from the official URL.\n- `artisan format --expected /workspace/expected.md --repro /workspace/repro.txt`: Render final tables.\n- `artisan submit`: Submit your reproduction script for evaluation.\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from https://github.com/pan2013e/ppt4j.\n   - You MUST use`artisan get https://github.com/pan2013e/ppt4j`.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table 2:\n   - `grep -in docker README.md`\n   - `grep -in \"Table 2\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_ppt4j_table_2.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_ppt4j_table_2.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Test results on the dataset**\n\n| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\n| ---------- | ------ | ---------------: | ----: | -----: | ----: |\n| PPT4J      | **D1** |             ???% |  ???% |   ???% |  ???% |\n|            | **D2** |            ??.?% |  ???% |  ??.?% | ??.?% |\n\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\nartisan get https://github.com/pan2013e/ppt4j\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_ppt4j_table_2.sh\nartisan submit /workspace/repro_ppt4j_table_2.sh\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward."
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I will start by downloading and extracting the artifact repository using the prescribed `artisan get` command so I can inspect its contents and locate the resources needed to reproduce Table 2.\n\n<mini_swe_agent_bash>\nartisan get https://github.com/pan2013e/ppt4j\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 4.336230754852295,
+        "response": {
+          "id": "chatcmpl-D0Z0ElxWuVf6JF5p4REmCVcTD3H8U",
+          "created": 1769026922,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I will start by downloading and extracting the artifact repository using the prescribed `artisan get` command so I can inspect its contents and locate the resources needed to reproduce Table 2.\n\n<mini_swe_agent_bash>\nartisan get https://github.com/pan2013e/ppt4j\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 245,
+            "prompt_tokens": 1221,
+            "total_tokens": 1466,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 165,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nCloning into 'ppt4j'...\nCloned repository into ppt4j\n\nREADME PATH: ppt4j/README.md\n\n</output>",
+      "exec_time": 16.78765559196472
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Now that the artifact is downloaded, I need to read the README to understand the reproduction steps and identify any specific instructions related to Table 2.\n\n<mini_swe_agent_bash>\ncat ppt4j/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 2.183339834213257,
+        "response": {
+          "id": "chatcmpl-D0Z0Z6Y8sncgpRZaeT8LOVZknd8cX",
+          "created": 1769026943,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Now that the artifact is downloaded, I need to read the README to understand the reproduction steps and identify any specific instructions related to Table 2.\n\n<mini_swe_agent_bash>\ncat ppt4j/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 101,
+            "prompt_tokens": 1344,
+            "total_tokens": 1445,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 35,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n# PPT4J\n\n[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10397354.svg)](https://doi.org/10.5281/zenodo.10397354)\n[![Docker](https://img.shields.io/badge/Docker%20Hub-zhiyuanpan/ppt4j-blue.svg)](https://hub.docker.com/r/zhiyuanpan/ppt4j)\n\n\nThis is the replication package for the ICSE 2024 paper *\"PPT4J: Patch Presence Test for Java Binaries\"*.\n\n**Note:** For more details on the paper, please refer to [https://dl.acm.org/doi/abs/10.1145/3597503.3639231](https://dl.acm.org/doi/abs/10.1145/3597503.3639231).\n\n**Note:** The documentation page is now available at [https://pan2013e.github.io/ppt4j](https://pan2013e.github.io/ppt4j).\n\n---\n\n## Project structure\n\n```\n.\n\u251c\u2500\u2500 Dockerfile\n\u251c\u2500\u2500 README.md\n\u251c\u2500\u2500 all.iml\n\u251c\u2500\u2500 download.sh\n\u251c\u2500\u2500 framework\n\u251c\u2500\u2500 lib\n\u251c\u2500\u2500 misc\n\u251c\u2500\u2500 pom.xml\n\u251c\u2500\u2500 replicate_rq1.py\n\u251c\u2500\u2500 scripts\n\u2514\u2500\u2500 urls.txt\n```\n\n- The `framework` folder contains the code of PPT4J\n- The `misc` folder contains an example of using PPT4J\n  - Please checkout `misc/src/main/java/ppt4j/Demo.java` for detailed usage.\n- The `scripts` folder contains utility scripts, written in Python\n- The `lib` folder contains necessary jars\n\n## Requirements\n\nNote: We provide Docker images for replication. If you use Docker, you can just jump to the section \"Using docker\".\n\n### System requirements\n\n- This project is a prototype implementation and only supports UNIX-like operating systems.\n\n### Software requirements\n\n- **JDK, Maven, Python**\n- The versions of software we use:\n  - JDK 17.0.2 (Java SE 17.0.2, Oracle HotSpot 64-Bit Server VM, build 17.0.2+8-LTS-86)\n  - Apache Maven 3.9.1\n  - Python 3.9.10\n- It should be fine if you use other recent versions of Maven and Python.\n- We strongly recommend that you use the same Oracle JDK 17.0.2 for replication. Run `export JAVA_HOME=...` command to make sure that maven uses the expected version of JDK.\n\n## Setting up the environment\n\n### On host machine\n\n- [Download the dataset](https://doi.org/10.5281/zenodo.10397354) and extract the items to your preferred location. Then set \n  - `ppt4j.database.root` field in `framework/src/main/resources/ppt4j.properties` to that location. Or you can just extract to your home directory to make the property file unaltered.\n\n### Using Docker\n\n- We provide a [Docker image](https://hub.docker.com/r/zhiyuanpan/ppt4j) as an alternative. To start a container, the host system and architecture should be `Linux, x86_64(amd64)`.\n\n```bash\n# Host OS\n$ docker pull zhiyuanpan/ppt4j\n$ # alternative: docker pull zhiyuanpan/ppt4j:minimal-latest\n$ docker run --rm -it zhiyuanpan/ppt4j\n```\n\n- The docker images on Docker Hub have two tags: `minimal`(~250M download size, ~500M final usage) and `complete`(~13G download size, ~22G final usage). \n  - The `complete` one provides an out-of-the-box experience (with dataset). Commands described in the next section can be executed without any further configuration.\n  - The `minimal` one provides a minimal running environment that satisfies software requirements (without dataset). To test the dataset in `minimal` containers, please first run `bash download.sh` in the **home directory**, and the script will start the downloading process. \n- To test other Java binaries, you can mount custom directories in the `docker run` command.\n\nFor detailed script/executable usage, please refer to the documentation below.\n\n## Run PPT4J\n\nFor a quick start, you can run `python replicate_rq1.py` to get the results of RQ1 in the paper.\n\nYou can also use the Python scripts inside the `scripts` folder for: **project building** and **testing**.\n\n- In the **project root** (where `README.md` and `all.iml` are located), run `python -m scripts.<name> <args>`.\n  - Available `<name>`: `build, test`\n  - `scripts.build`: wrapper of maven commands; no arg; build the `Java` projects\n  - `scripts.test`: perform tests on the dataset. Please leave `<args>` empty for detailed usage of this subcommand.\n- Example\n```bash\n$ python -m scripts.build\n$ python -m scripts.test postpatch 1\n\n[test.py           ]  INFO - Running test 1 postpatch\n[.a.p.PatchAnalyzer]  INFO - Ground truth binary type in dataset: postpatch\n[.a.p.PatchAnalyzer]  INFO - Analyzing patch for fastjson, CVE ID: CVE-2017-18349, Database ID: 1\n[.a.p.PatchAnalyzer]  INFO - Result: 1.0\n[p.u.AspectUtils   ]  INFO - Result: patch is present\n```\n\n```bash\n$ python -m scripts.test all\n```\n\n## Misc\n- The compiled PPT4J only works as separate bytecode files in `framework/target/classes`. Packing them into a jar and use the jar will lead to unexpected behaviours, due to our implementation and the classpath mechanism in newer Java versions.\n</output>",
+      "exec_time": 0.07597780227661133
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I will search the README for Docker-related instructions to understand how they expect the environment and experiments (including Table 2) to be run.\n\n<mini_swe_agent_bash>\ngrep -in docker ppt4j/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 2.7870848178863525,
+        "response": {
+          "id": "chatcmpl-D0Z0bRF1Npr8Jqq7QMX7b3DLtdC2Z",
+          "created": 1769026945,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I will search the README for Docker-related instructions to understand how they expect the environment and experiments (including Table 2) to be run.\n\n<mini_swe_agent_bash>\ngrep -in docker ppt4j/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 141,
+            "prompt_tokens": 2703,
+            "total_tokens": 2844,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 73,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n4:[![Docker](https://img.shields.io/badge/Docker%20Hub-zhiyuanpan/ppt4j-blue.svg)](https://hub.docker.com/r/zhiyuanpan/ppt4j)\n19:\u251c\u2500\u2500 Dockerfile\n40:Note: We provide Docker images for replication. If you use Docker, you can just jump to the section \"Using docker\".\n63:### Using Docker\n65:- We provide a [Docker image](https://hub.docker.com/r/zhiyuanpan/ppt4j) as an alternative. To start a container, the host system and architecture should be `Linux, x86_64(amd64)`.\n69:$ docker pull zhiyuanpan/ppt4j\n70:$ # alternative: docker pull zhiyuanpan/ppt4j:minimal-latest\n71:$ docker run --rm -it zhiyuanpan/ppt4j\n74:- The docker images on Docker Hub have two tags: `minimal`(~250M download size, ~500M final usage) and `complete`(~13G download size, ~22G final usage). \n77:- To test other Java binaries, you can mount custom directories in the `docker run` command.\n</output>",
+      "exec_time": 0.10528445243835449
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Next I need to check if the README references \u201cTable 2\u201d specifically, which might point to exact commands or scripts for reproducing the reported results.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 2\" ppt4j/README.md || sed -n '1,200p' ppt4j/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 1.9797651767730713,
+        "response": {
+          "id": "chatcmpl-D0Z0eF6e2Sy423AfbgvtUYhbfhdlR",
+          "created": 1769026948,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Next I need to check if the README references \u201cTable 2\u201d specifically, which might point to exact commands or scripts for reproducing the reported results.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 2\" ppt4j/README.md || sed -n '1,200p' ppt4j/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 109,
+            "prompt_tokens": 3044,
+            "total_tokens": 3153,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 18,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 1152
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n# PPT4J\n\n[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10397354.svg)](https://doi.org/10.5281/zenodo.10397354)\n[![Docker](https://img.shields.io/badge/Docker%20Hub-zhiyuanpan/ppt4j-blue.svg)](https://hub.docker.com/r/zhiyuanpan/ppt4j)\n\n\nThis is the replication package for the ICSE 2024 paper *\"PPT4J: Patch Presence Test for Java Binaries\"*.\n\n**Note:** For more details on the paper, please refer to [https://dl.acm.org/doi/abs/10.1145/3597503.3639231](https://dl.acm.org/doi/abs/10.1145/3597503.3639231).\n\n**Note:** The documentation page is now available at [https://pan2013e.github.io/ppt4j](https://pan2013e.github.io/ppt4j).\n\n---\n\n## Project structure\n\n```\n.\n\u251c\u2500\u2500 Dockerfile\n\u251c\u2500\u2500 README.md\n\u251c\u2500\u2500 all.iml\n\u251c\u2500\u2500 download.sh\n\u251c\u2500\u2500 framework\n\u251c\u2500\u2500 lib\n\u251c\u2500\u2500 misc\n\u251c\u2500\u2500 pom.xml\n\u251c\u2500\u2500 replicate_rq1.py\n\u251c\u2500\u2500 scripts\n\u2514\u2500\u2500 urls.txt\n```\n\n- The `framework` folder contains the code of PPT4J\n- The `misc` folder contains an example of using PPT4J\n  - Please checkout `misc/src/main/java/ppt4j/Demo.java` for detailed usage.\n- The `scripts` folder contains utility scripts, written in Python\n- The `lib` folder contains necessary jars\n\n## Requirements\n\nNote: We provide Docker images for replication. If you use Docker, you can just jump to the section \"Using docker\".\n\n### System requirements\n\n- This project is a prototype implementation and only supports UNIX-like operating systems.\n\n### Software requirements\n\n- **JDK, Maven, Python**\n- The versions of software we use:\n  - JDK 17.0.2 (Java SE 17.0.2, Oracle HotSpot 64-Bit Server VM, build 17.0.2+8-LTS-86)\n  - Apache Maven 3.9.1\n  - Python 3.9.10\n- It should be fine if you use other recent versions of Maven and Python.\n- We strongly recommend that you use the same Oracle JDK 17.0.2 for replication. Run `export JAVA_HOME=...` command to make sure that maven uses the expected version of JDK.\n\n## Setting up the environment\n\n### On host machine\n\n- [Download the dataset](https://doi.org/10.5281/zenodo.10397354) and extract the items to your preferred location. Then set \n  - `ppt4j.database.root` field in `framework/src/main/resources/ppt4j.properties` to that location. Or you can just extract to your home directory to make the property file unaltered.\n\n### Using Docker\n\n- We provide a [Docker image](https://hub.docker.com/r/zhiyuanpan/ppt4j) as an alternative. To start a container, the host system and architecture should be `Linux, x86_64(amd64)`.\n\n```bash\n# Host OS\n$ docker pull zhiyuanpan/ppt4j\n$ # alternative: docker pull zhiyuanpan/ppt4j:minimal-latest\n$ docker run --rm -it zhiyuanpan/ppt4j\n```\n\n- The docker images on Docker Hub have two tags: `minimal`(~250M download size, ~500M final usage) and `complete`(~13G download size, ~22G final usage). \n  - The `complete` one provides an out-of-the-box experience (with dataset). Commands described in the next section can be executed without any further configuration.\n  - The `minimal` one provides a minimal running environment that satisfies software requirements (without dataset). To test the dataset in `minimal` containers, please first run `bash download.sh` in the **home directory**, and the script will start the downloading process. \n- To test other Java binaries, you can mount custom directories in the `docker run` command.\n\nFor detailed script/executable usage, please refer to the documentation below.\n\n## Run PPT4J\n\nFor a quick start, you can run `python replicate_rq1.py` to get the results of RQ1 in the paper.\n\nYou can also use the Python scripts inside the `scripts` folder for: **project building** and **testing**.\n\n- In the **project root** (where `README.md` and `all.iml` are located), run `python -m scripts.<name> <args>`.\n  - Available `<name>`: `build, test`\n  - `scripts.build`: wrapper of maven commands; no arg; build the `Java` projects\n  - `scripts.test`: perform tests on the dataset. Please leave `<args>` empty for detailed usage of this subcommand.\n- Example\n```bash\n$ python -m scripts.build\n$ python -m scripts.test postpatch 1\n\n[test.py           ]  INFO - Running test 1 postpatch\n[.a.p.PatchAnalyzer]  INFO - Ground truth binary type in dataset: postpatch\n[.a.p.PatchAnalyzer]  INFO - Analyzing patch for fastjson, CVE ID: CVE-2017-18349, Database ID: 1\n[.a.p.PatchAnalyzer]  INFO - Result: 1.0\n[p.u.AspectUtils   ]  INFO - Result: patch is present\n```\n\n```bash\n$ python -m scripts.test all\n```\n\n## Misc\n- The compiled PPT4J only works as separate bytecode files in `framework/target/classes`. Packing them into a jar and use the jar will lead to unexpected behaviours, due to our implementation and the classpath mechanism in newer Java versions.\n</output>",
+      "exec_time": 0.06802082061767578
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I need to inspect the expected table file to understand the exact format and what values I must reproduce and output into `/workspace/repro.txt`.\n\n<mini_swe_agent_bash>\ncat /workspace/expected.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 4.776810169219971,
+        "response": {
+          "id": "chatcmpl-D0Z0gCWU2krDLn4W6alUKfGlaEQzi",
+          "created": 1769026950,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I need to inspect the expected table file to understand the exact format and what values I must reproduce and output into `/workspace/repro.txt`.\n\n<mini_swe_agent_bash>\ncat /workspace/expected.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 293,
+            "prompt_tokens": 4428,
+            "total_tokens": 4721,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 229,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 2944
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n**Table 2: Test results on the dataset**\n\n| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\n| ---------- | ------ | ---------------: | ----: | -----: | ----: |\n| PPT4J      | **D1** |             ???% |  ???% |   ???% |  ???% |\n|            | **D2** |            ??.?% |  ???% |  ??.?% | ??.?% |\n</output>",
+      "exec_time": 0.06646013259887695
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I should read the paper text to locate Table 2 and any description of how its results were generated, so I can determine which scripts or commands in the artifact correspond to that table.\n\n<mini_swe_agent_bash>\ncat /workspace/paper.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 7.421280860900879,
+        "response": {
+          "id": "chatcmpl-D0Z0l9nVujU9tfwZiF71mNtqvJgaR",
+          "created": 1769026955,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I should read the paper text to locate Table 2 and any description of how its results were generated, so I can determine which scripts or commands in the artifact correspond to that table.\n\n<mini_swe_agent_bash>\ncat /workspace/paper.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 349,
+            "prompt_tokens": 4614,
+            "total_tokens": 4963,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 276,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 1280
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n# **Ppt4J: Patch Presence Test for Java Binaries**\n\n\n\nZhiyuan Pan\nThe State Key Laboratory of\nBlockchain and Data Security,\nZhejiang University\nHangzhou, China\nzy_pan@zju.edu.cn\n\n\nXian Zhan\n\nThe Hong Kong Polytechnic\nUniversity\nHong Kong, China\nchichoxian@gmail.com\n\n\n**ABSTRACT**\n\n\n\nXing Hu [\u2217]\n\nThe State Key Laboratory of\nBlockchain and Data Security,\nZhejiang University\nHangzhou, China\nxinghu@zju.edu.cn\n\n\nDavid Lo\n\nSchool of Computing and Information\nSystems, Singapore Management\nUniversity\nSingapore\ndavidlo@smu.edu.sg\n\n\n\nXin Xia\n\nSoftware Engineering Application\nTechnology Lab, Huawei\nHangzhou, China\nxin.xia@acm.org\n\n\nXiaohu Yang\nThe State Key Laboratory of\nBlockchain and Data Security,\nZhejiang University\nHangzhou, China\nyangxh@zju.edu.cn\n\n\n\nThe number of vulnerabilities reported in open source software has\nincreased substantially in recent years. Security patches provide the\nnecessary measures to protect software from attacks and vulnerabilities. In practice, it is difficult to identify whether patches have\nbeen integrated into software, especially if we only have binary\nfiles. Therefore, the ability to test whether a patch is applied to the\ntarget binary, a.k.a. patch presence test, is crucial for practitioners.\nHowever, it is challenging to obtain accurate semantic information\nfrom patches, which could lead to incorrect results.\nIn this paper, we propose a new patch presence test framework\nnamed Ppt4J ( **P** atch **P** resence **T** est **for J** ava Binaries). Ppt4J is\ndesigned for open-source Java libraries. It takes Java binaries (i.e.\nbytecode files) as input, extracts semantic information from patches,\nand uses feature-based techniques to identify patch lines in the binaries. To evaluate the effectiveness of our proposed approach Ppt4J,\nwe construct a dataset with binaries that include 110 vulnerabilities.\n\nThe results show that Ppt4J achieves an F1 score of 98.5% with reasonable efficiency, improving the baseline by 14.2%. Furthermore,\nwe conduct an in-the-wild evaluation of Ppt4J on JetBrains IntelliJ\nIDEA. The results suggest that a third-party library included in the\nsoftware is not patched for two CVEs, and we have reported this\npotential security problem to the vendor.\n\n\n**CCS CONCEPTS**\n\n\n- **Software and its engineering** \u2192 _Software reliability_ .\n\n\n**KEYWORDS**\n\n\nPatch Presence Test, Binary Analysis, Software Security\n\n\n\u2217 Corresponding Author\n\n\nPermission to make digital or hard copies of all or part of this work for personal or\nclassroom use is granted without fee provided that copies are not made or distributed\nfor profit or commercial advantage and that copies bear this notice and the full citation\non the first page. Copyrights for components of this work owned by others than the\nauthor(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or\nrepublish, to post on servers or to redistribute to lists, requires prior specific permission\nand/or a fee. Request permissions from permissions@acm.org.\n_ICSE \u201924, April 14\u201320, 2024, Lisbon, Portugal_\n\u00a9 2024 Copyright held by the owner/author(s). Publication rights licensed to ACM.\nACM ISBN 979-8-4007-0217-4/24/04...$15.00\n[https://doi.org/10.1145/3597503.3639231](https://doi.org/10.1145/3597503.3639231)\n\n\n\n**ACM Reference Format:**\n\nZhiyuan Pan, Xing Hu, Xin Xia, Xian Zhan, David Lo, and Xiaohu Yang.\n2024. Ppt4J: Patch Presence Test for Java Binaries. In _2024 IEEE/ACM 46th_\n_International Conference on Software Engineering (ICSE \u201924), April 14\u201320,_\n_2024, Lisbon, Portugal._ [ACM, New York, NY, USA, 12 pages. https://doi.org/](https://doi.org/10.1145/3597503.3639231)\n\n[10.1145/3597503.3639231](https://doi.org/10.1145/3597503.3639231)\n\n\n**1** **INTRODUCTION**\n\n\nThe reuse of open source libraries is widespread [ 25 ]. Vulnerabilities in open-source software have become a major concern, posing\nsignificant threats to software and users [ 17 ]. For example, the\nnumber of Common Vulnerabilities and Exposures (CVEs [ 6 ]) reported during the first quarter of 2023 has already exceeded the\ntotal number of CVEs reported in 2016 [ 37 ]. Although upstream\ndevelopers may discover and fix these vulnerabilities over time,\nvulnerable versions may still propagate to downstream software or\nlibraries, potentially compromising the security of the systems that\nrely on them.\nSince open source libraries are frequently distributed as binary\nfiles, it is essential that developers and users in the software supply\nchain be aware of potential vulnerabilities in the libraries they\nintroduce. For example, _Log4Shell_ (CVE-2021-44228 [ 33 ]) is a wellknown vulnerability in Apache Log4j [ 12 ] that can lead to the\nexecution of arbitrary code. If a software development team has\nintegrated Log4j into their project, developers should verify if their\nversion of Log4j is vulnerable to _Log4Shell_ . In other words, they\nhave to confirm whether the binary contains the patch for CVE\n2021-44228.\n\nThe above process of testing whether a security patch is applied\nto the program binaries is called _patch presence test_ [ 44 ]. However,\ntraditional approaches that only take binary files for analysis cannot\nbe utilized for patch presence tests due to the coarse granularity [ 44 ].\nFor example, binary bug search tools, such as Genius proposed\nby Feng et al. [ 10 ], identify vulnerability types but cannot test\nthe presence of an arbitrary patch commit. Similarly, binary code\nsearch tools, such as Tracy proposed by David et al. [ 8 ], find similar\nfunctions but cannot tell whether the function is patched or not.\nTo accurately test the presence of a patch in fine granularity,\nZhang et al. propose FIBER [ 44 ], a patch presence test framework\nfor C/C++ binaries that extracts a localized part of patch _diff_ [ 40 ] for\n\n\nICSE \u201924, April 14\u201320, 2024, Lisbon, Portugal Zhiyuan Pan, Xing Hu, Xin Xia, Xian Zhan, David Lo, and Xiaohu Yang\n\n\n\nsignature generation. BScout [ 7 ], another framework that targets\nJava binaries, utilizes the entire patch _diff_ .\nHowever, existing studies on patch presence test for Java binaries\nstill have the following two limitations:\n\n\n  - **Inability to capture minor changes.** The features extracted by current approaches are unable to handle some subtle modifications to the source code (e.g., changing method\ncall parameters, branch conditions and statements outside\nmethod bodies).\n\n  - **Limited patch semantic.** The _diffs_ utilized in existing approaches cannot perfectly reflect semantic changes (i.e., actual discrepancies in program behavior) in the patches, leading to the inclusion of extraneous information that does not\nexist in the patches.\n\n\nGiven the widespread application of Java, such as server-side programs and Android applications, the limitations mentioned above\nhighlight the need for a more comprehensive and accurate approach.\nTo address these limitations, we propose a new patch presence test\nframework named Ppt4J ( **P** atch **P** resence **T** est **for J** ava Binaries).\nPpt4J exploits the correspondence between source code features\nand binary features. It first extracts features from the source code\nto generate semantic changes. Then, the semantic changes guide\nPpt4J to perform source-to-binary feature matching and feature\nqueries. Finally, Ppt4J provides the test result by summarizing the\nqueries.\nTo evaluate the effectiveness of Ppt4J, we construct a dataset\nwith binaries that include 110 vulnerabilities in total. We compare\nPpt4J with a state-of-the-art Java patch presence test framework,\nBScout [ 7 ], in terms of accuracy, precision, recall, and F1 score. To\nevaluate the effectiveness of Ppt4J in real-world software, we perform an in-the-wild evaluation by testing the presence of patches\nin various versions of JetBrains IntelliJ IDEA [ 38 ]. The results on\nthe dataset demonstrate that Ppt4J achieves an F1 score of 98.5%,\nimproving the baseline by 14.2% while maintaining reasonable efficiency. The results of the in-the-wild evaluation indicate that Ppt4J\nremains accurate in real-world scenarios. In addition, our evaluation reveals that Ppt4J has the ability to uncover instances where\napplication vendors (e.g., JetBrains) have failed to apply security\npatches to third-party libraries they import, further demonstrating\nits utility in practical settings.\nIn summary, we make the following contributions:\n\n\n(1) We propose a novel framework for Java binaries, Ppt4J, to\naccurately test the presence of patches by highlighting semantic code differences from patches.\n(2) We construct a dataset to evaluate the effectiveness of Ppt4J\nby obtaining source code from GitHub repositories, labeling\nground truths, and building binaries.\n(3) We evaluate Ppt4J using the dataset and real-world software. Ppt4J outperforms the baseline and is able to test the\npresence of patches in real-world scenarios.\n(4) We release the replication package of Ppt4J [1], including the\nsource code of Ppt4J and our dataset, to facilitate future\nresearch.\n\n\n1 [https://github.com/pan2013e/ppt4j](https://github.com/pan2013e/ppt4j)\n\n\n\nThe remainder of the paper is structured as follows. Section 2\nintroduces the background concepts for this paper and motivates\nthe problem using an example. Section 3 presents the approach of\nPpt4J. Section 4 describes the baseline approach, the preparation\nfor our dataset, and the evaluation metrics. Section 5 presents the\nexperimental results and our case study. Section 6 and Section 7\ndiscusses comparsions with the baseline and threats of validity.\nSection 8 summarizes the related work. Section 9 concludes the\n\npaper.\n\n\n**2** **BACKGROUND**\n\n\nIn this section, we discuss the background of the patch presence\ntest task and provide a motivating example to illustrate the main\nidea of Ppt4J.\n\n\n**2.1** **Patch Presence Test**\n\n\nThe task of patch presence test and its scope of the problem are\ndefined as follows:\n\n\n_Definition._ Given a security patch _diff_ _\ud835\udc43_ from a specific open\nsource library in the upstream, patch presence test works by evaluating target program binaries _\ud835\udc35_ on a boolean function\n\n\n_\ud835\udc53_ : ( _\ud835\udc36_ 1 _,\ud835\udc36_ 2 _, \ud835\udc43, \ud835\udc35_ ) \u2192{True _,_ False} _,_\n\n\nwhere _\ud835\udc36_ 1 and _\ud835\udc36_ 2 refer to the upstream source code of the software\nright before and after patch _\ud835\udc43_ . _\ud835\udc35_ refer to the standard Java bytecode\nin this paper and should be provided by the user. Among _\ud835\udc36_ 1 _,\ud835\udc36_ 2\nand _\ud835\udc43_, at least two of them must be provided and the third can be\nautomatically derived.\n\n\nPatch presence test checks if a specific patch is applied to the\nprovided target binaries [ 44 ]. In this task, the upstream source code\n_\ud835\udc36_ 1 _,\ud835\udc36_ 2 and the target binaries _\ud835\udc35_ are supposed to belong to the same\nlibrary, but the target binaries can be compiled from any version\nof source code. The function _\ud835\udc53_ has two possible return values. If\n_\ud835\udc53_ returns true, we confirm the existence of a patch commit within\nthe binaries, and vice versa.\nThe advantage of patch presence test lies in its ability to detect\nspecific patch commits. This enables users to specifically check for\nsecurity patches that they are most concerned about. Thus, the\npotential risks that arise from vulnerabilities can be mitigated.\n\n\n**2.2** **Motivating Example**\n\n\nExisting patch presence test work for Java binaries takes the complete _diff_ (i.e., the exact differences in characters) as input to analyze\npatch presence. However, existing work is limited as the whole _diff_\nwill introduce \u201csemantic redundancy\u201d, that is, some (-) and (+)\nlines end up with no semantic changes, which may introduce unrelated information.\n\nIntuitively, to accurately test the presence of a patch, we should\nextract precise semantic changes from _diff_ that reflect all semantic information while not including unrelated information. We illustrate the importance of semantic changes by using real-world\nexamples shown in Figure 1.\nIn the first case of Figure 1, the _diff_ introduces a try-catch\nblock with six _diff_ lines. However, there are no differences between lines 1, 2, and 5, 6, except for indentations. If we trim the\n\n\nPpt4J: Patch Presence Test for Java Binaries ICSE \u201924, April 14\u201320, 2024, Lisbon, Portugal\n\n\n\n**(a) CVE-2017-1000498 [28]**\n\n\n**(b) CVE-2016-8739 [27]**\n\n\n**(c) CVE-2018-11797 [30]**\n\n\n**Figure 1: Examples of \u201csemantic redundancy\u201d:** _**diff**_ **lines ex-**\n**cerpted from full security patches.**\n\n\nleading spaces/tabs, these lines would be identical. In other words,\nthe actual semantic-related change of the patch is the try-catch\nenvironment, rather than these four statements. Similar cases include moving statements into if-else, for, or while blocks. In\nthe second case (Figure 1b), lines 1 and 3 differ due to the change\nof a variable (i.e., is \u2212\u2192 reader ). The change originates from\ncalling the method createXMLStreamReader . Thus, the code that\ncauses the actual semantic change is line 2, not lines 1 and 3. In the\nthird case (Figure 1c) [2], we can observe that an if block is deleted\nand another if block is added. But after inspecting the code, the\nonly semantic change is line 7, that is, throw an exception when\nB == 2 && C == 0 && A != Algorithm.none.\nFrom these examples, we conclude that the differences in characters may not correspond to semantic changes. Motivated by this, we\nillustrate the idea of our work, which highlights semantic changes\nand is carried out in the following steps:\n\n\nStep 1 **Feature extraction.** We extract features for patch-relevant\nJava source code and binaries.\nStep 2 **Semantic change generation.** We generate semantic changes\nfor a patch based on the original _diff_ and the extracted features in Step 1.\nStep 3 **Feature matching.** We match sequences of source-level\nfeatures and binary-level features extracted in Step 1.\nStep 4 **Patch presence evaluation.** Instructed by semantic changes\nin Step 2 and feature matching results in Step 3, we evaluated\nthe patch presence for the binaries.\n\n\n**3** **APPROACH**\n\n\nIn this section, we first provide an overview of Ppt4J and its architecture. Then, we introduce each component in detail.\n\n\n2 The code in the figure is simplified for illustration. The original version\n[is available at https://github.com/FusionAuth/fusionauth-jwt, with commit hash](https://github.com/FusionAuth/fusionauth-jwt)\n0d94dcef0133d699f21d217e922564adbb83a227\n\n\n\n**3.1** **Overview of Ppt4J**\n\n\nThe framework of Ppt4J is depicted in Figure 2. Ppt4J takes the\nsource code and binaries as input. The output of the framework\nis the patch presence status (i.e., true or false ) of the binaries.\nAdditionally, the framework provides user-configurable parameters,\nwhich we will discuss in detail later in this section. By utilizing\nthis framework, Ppt4J is able to efficiently analyze binaries and\naccurately test the presence of patches.\n\n\n**3.2** **Feature Extraction**\n\n\nThis component extracts rule-based features for Java code lines and\nbytecode blocks.\n\n\n_3.2.1_ _Pre-Process._ Raw source code and binaries are not ideal for\n\nfeature extraction due to certain programming practices, e.g., a\nstatement might be splitted into multiple lines. Additionally, a single\ninstruction may not accurately represent the intended semantic\ninformation of a Java statement, which is usually compiled into a\ngroup of instructions.\nTo address this issue, Ppt4J incorporates filters that aggregate\ndiscrete elements. For instance, we merge split lines in Java source\ncode to create logical lines from abstract syntax trees (ASTs). As\nfor binaries, we propose to split instruction sequences into logical blocks using line number information in binaries. Sometimes,\nline numbers may be absent or stripped. We discuss such case in\nSection 6.1.\n\n\n_3.2.2_ _Feature Types._ Each line of logical source code or each logical\nbytecode block corresponds to a set of features that can include\nzero or more features. Our goal is to select feature types that reflect\na large proportion of the Java language specifications and Java VM\nspecifications [ 1 ]. To achieve this, we select a variety of simple\nand non-trivial feature types. This ensures that Ppt4J is capable\nof capturing significant information and minimizing the risk of\nmissing important details. As shown in Figure 3, the feature types\nin our definition include literals, method invocations, field accesses,\narray creations, and special instructions.\nTo be specific, \u201cliteral\u201d contains compile-time constant values,\nfields, and expressions. \u201cMethod invocation\" contains calls to static\nmethods, virtual methods, and interface methods. We exclude method\ninvocations that can be implicitly generated by the compiler frequently. The excluded methods are <init> in Object and StringBuilder, toString, valueOf, append and longValue . For other\nmethod invocations, we include a method\u2019s name, owner (i.e., the\nclass to which it belongs), and actual parameter types. \u201cField access\u201d\nand \u201carray creation\u201d, as their names suggest, contain read/write to\nmutable fields and creation of array objects, respectively. Finally,\nwhen extracting \u201cspecial instructions\u201d, we seek source code elements or instructions that meet one of the following characteristics:\n\n\n(1) Distinctive calculations. \u2776 Special binary operators: shift\nand instanceof ; \u2777 Special unary operators: ++ and -- (including prefix and postfix).\n(2) Control flow manipulations: return statements, throw statements, if blocks and loops.\n(3) Synchronization primitives, e.g., monitorexit instruction\nand synchronized blocks.\n\n\nICSE \u201924, April 14\u201320, 2024, Lisbon, Portugal Zhiyuan Pan, Xing Hu, Xin Xia, Xian Zhan, David Lo, and Xiaohu Yang\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n**Figure 2: Overall approach of Ppt4J**\n\n\n\n(4) Representations of syntatic sugars, e.g., the labels of switch\nblocks, lambda expressions.\n\n\n_Literal_\n\n\n\nby traversing logical blocks using ASM [ 3, 20, 23 ]. Specifically, for\neach logical bytecode block, we traverse the instructions in the\nblock. Similar to the extraction of source code, if an instruction\nmeets any of the rules, the related values or literals are used to\nconstruct a feature object.\nFor non-trivial feature types, we perform static analysis to collect\nfine-grained features, especially when dealing with minor patches.\nThe details can be found as follows:\n\n\u2776 **Literals.** To deal with compiler optimizations on literals, we\nimplement constant propagation and folding for the source code.\nAccesses to constant fields are replaced by literals, and arithmetics\non literals or constant fields are simplified. This transformation\nis interprocedural and interclass because ASTs of all dependent\nclasses are accessible.\n\n\u2777 **Method invocations.** Java is an object-oriented programming\nlanguage, and inheritance is quite common for code reusability. In\nthis case, objects of a derived class can be referenced by variables of\na base class. Thus, normal method signatures cannot always reflect\nthe exact types of the arguments of method invocations. To obtain\nthe exact argument types of method calls and build fine-grained\nmethod signatures, we implement type analysis for binaries. Starting from the point where an argument variable is initialized, the\nanalysis simulates possible execution paths and returns a more\nprecise type of the variable. To be specific, when walking through a\nmethod, it maintains a stack and a local variable table, which store\nthe types of elements [3] . During this process, it takes out variable\ntypes in the stack and local variable table, simulates a bytecode instruction, stores the resulting types back to the data structures, and\nthen moves to the next instruction. We use the common superclass\nif an element type has multiple possibilities. Due to the static type\nsystem in Java, it is ensured that the stored type is a subtype of\nthe type found in the method\u2019s original signature. Thus, the type\nanalysis results in a more detailed method invocation feature.\n\n\n3 If an element is null, we denote the type as null and do not step further.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n**Figure 3: The railroad diagram that illustrates feature types**\n**selected in our approach.**\n\n\n_3.2.3_ _Extraction._ For Java source code, we extract features by analyzing ASTs. First, we recursively generate the class dependencies\nfrom the import statements. Then, we design a custom AST visitor\nbased on Spoon [ 35 ]. Specifically, the visitor walks through the syntax tree, from the root node to leaf nodes. If a source code element\nmeets any of the rules described in Section 3.2.2, it extracts the\nrelated values or literals, constructs a feature object, and adds it to\nthe corresponding feature set. For Java binaries, we extract features\n\n\nPpt4J: Patch Presence Test for Java Binaries ICSE \u201924, April 14\u201320, 2024, Lisbon, Portugal\n\n\n\n1 @@ -400,7 +400,7 @@ private static int fastRound(final float x) {\n\n2 private int extend(int v, final int t) {\n\n3 // \"EXTEND\", section F.2.2.1, figure F.12, page 105 of T.81\n\n4 int vt = (1 << (t - 1));\n\n7 vt = (-1 << t) + 1;\n\n8 v += vt;\n\n9 }\n\n\n**Figure 4: Patch snippet from CVE-2018-17202 [32]**\n\n\n\u2778 **Loop statements.** We distinguish condition statements and\nloop statements by generating intra-procedure control flow graphs\n(CFGs) for binaries and analyzing the graphs. For example, the patch\nin Figure 4 changes a while loop to an if statement. Although both\nof while loop and if statement generate branch instructions, loop\nstatements generate GOTO instructions in future blocks that redirect\nthe control flow. Since the Java programming language does not\nallow programmers to manipulate control flows with keywords like\ngoto, we assert that a backward GOTO instruction must point to a\nloop condition.\n\n\n**3.3** **Semantic Change Generation**\n\n\nAs discussed in Section 2.2, commonly used utilities like UNIX\n_diff_ compare texts between different versions. However, _diff_ is\nlimited to differences in characters and cannot explain the behavior\nof the program [ 15 ]. To evaluate patch presence more accurately,\nwe extract semantic changes for each security patch based on the\noriginal _diff_ generated from the git diff <commit> <commit>\ncommand. This command compares two commits of a git repository\nand generates output in _unified diff format_ [18].\nFirst, we parse the _diff_ and split the hunks (i.e., groups of differing\nlines interspersed in files) into finer-grained code blocks. During\nthe parsing process, we filter out unrelated _diff_ contents, i.e., lines\nthat contain no features. Also, split lines are treated as a single\nlogical line. After that, we categorize the blocks into three types,\n_pure addition_ ( _**A**_ -type), _pure deletion_ ( _**D**_ -type), and _mixed blocks_\n( _**M**_ -type). An _**M**_ -type block consists of both (+) lines and (-) lines,\nin which two kinds of lines overlap or adjoin in space, and (-) lines\nappear before (+) lines.\nThen, we classify the _diff_ lines as pure (+) lines, pure (-) lines\nand { (-) line, (+) line} pairs, and put them in different sets. The\nclassification result reflects the semantic of the patch and can be\nused to instruct the patch presence evaluator (in Section 3.5). We\ndefine four types of sets: **SA** for pure (+) lines, **SD** for pure (-)\nlines, **SX** for lines to be excluded in our approach, and **SM** for { (-)\nline, (+) line} pairs. In particular, **SX** refers to the lines that do\nnot participate in future evaluations. The line pairs in the **SM** set\nare called \u201cmodification line pairs\u201d. We consider all _diff_ lines as\nsemantic changes for _**A**_ -type and _**D**_ -type blocks and put them into\n**SA** or **SD** sets. We apply a heuristic approach for _**M**_ -type blocks\nusing previously extracted features to filter semantic changes, as\ndescribed in Algorithm 1. The above four sets contain semantic\nchange lines and are utilized in the patch presence evaluation (Step\n4 in Figure 2).\n\n\n\n**Algorithm 1** Filtering semantic changes for _**M**_ -type blocks\n\n\n**Input:** An _**M**_ -type diff block B\n\n\n1: del, add \u2190 splitByType(B)\n2: c1 \u2190 getSmallerOne(del, add)\n3: c2 \u2190 getLargerOne(del, add)\n4: window_size \u2190 c1.size()\n5: initWindow(c2, window_size) _\u22b2_ Initialize a sliding window on c2\n6: **for all** possible windows **do**\n7: best_window \u2190 the most similar [4] window to c1.\n\n8: coeff \u2190 simMetric(c1, best_window)\n\n9: **end for**\n\n10: **if** coeff = 1 **then** _\u22b2_ These lines should be excluded\n\n11: SX.putAll(c1)\n12: SX.putAll(best_window)\n13: **else if** coeff \u2265 _\ud835\udf0e_ _\ud835\udc53_ **then** _\u22b2_ Considered as modification pairs\n14: makePairs(c1, best_window).forEach(SM::put)\n\n15: **end if**\n\n16: **for all** remaining line l **do**\n17: **if** l.type = (+) **then**\n18: SA.put(l) _\u22b2_ Considered as addition lines\n\n19: **else**\n\n20: SD.put(l) _\u22b2_ Considered as deletion lines\n\n21: **end if**\n\n22: **end for**\n\n\nTo be specific, Step 2 in Figure 2 illustrates an example of semantic change generation. In this example, we can observe that lines 1\nand 3 do not have semantic changes if we put them together, and\nthus should be excluded. Line 2, on the other hand, has a semantic\nchange (i.e., function call createXMLStreamReader ), thus we put\nit into the **SA** set.\n\nOur semantic change generator can handle all code differences\ninside method bodies. However, for out-of-method source code\nlines, we only consider assignments to fields. Since these assignments are components of the constructor methods <init> or static\ninitialization blocks <clinit>, which cannot be ignored. In this paper, we ignore other types of out-of-method code differences, such\nas modifying method signatures or implementing new interfaces\nand we assume that these changes should be reflected by other\nchanges inside the method bodies.\n\n\n**3.4** **Feature Matching**\n\n\nFrom the last step, we extract unified features from the source code\nand the binaries, they can be considered as sorted sequences of\nfeature sets, i.e.,\n\n\n[( _\ud835\udc56\ud835\udc51\ud835\udc65_ 1 _,\ud835\udc46_ 1 ) _,_ ( _\ud835\udc56\ud835\udc51\ud835\udc65_ 2 _,\ud835\udc46_ 2 ) _,_ ( _\ud835\udc56\ud835\udc51\ud835\udc65_ 3 _,\ud835\udc46_ 3 ) \u00b7 \u00b7 \u00b7 ]\n\n\nwhere _\ud835\udc56\ud835\udc51\ud835\udc65_ 1 _< \ud835\udc56\ud835\udc51\ud835\udc65_ 2 _<_ - \u00b7 \u00b7 _< \ud835\udc56\ud835\udc51\ud835\udc65_ _\ud835\udc5b_ .\n_\ud835\udc56\ud835\udc51\ud835\udc65_ _\ud835\udc56_ refers to a logical line number in the source feature sequence\nor an instruction block index in the binary feature sequence, and\n_\ud835\udc46_ _\ud835\udc56_ refers to a feature set. For source sequences, _\ud835\udc56\ud835\udc51\ud835\udc65_ may not be\nconsecutive due to empty or comment lines. In practice, we remap\nthese indices for convenience.\n\nInspired by sequence alignment techniques used in other disciplines, we employ a similar approach to match source code features\n\n\n4 Similarity metric for feature sets and threshold parameter _\ud835\udf0e_ _\ud835\udc53_ are discussed in Section 3.4\n\n\nICSE \u201924, April 14\u201320, 2024, Lisbon, Portugal Zhiyuan Pan, Xing Hu, Xin Xia, Xian Zhan, David Lo, and Xiaohu Yang\n\n\n\nand binary features. In general, given two feature set sequences,\n\n_\ud835\udc34_ = [( _\ud835\udc4e_ 1 _,\ud835\udc46_ _\ud835\udc4e_ 1 ) _,_      - \u00b7 \u00b7 _,_ ( _\ud835\udc4e_ _\ud835\udc5b_ _,\ud835\udc46_ _\ud835\udc4e_ _\ud835\udc5b_ )] _,_\n\n\n_\ud835\udc35_ = [( _\ud835\udc4f_ 1 _,\ud835\udc46_ _\ud835\udc4f_ 1 ) _,_       - \u00b7 \u00b7 _,_ ( _\ud835\udc4f_ _\ud835\udc5b_ _,\ud835\udc46_ _\ud835\udc4f_ _\ud835\udc5b_ )] _,_\n\n\nthe feature matcher outputs a sequence\n\n\n_\ud835\udc36_ = [( _\ud835\udc4e_ _\ud835\udc56_ 1 _,\ud835\udc4f_ _\ud835\udc57_ 1 _,\ud835\udc46_ _\ud835\udc58_ 1 ) _,_     - \u00b7 \u00b7 _,_ ( _\ud835\udc4e_ _\ud835\udc56_ _\ud835\udc5b_ _,\ud835\udc4f_ _\ud835\udc57_ _\ud835\udc5b_ _,\ud835\udc46_ _\ud835\udc58_ _\ud835\udc5b_ )]\n\n\nwhere the first key in the tuple sorts elements. The _\ud835\udc4e_ _\ud835\udc56_ _\ud835\udc5b_ -th logical\nsource code line matches the _\ud835\udc4f_ _\ud835\udc57_ _\ud835\udc5b_ -th binary block. Before matching,\nwe first define the equivalence of two feature sets:\n\n\n_Definition._ Given two finite feature sets _\ud835\udc46_ 1 _,\ud835\udc46_ 2 and a similarity\nmetric _\ud835\udc53_ : ( _\ud835\udc46_ 1 _,\ud835\udc46_ 2 ) \u2192[0 _,_ 1], _\ud835\udc46_ 1 and _\ud835\udc46_ 2 are equivalent iff\n\n\n_\ud835\udc53_ ( _\ud835\udc46_ 1 _,\ud835\udc46_ 2 ) \u2265 _\ud835\udf0e_ _\ud835\udc53_ _, \ud835\udf0e_ _\ud835\udc53_ \u2208(0 _,_ 1)\n\nwhere _\ud835\udf0e_ _\ud835\udc53_ is a threshold parameter. By default, _\ud835\udf0e_ _\ud835\udc53_ is set to 0.7.\n\n\nSpecifically, we use the Jaccard similarity coefficient [ 41 ] J as\nthe similarity metric, that is\n\n\n\nJ ( _\ud835\udc34, \ud835\udc35_ ) = \uf8f1\uf8f4\uf8f4\uf8f2\n\n\uf8f4\uf8f4\uf8f3\n\n\n\n1 A and B are both empty\n| _\ud835\udc34_ \u2229 _\ud835\udc35_ |\notherwise\n| _\ud835\udc34_ \u222a _\ud835\udc35_ |\n\n\n\nAfter defining the equivalence of feature sets, we apply a sequencematching algorithm. Specifically, we use the longest common subsequence (LCS) algorithm because we should obtain as many matches\nas possible and we expect the matches to be in order. For example,\nStep 3 in Figure 2 illustrates the matching process of two sequences\nBCDAACD and ACDBAC . After applying the LCS algorithm, we get\nthe matching result CDAC . In our LCS algorithm, the elements in\nthe sequences are feature sets. Then, the aforementioned similarity\nmetric and equivalence of two feature sets are applied.\nHowever, due to line breaks in the source code, some source\nfeature sets in the sequence are not matched with binary feature\nsets. To address this issue, after running the LCS algorithm, we\nstart a second matching pass for unmatched binary blocks and\nemploy a heuristic approach that attempts to search for the best\nmatch. The heuristic idea is that the union of a few consecutive\n\nunmatched binary feature sets is likely to match a source feature\nset. Specifically, we employ a variable-length sliding window to\nscan the spaces of the unmatched binary feature sets. As the sliding window moves, in each move we obtain an _aggregated feature_\n_set_, which simply means the union of all binary feature sets in a\nwindow. If an aggregated feature set corresponds to a source code\nline, we regard it as a new match. Since the scanning process is\ntime-consuming and memory-consuming and we assume that programmers generally avoid splitting statements into too many lines,\nwe limit the maximum window size to increase performance. By\ndefault, the size is set to 5 instructions/window.\n\n\n**3.5** **Patch Presence Evaluation**\n\n\nThe patch presence evaluator serves as the decision-making component in our approach, responsible for aggregating all relevant\ninformation and determining the presence of a patch in the binaries.\nThe idea is to assign votes to each semantic change line and let them\nmake recommendations. These semantic change lines are obtained\nfrom the output of the semantic change generator as described in\nSection 3.3. Our voting rules for the patch presence evaluator are\ndescribed below:\n\n\n\n\u2776 There are two voting options: **A** for those in favor of the\nbinary being **patched**, and **B** for those in favor of the binary being\n**unpatched** .\n\u2777 For the (+) lines in the **SA** set, if the lines appear in the binaries,\nthey vote for **A** . If not, they vote for **B** .\n\u2778 Similarly, for the (-) lines in the **SD** set, if the lines **do not**\nappear in the binaries, they vote for **A** . Otherwise, they vote for **B** .\n\u2779 For modification line pairs (pre, post) in the **SM** set, we\nexpect the features in binaries to be more similar to the post-patch\nline than to the pre-patch line. Thus, if the similarity score of ( post,\nbinary) is larger than ( pre, binary), the lines vote for **A** . Otherwise,\nthey vote for **B** . In terms of similarity, we use the same metric\ndescribed in Section 3.4.\n\n\u277a Lines in the **SX** set are ignored as they do not contain semantic\nchanges.\nTo determine whether a given source code line appears in the\nbinaries, we check the existence of its corresponding logical line\nnumber in the output sequence generated by the feature matcher.\nIn addition to these rules, lines with a greater number of features\nare preferred in our approach. To be specific, the number of votes\nfor each line is equivalent to the number of features it possesses.\nOnce we have all the votes, we calculate the patch\u2019s \u201csupport rate\u201d,\nwhich refers to the percentage of total votes in favor of the binary\nbeing patched. We consider the patch to be present if the support\nrate equals or exceeds a specified threshold parameter, denoted by\n_\ud835\udf0e_ _\ud835\udc5d_ . By default, the parameter is set to 0.6.\n\n\n**4** **EXPERIMENTAL SETTINGS**\n\n\nIn this section, we describe the details of the baseline, dataset, and\nimplementation of our approach.\n\n\n**4.1** **Baseline**\n\n\nThere exist a number of patch presence test approaches [ 7, 21, 39,\n44 ]. However, most of them target C/C++ binaries and cannot be\ndirectly employed to test Java binaries because machine instruction\nsets and bytecode instruction sets differ a lot. Among the existing\napproaches, BScout [ 7 ] is a patch presence test framework specifically designed for Java binaries, and we use it as our baseline. Since\nthe official implementation of BScout is not publicly available, we\nreimplement their approach with about 5,000 lines of Java code.\n\n\n**4.2** **Dataset**\n\n\n\n**Labeled Binaries**\n\n\n**1. Collect vulnerabilities** **2. Search for patch commits** **3. Build binaries from ground truth**\n\n\n**Figure 5: Steps to construct the dataset**\n\n\nTo evaluate the effectiveness of Ppt4J, we construct a dataset,\nas illustrated in Figure 5. In detail, the construction process can be\ndivided into the following three steps:\n\n\n\n**Vuln. Info** **Database**\n\n\n\n\n\n\n\n**Vulnerability List**\n\n**(** \ud835\udcd3\ud835\udfcf & \ud835\udcd3\ud835\udfd0 **)**\n\n\n\n**Community**\n\n\nPpt4J: Patch Presence Test for Java Binaries ICSE \u201924, April 14\u201320, 2024, Lisbon, Portugal\n\n\n**Table 1: List of vulnerabilities selected from Vul4J [4]**\n\n\n|Library Name Vulnerability ID|Library Name Vulnerability ID|\n|---|---|\n|alibaba/fastjson<br>CVE-2017-18349<br>apache/camel<br>CVE-2015-0264, CVE-2015-0263<br>apache/commons-compress<br>CVE-2019-12402, APACHE-COMMONS-001<br>apache/commons-confguration<br>CVE-2020-1953<br>apache/commons-fleupload<br>CVE-2013-2186<br>apache/commons-imaging<br>CVE-2018-17201, CVE-2018-17202<br>apache/commons-io<br>CVE-2021-29425<br>apache/cxf<br>CVE-2015-5253, CVE-2016-8739<br>apache/httpcomponents-client<br>HTTPCLIENT-1803<br>apache/jspwiki<br>CVE-2019-0225<br>apache/pdfbox<br>PDFBOX-3341, CVE-2018-11797<br>apache/santuario-java<br>CVE-2014-8152<br>apache/shiro<br>CVE-2016-6802<br>apache/sling<br>CVE-2016-5394, CVE-2016-6798<br>apache/sling-org-apache-sling-xss<br>CVE-2017-15717<br>apache/struts<br>CVE-2016-8738, CVE-2014-0113, CVE-2014-0112,<br>CVE-2016-4465, CVE-2016-2162, CVE-2014-7809,<br>CVE-2016-4436, CVE-2014-0116, CVE-2015-1831,<br>CVE-2016-3081<br>apache/tika<br>CVE-2018-8017<br>apache/tomee<br>CVE-2015-8581<br>apereo/java-cas-client<br>CVE-2014-4172<br>cloudfoundry/uaa<br>CVE-2019-3775, CVE-2018-1192<br>codehaus-plexus/plexus-archiver<br>CVE-2018-1002200<br>(Continued in the right column)|eclipse/rdf4j<br>CVE-2018-20227<br>ESAPI/esapi-java-legacy<br>CVE-2013-5960<br>esigate/esigate<br>CVE-2018-1000854<br>FasterXML/jackson-dataformat-xml<br>CVE-2016-7051, CVE-2016-3720<br>inversoft/prime-jwt<br>CVE-2018-1000125, CVE-2018-1000531<br>javamelody/javamelody<br>CVE-2013-4378<br>jenkinsci/ccm-plugin<br>CVE-2018-1000054<br>jenkinsci/groovy-sandbox<br>CVE-2018-1000865<br>jenkinsci/jenkins<br>CVE-2017-1000355, CVE-2018-1000864, CVE-2018-1999044<br>jenkinsci/junit-plugin<br>CVE-2018-1000056<br>jenkinsci/pipeline-build-step-plugin<br>CVE-2018-1000089<br>jenkinsci/subversion-plugin<br>CVE-2018-1000111<br>neo4j-contrib/neo4j-apoc-procedures<br>CVE-2018-1000820<br>OpenRefne/OpenRefne<br>CVE-2018-20157, CVE-2018-19859<br>resteasy/Resteasy<br>CVE-2020-1695<br>spring-projects/spring-data-rest<br>CVE-2017-8046<br>spring-projects/spring-framework<br>CVE-2018-15756, CVE-2016-9878, CVE-2018-1272<br>spring-projects/spring-security-oauth<br>CVE-2016-4977<br>square/retroft<br>CVE-2018-1000850<br>swagger-api/swagger-parser<br>CVE-2017-1000207<br>x-stream/xstream<br>CVE-2019-10173<br>zeroturnaround/zt-zip<br>CVE-2018-1002201|\n\n\n\n\u2776 **Vulnerability collection.** In this step, we collect a number\nof vulnerabilities for evaluation. We include two lists of vulnerabil\nities. The first list (abbreviated as **D** **1** ) consists of the Java library\nvulnerabilities evaluated in BScout\u2019s experiments, and the second\none (abbreviated as **D** **2** ) is selected [5] from Bui et al.\u2019s work, i.e.,\nVul4J [ 4 ]. The corresponding patches in **D** **1** are trivial and are used\nto check the correctness of our reimplementation of BScout. To\nevaluate the ability to test the presence of patches that introduce\nminor changes, we also include the **D** **2** list. Detailed vulnerabilities\nin **D2** are listed in Table 1.\n\n\u2777 **Commit searching.** In addition to the list of vulnerabilities,\nthe dataset also contains project snapshots and corresponding binaries labeled with ground truth. For a vulnerability in the list, we first\nsearch it in the National Vulnerability Database (NVD) [ 26 ], a CVE\ndatabase managed by the U.S. government. If a patch commit URL\nis given in the database, we are done with the search. Otherwise,\nwe manually search for patch-related commit IDs or issue IDs in\nopen-source projects. Once we locate the URL, we can derive the\npatch status (i.e., patched or unpatched) of a project snapshot after\nsearching. We use patch status as ground truth to label a project\nsnapshot.\n\u2778 **Binary compilation.** In the final step, we compile binaries\nfrom project snapshots. The compilation process can be automated\nas most open-source Java projects are well documented and provide\nbuild scripts, e.g., build.xml [ 11 ], pom.xml [ 13 ], build.gradle [ 19 ]\nand shell scripts. In practice, most of the projects in the dataset [ 4 ]\ncan be built without human intervention, except for a few old versions of the Spring Framework, since some dependencies cannot be\nautomatically resolved due to the change of their repository URLs [6] .\nTo correspond to the common compilation and distribution process\nfor open source libraries, we use the default compiler options and\nflags specified in the build scripts.\n\n\n5 Some vulnerabilities are excluded because the corresponding projects are too old and\nthe build tools fail to resolve some dependencies during compilation.\n6 [https://spring.io/blog/2020/10/29/notice-of-permissions-changes-to-repo-spring-](https://spring.io/blog/2020/10/29/notice-of-permissions-changes-to-repo-spring-io-fall-and-winter-2020)\n[io-fall-and-winter-2020](https://spring.io/blog/2020/10/29/notice-of-permissions-changes-to-repo-spring-io-fall-and-winter-2020)\n\n\n\n**4.3** **Evaluation Metrics**\n\n\nPatch presence test can be considered as a binary classification\nproblem in evaluations, and there are four possible outcomes:\n\n  - True Positive ( **TP** ): The binaries are patched, and Ppt4J\ndetects the presence of the patch.\n\n  - True Negative ( **TN** ): The binaries are not patched, and Ppt4J\ndoes not detect the presence of the patch.\n\n   - False Positive ( **FP** ): The binaries are not patched, but Ppt4J\ndetects the presence of the patch.\n\n  - False Negative ( **FN** ): The binaries are patched, but Ppt4J\ndoes not detect the presence of the patch.\n\nBased on these possible outcomes, the evaluation metrics we use\nare defined as follows:\n**Accuracy** is the proportion of correct predictions among the\ntotal number of cases examined.\n\n\n_\ud835\udc47\ud835\udc43_ + _\ud835\udc47\ud835\udc41_\nAccuracy =\n_\ud835\udc47\ud835\udc43_ + _\ud835\udc47\ud835\udc41_ + _\ud835\udc39\ud835\udc43_ + _\ud835\udc39\ud835\udc41_\n\n**Precision** measures the accuracy in classifying a sample as\npositive.\n\n_\ud835\udc47\ud835\udc43_\nPrecision =\n_\ud835\udc47\ud835\udc43_ + _\ud835\udc39\ud835\udc43_\n**Recall**, also known as True Positive Rate ( **TPR** ), measures the\nability to detect positive samples.\n\n\n_\ud835\udc47\ud835\udc43_\nRecall =\n_\ud835\udc47\ud835\udc43_ + _\ud835\udc39\ud835\udc41_\n\n**F1 Score** is the harmonic mean of precision and recall, which\nsymmetrically represents both precision and recall in one metric.\n\n_\ud835\udc39_ 1 = 2 \u00d7 [Precision][ \u00d7][ Recall]\n\nPrecision + Recall\n\n\n**4.4** **Implementation of Our Approach**\n\n\nWe implement the framework in Java and the replication package\nis publicly available. [7] To parse Java source code and analyze ASTs,\n\n\n7 [https://github.com/pan2013e/ppt4j](https://github.com/pan2013e/ppt4j)\n\n\nICSE \u201924, April 14\u201320, 2024, Lisbon, Portugal Zhiyuan Pan, Xing Hu, Xin Xia, Xian Zhan, David Lo, and Xiaohu Yang\n\n\n\nwe exploit Spoon which is a library for implementing analyses\nand transformations of Java source code proposed by Pawlak et\nal. [ 35 ]. To parse and analyze Java binaries, we employ ASM [ 20 ],\nwhich is an all-purpose Java bytecode manipulation and analysis\nframework. We set the threshold of feature equivalence _\ud835\udf0e_ _\ud835\udc53_ to 0.7\nand the threshold of patch support rate _\ud835\udf0e_ _\ud835\udc5d_ to 0.6. Besides, we set\nthe maximum window size of the second feature matching pass\nto 5 instructions. Ppt4J is lightweight and does not cost too much\nCPU and memory resources. We perform our experiments on a\nJava HotSpot(TM) 64-bit server VM (build 17.0.2+8-LTS-86) on a\npersonal computer (MacOS 13, 64-bit 3.2GHz CPU, 16GB RAM).\n\n\n**5** **RESULTS**\n\n\nIn this paper, we aim to answer the following four research ques\ntions:\n\n**RQ.1** **(Effectiveness)** How accurate is the patch presence test\nframework compared to previous work?\n**RQ.2** **(Efficiency)** How efficient is the patch presence test framework, especially when dealing with large code repositories?\n**RQ.3** **(Ablation Study)** How do the analyses described in Section 3.2.3 contribute to the overall effectiveness?\n**RQ.4** **(In-the-wild Evaluation)** Can our approach analyze opensource libraries in real-world applications?\n\n\n**5.1** **RQ1: Effectiveness**\n\n\n**Table 2: Test results on the dataset**\n\n| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\n| ---------- | ------ | ---------------: | ----: | -----: | ----: |\n| PPT4J      | **D1** |             ???% |  ???% |   ???% |  ???% |\n|            | **D2** |            ??.?% |  ???% |  ??.?% | ??.?% |\n\n\n_5.1.1_ _Results._ The overall result is presented in Table 2. According\nto Table 2, we can observe that both BScout and our work achieve\n100% accuracy, precision, recall and F1 score on **D** **1** . The results of\nBScout illustrate that our reproduction of it is consistent with the\nresults reported by Dai et al [ 7 ]. When we perform experiments\non **D** **2**, which has more subtle patches, the recall and F1 score of\nBScout drop noticeably, while Ppt4J still maintains a remarkable\nperformance.\nIn addition to the conclusion mentioned above, Ppt4J does not\ngenerate false positive results, which means that it does not mistakenly report a binary as having been patched when it has not. This\nis an important feature as it ensures that developers can trust the\ntool\u2019s output and avoid wasting time investigating false leads.\n\n\n_5.1.2_ _Qualitative Analysis._ We also conduct an qualitative analysis that presents some representative patterns to demonstrate the\nstrengths of our work compared to BScout.\n\u2776 **Minor changes.** We examine several security patches in our\ndataset and find that the features extracted by BScout are unable to\ndistinguish some minor changes.\n\n\n\n1 @@ -174,7 +174,7 @@ public <T> T deserialze(DefaultJSONParser parser, Type\n\n_\u21a9_ \u2192 type, Object fieldName) {\n2 componentType = componentClass = clazz.getComponentType();\n3 }\n4 JSONArray array = new JSONArray();\n\n7\n\n8 return (T) toObjectArray(parser, componentClass, array);\n9 }\n\n\n**Figure 6: Patch snippet from CVE-2017-18349 [** **29** **]: An exam-**\n**ple of minor change that only replaces an argument**\n\n\n\"parseArray\":( **Ljava/lang/reflect/Type;** L...Collection;L...Object;)V\n\n\n**Figure 7: Class hierarchy of java.lang.reflect.Type**\n\n\nFor example, Figure 6 shows the patch _diff_ of CVE-2017-18349. In\nthis patch, only the first parameter of the method call parseArray\n(Type, Collection, Object) is changed from componentClass\nto componentType . This is a minor change that only includes a\nvariable replacement.\n\ufffd **BScout:** According to Dai et al. [ 7 ], BScout only extracts\nmethod names with argument lengths. In this case, the features of\nthe method call before and after the patch are identical.\n\ufffd **Ppt4J:** In this case, Ppt4J works because it implements a type\nanalysis, as described in Section 3.2.3. The type of the first parameter in the method signature is java.lang.reflect.Type . It is too\ngeneral in the class hierarchy, and many subclasses implement this\ninterface, as illustrated in Figure 7. With the help of type analysis,\nPpt4J traces the variables and checks their exact type instead of\nusing their common super class java.lang.reflect.Type . The\nexact type of componentClass is java.lang.Class, and the exact type componentType is java.lang.reflect.Type . In this way,\nPpt4J extracts different features before and after the patch, and\nthus detects the minor change.\n\u2777 **Syntactic sugars.** Syntatic sugars [ 42 ] make modern programming languages carry more semantic information than their\nlower-level representations such as IR, bytecode, and assembly code.\nTo accurately perform feature matching (as described in Section 3.4),\nwe must bridge the gaps between source code and binary, i.e., interpret syntactic sugars in the source code to bytecode representations.\nPpt4J is able to interpret and capture these types of information to\nreduce the number of false negative results.\nFor example, variable-length arguments (abbriviated as _varargs_ )\nare syntactic sugars in Java and are converted into raw arrays in\ncode generation. BScout avoids extracting array creations because\nJava compilers automatically create java.lang.Object[] when\ncalling _vararg_ methods [ 7 ]. This solves the inconsistency problem,\nbut BScout cannot detect if a programmer manually creates an\narray. On the contrary, Ppt4J interprets _varargs_ at the source code\nlevel, allowing it to detect all kinds of array creations.\n\n\nPpt4J: Patch Presence Test for Java Binaries ICSE \u201924, April 14\u201320, 2024, Lisbon, Portugal\n\n\n1 @@ -46,7 +47,7 @@ public abstract class MimeTypeUtils {\n\n2 // other codes omitted\n\n\n3\n\n\n**Figure 8: Patch snippet from CVE-2018-1272 [** **31** **]: An exam-**\n**ple of syntatic sugar that uses a field initialization statement**\n\n\n**Table 3: Time consumption on the dataset**\n\n\n**Framework** **Average** **\u223c75%** [a]\n\n\nBScout [b] 0.34 sec/patch 0.28 sec/patch\n\n\nPpt4J 0.48 sec/patch 0.30 sec/patch\n\n\n\na 75% of test cases are analyzed within this amount of time.\nb This refers to our reproduction of Dai et al.\u2019s work [7].\n\n\nAnother example of syntactic sugars in Java is field initializations. Field initializations are actually statements in the constructor\nmethod <init> or static initializing block <clinit> . Our work\nPpt4J is designed to extract features from field initializations, but\nBScout simply ignores them. Figure 8 is a security patch of the\nSpring framework [ 34 ], which only changes the initialization of the\nfield RND. Ppt4J detects this change, while BScout does not.\n\u2778 **Semantic redundancy in** _**diff**_ **.** As shown in Section 2.2,\nPpt4J utilizes the features of the source code and excludes unrelated\ninformation in _diff_ . However, BScout takes into account the whole\npatch _diff_ . Although BScout indeed does not miss any semantic\ninformation in the patches, it is very likely to introduce unrelated\ninformation and fail in cases as shown in Figure 1c.\n\n\n\n\n\n\n\n\n\n**5.2** **RQ2: Efficiency**\n\n\nTo answer RQ2, we measure the time consumption of Ppt4J on the\ndataset. [8] Table 3 shows that most patches can be quickly analyzed.\nSome patches may take a bit longer (several seconds) because of\nthe CFG construction and analysis on large bytecodes, but we think\nit is still acceptable compared to the time costs of human inspections. Ppt4J can achieve this performance because only dependent\nbytecodes are analyzed, so the time cost is not proportional to the\nproject size. Besides, the preprocessing phase in dataset preparations caches the source code features and reduces the analysis time\nwhen users input their binaries. Table 3 also lists the time consumption of our reimplemented baseline, BScout. Compared to BScout,\nPpt4J is a bit slower in most test cases, but we think that Ppt4J\u2019s\nadvantages in effectiveness (as discussed in RQ1) can compensate\nfor the shortcomings in terms of time efficiency.\n\n\n8 When collecting data, we ignore the startup time of the Java virtual machine and\nthird-party dependencies, and only focus on the components described in Section 3.\n\n\n\n\n  - Ppt4J **\ud835\udeab** **1** : Type analysis is removed. This means that method\nsignatures are not revised during feature extraction.\n\n  - Ppt4J **\ud835\udeab** **2** : Some special instructions are ignored, such as\nloop and branch.\n\n  - Ppt4J **\ud835\udeab** **3** : Constant propagation/folding is removed. This\nmeans that constant fields and expressions are not simplified\nduring feature extraction.\n\nWe evaluate the above four variants on the same dataset (as\ndescribed in Section 4.2), and compare the incomplete ones with\nPpt4J FULL . The results are illustrated in Figure 9. We can conclude\nthat Ppt4J benefits from these analyses. In the cases of Ppt4J **\ud835\udeab** **1-3**,\nthe F1 score decreases by 4.0%, 2.3%, and 6.8% respectively after one\nspecific analysis is removed.\n\n\n\n**5.4** **RQ4: In-the-wild Evaluation**\n\n\n_5.4.1_ _Experimental setting._ To evaluate the effectiveness of our\napproach in practical settings, we use IntelliJ IDEA Ultimate [ 38 ]\nas the target software for our in-the-wild evaluation. The reason\nto choose IntelliJ IDEA is that it is a widely used IDE software,\nand it embeds a large number of binaries from open-source Java\nlibraries. We obtain various versions of IntelliJ IDEA and extract\nthe included third-party libraries. Next, we conduct patch presence\n\n\n\n\nICSE \u201924, April 14\u201320, 2024, Lisbon, Portugal Zhiyuan Pan, Xing Hu, Xin Xia, Xian Zhan, David Lo, and Xiaohu Yang\n\n\n\n**Table 4: Evaluation on different versions of IntelliJ IDEA**\n\n\n**Version Timeline** [a]\n\n\n**Vulnerability**\nV1 V2 V3 V4 V5\n\n\na V1 - V5 are 5 versions of IntelliJ IDEA Ultimate, sorted in ascending order of release\ntime. V1: IU-181.5684.4; V2: IU-191.8026.42; V3: IU-203.8084.24; V4: IU-213.7172.25; V5:\nIU-231.8109.175. The first two digits in the version string specify the release year, e.g.,\nV1 was released in 2018.\nb Patch commit time. Retrieved from Github, in MM/YY format.\nc Real IDs of _CVE-Anonymous-1/2_ are omitted due to \u201cresponsible reporting\u201d principle.\nd N/A means this version of software does not include the library.\n\n\ntests on these open-source libraries for specific patches. However,\nlabeling real-world binaries with ground truth is challenging since\nnot all binary packages contain version information. To address\nthis issue, we utilize unit tests in some patches. These unit tests are\ncommitted together with the bug fixes, and can be trusted sources\nof ground truths. If our patch presence predictions align with the\nunit test results, it indicates that our approach can perform well in\nreal-world scenarios. Specifically, each test case employed in this\nexperiment includes: \u2776 Binaries of a third-party library extracted\nfrom IntelliJ IDEA. \u2777 A security patch, along with the unit test,\nand the source code of the library before and after the patch.\n\n\n_5.4.2_ _Results._ The detailed result is shown in Table 4. We conclude\n\nthat most of the output from Ppt4J is consistent with the unit\ntests and the accuracy is 89.7%. We also notice that Ppt4J does not\ngenerate false positive outputs. In conclusion, we believe that Ppt4J\nis capable of real world scenarios. We also learn some facts about\nthe patch status in IntelliJ IDEA from the experiment results.\n\u2776 The application vendor JetBrains promptly applied the upstream patch for CVE-2019-12402, ensuring that libraries in releases\nafter 2020 were not affected by this vulnerability. However, even\nthough the patch commit for CVE-2021-29425 was released in May\n2018, JetBrains did not apply it in one of their 2019 versions, such\nas _IU-191.8026.42_ . Similarly, for CVE-2015-6420, the patch commit\nwas available as early as November 2015, but they failed to apply it\nin one of the 2018 versions.\n\n\u2777 We notice that a third-party library in IntelliJ IDEA has not yet\nbeen patched for two specific vulnerabilities (i.e., _CVE-Anonymous-1_\nand _CVE-Anonymous-2_, as shown in Table 4) until now. The application vendor JetBrains forked its branch, but has not merged the\nupstream branch later, leaving the vulnerabilities unresolved. Although we cannot definitively assert that vulnerabilities in open\n\n\n\nsource libraries will invariably impact commercial software, we believe that minimizing vulnerabilities in these libraries can mitigate\nthe risk of exploitation. Thus, we report this problem to JetBrains.\n\u2778 We also perform this evaluation using our reimplemented\nbaseline. Compared to Ppt4J\u2019s results, the accuracy of BScout decreases by 14.3% and drops to 76.9%. Upon examination of the failed\ntest cases, we find out Ppt4J performs better due to its effectiveness in handling patches with minor changes, as discussed in RQ1.\nFor example, in the case of _CVE-Anonymous-1_, BScout cannot even\ntell whether a binary contains the patch because no features are\nextracted from the patch.\n\n\n\n\n\n**6** **DISCUSSION**\n\n**6.1** **Line number information**\n\n\nAlthough generated by default, line number information is part of\nthe debug information, and can be stripped from binaries. Ppt4J fails\nwithout such information. Despite this, we perform an empirical\nstudy on line number information in open-source Java libraries.\nWe collect 9,077 jar files (containing 2,032,221 class files in total),\nwhich are downloaded from the Maven central repository [ 13 ]. Our\nfindings show that over 90% of these class files include line number\ninformation. As Ppt4J is proposed for use for general open-source\nlibraries, we believe it is still applicable in many practical scenarios.\n\n\n**6.2** **Ppt4J vs. Baseline**\n\n\nCompared to the baseline BScout, Ppt4J selects different sets of\nfeature types, and applies different algorithms to extract non-trivial\nfeatures and handle syntactic sugars. With these algorithms, Ppt4J\nis able to capture minor changes in patches and the extracted features are more fine-grained, as illustrated in Section 3.2.3 and the\nqualitative analysis on the dataset in Section 5.1. It is also worth\nnoting that we propose the semantic change generator in Ppt4J.\nWith semantic change generation, Ppt4J is able to process _diff_ files\nand filter out unrelated information based on the previously extracted features, as illustrated in Section 2 and Section 3. However,\nBScout takes the complete patch _diff_ as input and cannot handle the\nsemantic redundancy in diffs. The drawback of Ppt4J compared to\nBScout is its efficiency and dependence on line number information,\nbut as discussed earlier in Section 5.2 and Section 6.1, we believe\nPpt4J remains practical.\n\n\n**7** **THREATS TO VALIDITY**\n\n\n**Correctness of our reproduction.** \u2776 As mentioned earlier in\nSection 4.2 and Section 5.1, we reimplement BScout [ 7 ] and reproduce identical results on dataset **D** **1** in terms of accuracy, precision,\nrecall and F1 score. However, in addition to **D** **1**, Dai et al. [ 7 ] also\nconstruct a dataset consisting of Android applications and evaluate\ntheir approach on this dataset. Since the details of this dataset are\nnot available, we cannot reproduce all experiments in the authors\u2019\n\n\nPpt4J: Patch Presence Test for Java Binaries ICSE \u201924, April 14\u201320, 2024, Lisbon, Portugal\n\n\n\npaper. This might be a threat to the correctness of our reproduction\nand the effectiveness evaluation. \u2777 We only reimplement one variant of BScout that relies on line number information. The complete\nversion of BScout leverages a machine learning model, but neither\nthe model weights nor the training dataset is publicly available.\nThus, it is not practical for us to reimplement the complete one.\nHowever, this does not create issues with the reliability of our findings in Section 5. According to Dai et al. [ 7 ], the performance of\nthe complete version of BScout is lower than the variant if line\nnumber information is present. Therefore, the performance of our\nreimplemented baseline reported in Section 5 is supposed to be an\nupper bound.\n**Patch backporting.** Backporting security patches to older versions\nis a common practice, which means that multiple different patch\ncommits can correspond to the same vulnerability. However, when\nconstructing the dataset, we only selected one version for each\nvulnerability, and Ppt4J cannot automatically select the correct\npatch commit. This limitation can lead to erroneous results when\nPpt4J analyzes open-source libraries in real-world scenarios.\n**Inherent flaws with rule-based features.** Ppt4J extracts rulebased features from the source code, providing finer granularity\nthan the baseline approach. However, this method has an inherent\nlimitation in that it cannot always cover all language features. As\nthe Java language continues to evolve, the tool must be updated to\nadapt to programs written using new standards.\n**Effectiveness against version changes.** In Ppt4J, we use the\nlongest common subsequence algorithm to match the features. However, this algorithm assumes that the source code structure is stable\nand may produce unsatisfactory results in the case of significant\ncode changes, such as API-breaking updates.\nFor example, during our evaluation of IntelliJ IDEA, we encounter four false negative samples related to _HTTPCLIENT-1803_\n(in Table 4). In this case, the unit tests show that the samples were\npatched, but Ppt4J fails to detect the patch.\nUpon further examination of the bytecodes, we discover that\nIntelliJ IDEA imported a library of a newer version, which has been\nreconstructed and replaced by a different set of APIs. As a result,\nthe code differences in the security patch were not reflected in the\nbinaries of the new version.\n\n\n**8** **RELATED WORK**\n\n\n**Binary similarity analysis.** The study of function similarity in\nbinaries has been tackled through various techniques. Bourquin\net al. [ 2 ] and BinDiff [ 5 ] rely on the isomorphism of control flow\ngraphs to evaluate similarities. Khoo et al. propose Rendezvous [ 22 ],\nwhich optimizes this approach by improving the granularity of\nthe analysis. Alternative approaches, such as BinHunt [ 14 ] and\niBinHunt [ 24 ], formulate the semantic equivalence of basic blocks\nthrough symbolic execution and theorem provers.\nFor cross-platform capability, Pewny et al. [ 36 ] extract I/O behaviors at the basic block level. In addition, Eschweiler et al. propose\ndiscovRE [ 9 ], which generates platform-independent feature vectors from basic blocks. Furthermore, new techniques have been\nproposed to address the issues of efficiency and scalability. Genius [ 10 ] encodes the representations of control flow graphs as\ngraph embeddings. Other methods like Gemini [ 43 ] further utilize\n\n\n\nneural networks. Additionally, Huang et al. [ 16 ] propose BinSequence, which uses Min-hashing to filter the search space.\n**Patch presence test.** The first to publicly propose and implement\npatch presence tests is FIBER [ 44 ]. FIBER generates binary signatures by analyzing security patches. These signatures reflect\nrepresentative changes introduced by the patches and are utilized\nto search for the target binary file.\nSubsequent papers improve and extend FIBER\u2019s approach. Dai et\nal. propose BScout [ 7 ] to check the existence of patches in Java binaries without generating signatures. BScout employs new techniques\nto bridge the gap between source code and bytecode instructions\nand to check patch semantics throughout the target executable\nfile. Jiang and Zhang propose PDiff [ 21 ] to test the patch presence of images from the downstream kernel in the open source\nkernel domain. PDiff generates summaries for patches. Based on\nsemantic summaries, PDiff compares the target with mainstream\nversions before and after applying the patch and selects the closest for evaluation. An alternative approach, Osprey [ 39 ], employs\na more lightweight static analysis algorithm compared to FIBER\nand improves efficiency without compromising too much accuracy.\nAmong the related work, FIBER, PDiff and Osprey test the patch\npresence of C/C++ binaries, while BScout and our proposed Ppt4J\ntarget Java binaries. Compared to the state of the art, the advantages\nof Ppt4J are mainly its superiority of capturing minor changes in\npatches and its ability to extract precise semantic changes from\npatch diffs.\n\n\n**9** **CONCLUSION AND FUTURE WORK**\n\n\nIn this paper, we aim to address the problem with patch _diffs_ in\nexisting work by highlighting semantic changes. Then we design\nand implement Ppt4J, a patch presence test framework targeting\nJava binaries, which performs accurate tests with the help of semantic changes that reflect differences in program effects. Ppt4J\nis systematically evaluated on a dataset with real-world vulnerabilities. The results show that Ppt4J achieves an F1 score of 98.5%\nwhile maintaining a reasonable performance. In addition, we perform an in-the-wild evaluation Ppt4J on IntelliJ IDEA, in which it\nachieves an accuracy of 89.7% with no false positive results. Ppt4J\ndetects two unpatched CVEs in a third-party library within IntelliJ\nIDEA, and we have reported this potential problem to the vendor.\nIn future work, one possible research attempt is to minimize the impact of significant code changes in binaries (e.g., patch backporting\nand version changes, as described in Section 7). This investigation\nmay help improve the effectiveness of our proposed approach in\nreal-world applications.\n\n\n**ACKNOWLEDGMENTS**\n\n\nThis research is supported by the Fundamental Research Funds for\nthe Central Universities (No. 226-2022-00064), National Natural Science Foundation of China (No. 62141222), and the National Research\nFoundation, under its Investigatorship Grant (NRF-NRFI08-20220002). Any opinions, findings and conclusions or recommendations\nexpressed in this material are those of the author(s) and do not\nreflect the views of National Research Foundation, Singapore.\n\n\nICSE \u201924, April 14\u201320, 2024, Lisbon, Portugal Zhiyuan Pan, Xing Hu, Xin Xia, Xian Zhan, David Lo, and Xiaohu Yang\n\n\n\n**REFERENCES**\n\n\n[1] Oracle and/or its affiliates. [n. d.]. Java Language and Virtual Machine Specifica[tions. Retrieved July 1, 2023 from https://docs.oracle.com/javase/specs](https://docs.oracle.com/javase/specs)\n\n[2] Martial Bourquin, Andy King, and Edward Robbins. 2013. Binslayer: accurate\ncomparison of binary executables. In _Proceedings of the 2nd ACM SIGPLAN Pro-_\n_gram Protection and Reverse Engineering Workshop_ . 1\u201310.\n\n[3] Eric Bruneton, Romain Lenglet, and Thierry Coupaye. 2002. ASM: A code manipulation tool to implement adaptable systems. _Adaptable and extensible component_\n_systems_ (2002).\n\n[4] Quang-Cuong Bui, Riccardo Scandariato, and Nicol\u00e1s E. D\u00edaz Ferreyra. 2022.\nVul4J: A Dataset of Reproducible Java Vulnerabilities Geared Towards the Study\nof Program Repair Techniques. In _2022 IEEE/ACM 19th International Conference_\n_on Mining Software Repositories (MSR)_ [. 464\u2013468. https://doi.org/10.1145/3524842.](https://doi.org/10.1145/3524842.3528482)\n[3528482](https://doi.org/10.1145/3524842.3528482)\n\n[5] The Zynamics Company. [n. d.]. BinDiff. [Retrieved July 1, 2023 from https:](https://www.zynamics.com/bindiff.html)\n[//www.zynamics.com/bindiff.html](https://www.zynamics.com/bindiff.html)\n\n[6] The MITRE Corporation. [n. d.]. Common Vulnerabilities and Exposures. Re[trieved July 1, 2023 from https://www.cve.org](https://www.cve.org)\n\n[7] Jiarun Dai, Yuan Zhang, Zheyue Jiang, Yingtian Zhou, Junyan Chen, Xinyu Xing,\nXiaohan Zhang, Xin Tan, Min Yang, and Zhemin Yang. 2020. BScout: Direct\nwhole patch presence test for java executables. In _Proceedings of the 29th USENIX_\n_Conference on Security Symposium_ . 1147\u20131164.\n\n[8] Yaniv David and Eran Yahav. 2014. Tracelet-Based Code Search in Executables.\nIn _Proceedings of the 35th ACM SIGPLAN Conference on Programming Language_\n_Design and Implementation_ (Edinburgh, United Kingdom) _(PLDI \u201914)_ . Association\nfor Computing Machinery, New York, NY, USA, 349\u2013360. [https://doi.org/10.](https://doi.org/10.1145/2594291.2594343)\n[1145/2594291.2594343](https://doi.org/10.1145/2594291.2594343)\n\n[9] Sebastian Eschweiler, Khaled Yakdan, Elmar Gerhards-Padilla, et al . 2016. discovRE: Efficient Cross-Architecture Identification of Bugs in Binary Code.. In\n_Ndss_, Vol. 52. 58\u201379.\n\n[10] Qian Feng, Rundong Zhou, Chengcheng Xu, Yao Cheng, Brian Testa, and Heng\nYin. 2016. Scalable graph-based bug search for firmware images. In _Proceedings_\n_of the 2016 ACM SIGSAC Conference on Computer and Communications Security_ .\n480\u2013491.\n\n[11] The Apache Software Foundation. 2023. Apache Ant. Retrieved July 1, 2023\n[from https://ant.apache.org](https://ant.apache.org)\n\n[12] The Apache Software Foundation. 2023. Log4j - Apache Log4j(TM) 2. Retrieved\n[July 1, 2023 from https://logging.apache.org/log4j/2.x](https://logging.apache.org/log4j/2.x)\n\n[13] The Apache Software Foundation. 2023. Maven. Retrieved July 1, 2023 from\n[https://maven.apache.org](https://maven.apache.org)\n\n[14] Debin Gao, Michael K Reiter, and Dawn Song. 2008. Binhunt: Automatically\nfinding semantic differences in binary programs. In _Information and Communica-_\n_tions Security: 10th International Conference, ICICS 2008 Birmingham, UK, October_\n_20-22, 2008 Proceedings 10_ . Springer, 238\u2013255.\n\n[15] Susan Horwitz. 1990. Identifying the Semantic and Textual Differences between\nTwo Versions of a Program. In _Proceedings of the ACM SIGPLAN 1990 Conference_\n_on Programming Language Design and Implementation_ (White Plains, New York,\nUSA) _(PLDI \u201990)_ . Association for Computing Machinery, New York, NY, USA,\n[234\u2013245. https://doi.org/10.1145/93542.93574](https://doi.org/10.1145/93542.93574)\n\n[16] He Huang, Amr M Youssef, and Mourad Debbabi. 2017. Binsequence: Fast,\naccurate and scalable binary code reuse detection. In _Proceedings of the 2017 ACM_\n_on Asia conference on computer and communications security_ . 155\u2013166.\n\n[17] Emanuele Iannone, Roberta Guadagni, Filomena Ferrucci, Andrea De Lucia, and\nFabio Palomba. 2023. The Secret Life of Software Vulnerabilities: A Large-Scale\nEmpirical Study. _IEEE Transactions on Software Engineering_ 49, 1 (2023), 44\u201363.\n[https://doi.org/10.1109/TSE.2022.3140868](https://doi.org/10.1109/TSE.2022.3140868)\n\n[18] Free Software Foundation Inc. [n. d.]. Detailed Unified (Comparing and Merging\nFiles). [Retrieved Oct 11, 2023 from https://www.gnu.org/software/diffutils/](https://www.gnu.org/software/diffutils/manual/html_node/Detailed-Unified.html)\n[manual/html_node/Detailed-Unified.html](https://www.gnu.org/software/diffutils/manual/html_node/Detailed-Unified.html)\n\n[19] [Gradle Inc. 2023. Gradle Build Tool. Retrieved July 1, 2023 from https://gradle.org](https://gradle.org)\n\n[[20] INRIA. [n. d.]. ASM. Retrieved July 1, 2023 from https://asm.ow2.io](https://asm.ow2.io)\n\n\n\n\n[21] Zheyue Jiang, Yuan Zhang, Jun Xu, Qi Wen, Zhenghe Wang, Xiaohan Zhang,\nXinyu Xing, Min Yang, and Zhemin Yang. 2020. PDiff: Semantic-Based Patch\nPresence Testing for Downstream Kernels. In _Proceedings of the 2020 ACM SIGSAC_\n_Conference on Computer and Communications Security_ (Virtual Event, USA) _(CCS_\n_\u201920)_ . Association for Computing Machinery, New York, NY, USA, 1149\u20131163.\n\n[https://doi.org/10.1145/3372297.3417240](https://doi.org/10.1145/3372297.3417240)\n\n[22] Wei Ming Khoo, Alan Mycroft, and Ross Anderson. 2013. Rendezvous: A search\nengine for binary code. In _2013 10th Working Conference on Mining Software_\n_Repositories (MSR)_ . IEEE, 329\u2013338.\n\n[23] Eugene Kuleshov. 2007. Using ASM framework to implement common bytecode\ntransformation patterns. _Proc. of the 6th AOSD, ACM Press_ (2007).\n\n[24] Jiang Ming, Meng Pan, and Debin Gao. 2013. iBinHunt: Binary hunting with\ninter-procedural control flow. In _Information Security and Cryptology\u2013ICISC 2012:_\n_15th International Conference, Seoul, Korea, November 28-30, 2012, Revised Selected_\n_Papers 15_ . Springer, 92\u2013109.\n\n[25] Audris Mockus. 2007. Large-scale code reuse in open source software. In _First_\n_International Workshop on Emerging Trends in FLOSS Research and Development_\n_(FLOSS\u201907: ICSE Workshops 2007)_ . IEEE, 7\u20137.\n\n[26] NIST. [n. d.]. National Vulnerability Database. Retrieved July 1, 2023 from\n[https://nvd.nist.gov](https://nvd.nist.gov)\n\n[27] [NVD. 2016. CVE-2016-8739. Retrieved July 1, 2023 from https://nvd.nist.gov/](https://nvd.nist.gov/vuln/detail/CVE-2016-8739)\n[vuln/detail/CVE-2016-8739](https://nvd.nist.gov/vuln/detail/CVE-2016-8739)\n\n[28] [NVD. 2017. CVE-2017-1000498. Retrieved July 1, 2023 from https://nvd.nist.gov/](https://nvd.nist.gov/vuln/detail/CVE-2017-1000498)\n[vuln/detail/CVE-2017-1000498](https://nvd.nist.gov/vuln/detail/CVE-2017-1000498)\n\n[29] [NVD. 2017. CVE-2017-18349. Retrieved July 1, 2023 from https://nvd.nist.gov/](https://nvd.nist.gov/vuln/detail/CVE-2017-18349)\n[vuln/detail/CVE-2017-18349](https://nvd.nist.gov/vuln/detail/CVE-2017-18349)\n\n[30] [NVD. 2018. CVE-2018-11797. Retrieved July 1, 2023 from https://nvd.nist.gov/](https://nvd.nist.gov/vuln/detail/CVE-2018-11797)\n[vuln/detail/CVE-2018-11797](https://nvd.nist.gov/vuln/detail/CVE-2018-11797)\n\n[31] [NVD. 2018. CVE-2018-1272. Retrieved July 1, 2023 from https://nvd.nist.gov/](https://nvd.nist.gov/vuln/detail/CVE-2018-1272)\n[vuln/detail/CVE-2018-1272](https://nvd.nist.gov/vuln/detail/CVE-2018-1272)\n\n[32] [NVD. 2018. CVE-2018-17202. Retrieved July 1, 2023 from https://nvd.nist.gov/](https://nvd.nist.gov/vuln/detail/CVE-2018-17202)\n[vuln/detail/CVE-2018-17202](https://nvd.nist.gov/vuln/detail/CVE-2018-17202)\n\n[33] [NVD. 2021. CVE-2021-44228. Retrieved July 1, 2023 from https://nvd.nist.gov/](https://nvd.nist.gov/vuln/detail/CVE-2021-44228)\n[vuln/detail/CVE-2021-44228](https://nvd.nist.gov/vuln/detail/CVE-2021-44228)\n\n[34] VMware Inc. or its affiliates. [n. d.]. Spring Framework. Retrieved July 1, 2023\n[from https://spring.io/projects/spring-framework](https://spring.io/projects/spring-framework)\n\n[35] Renaud Pawlak, Martin Monperrus, Nicolas Petitprez, Carlos Noguera, and Lionel\nSeinturier. 2015. Spoon: A Library for Implementing Analyses and Transformations of Java Source Code. _Software: Practice and Experience_ 46 (2015), 1155\u20131179.\n[https://doi.org/10.1002/spe.2346](https://doi.org/10.1002/spe.2346)\n\n[36] Jannik Pewny, Behrad Garmany, Robert Gawlik, Christian Rossow, and Thorsten\nHolz. 2015. Cross-architecture bug search in binary executables. In _2015 IEEE_\n_Symposium on Security and Privacy_ . IEEE, 709\u2013724.\n\n[37] SecurityScorecard. 2023. Browse cve vulnerabilities by date. Retrieved July 1,\n[2023 from https://www.cvedetails.com/browse-by-date.php](https://www.cvedetails.com/browse-by-date.php)\n\n[38] JetBrains s.r.o. [n. d.]. IntelliJ IDEA \u2013 the Leading Java and Kotlin IDE. Retrieved\n[July 1, 2023 from https://www.jetbrains.com/idea](https://www.jetbrains.com/idea)\n\n[39] Peiyuan Sun, Qiben Yan, Haoyi Zhou, and Jianxin Li. 2021. Osprey: A fast and\naccurate patch presence test framework for binaries. _Computer Communications_\n[173 (2021), 95\u2013106. https://doi.org/10.1016/j.comcom.2021.03.011](https://doi.org/10.1016/j.comcom.2021.03.011)\n\n[40] Wikipedia. 2023. Diff - Wikipedia. [Retrieved July 1, 2023 from https://en.](https://en.wikipedia.org/wiki/Diff)\n[wikipedia.org/wiki/Diff](https://en.wikipedia.org/wiki/Diff)\n\n[41] Wikipedia. 2023. Jaccard index - Wikipedia. Retrieved July 1, 2023 from\n[https://en.wikipedia.org/wiki/Jaccard_index](https://en.wikipedia.org/wiki/Jaccard_index)\n\n[42] Wikipedia. 2023. Syntactic sugar - Wikipedia. Retrieved July 1, 2023 from\n[https://en.wikipedia.org/wiki/Syntactic_sugar](https://en.wikipedia.org/wiki/Syntactic_sugar)\n\n[43] Xiaojun Xu, Chang Liu, Qian Feng, Heng Yin, Le Song, and Dawn Song. 2017.\nNeural network-based graph embedding for cross-platform binary code similarity\ndetection. In _Proceedings of the 2017 ACM SIGSAC conference on computer and_\n_communications security_ . 363\u2013376.\n\n[44] Hang Zhang and Zhiyun Qian. 2018. Precise and Accurate Patch Presence Test\nfor Binaries. In _USENIX Security Symposium_ . 887\u2013902.\n\n\n</output>",
+      "exec_time": 0.07550787925720215
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: To follow the recommended Docker-based replication path and get an environment with the dataset already configured, I need to pull the official PPT4J Docker image from Docker Hub.\n\n<mini_swe_agent_bash>\ndocker pull zhiyuanpan/ppt4j\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 9.420509576797485,
+        "response": {
+          "id": "chatcmpl-D0Z0t27fBbDrfX2hy4cu2geZrU2s9",
+          "created": 1769026963,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: To follow the recommended Docker-based replication path and get an environment with the dataset already configured, I need to pull the official PPT4J Docker image from Docker Hub.\n\n<mini_swe_agent_bash>\ndocker pull zhiyuanpan/ppt4j\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 370,
+            "prompt_tokens": 23474,
+            "total_tokens": 23844,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 297,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nUsing default tag: latest\nlatest: Pulling from zhiyuanpan/ppt4j\n527f5363b98e: Pulling fs layer\n541944f1a010: Pulling fs layer\n86c172bdd8dd: Pulling fs layer\n62d17cf57850: Pulling fs layer\nfdec588fd8f8: Pulling fs layer\n0293575c18f5: Pulling fs layer\nd4ca37895237: Pulling fs layer\nee10ee565ba9: Pulling fs layer\n62d17cf57850: Waiting\nfdec588fd8f8: Waiting\nd4ca37895237: Waiting\n0293575c18f5: Waiting\n86c172bdd8dd: Verifying Checksum\n86c172bdd8dd: Download complete\n527f5363b98e: Verifying Checksum\n527f5363b98e: Download complete\n62d17cf57850: Verifying Checksum\n62d17cf57850: Download complete\nfdec588fd8f8: Verifying Checksum\nfdec588fd8f8: Download complete\n0293575c18f5: Download complete\nee10ee565ba9: Verifying Checksum\nee10ee565ba9: Download complete\n527f5363b98e: Pull complete\n541944f1a010: Verifying Checksum\n541944f1a010: Download complete\n541944f1a010: Pull complete\n86c172bdd8dd: Pull complete\n62d17cf57850: Pull complete\nfdec588fd8f8: Pull complete\n0293575c18f5: Pull complete\nd4ca37895237: Verifying Checksum\nd4ca37895237: Download complete\nd4ca37895237: Pull complete\nee10ee565ba9: Pull complete\nDigest: sha256:d7ae5999f87de67070ecf852942861cacc07752fafb21f1fc26ea28c8415a661\nStatus: Downloaded newer image for zhiyuanpan/ppt4j:latest\ndocker.io/zhiyuanpan/ppt4j:latest\n</output>",
+      "exec_time": 1483.1311633586884
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: With the Docker image available, I should start a long-running container using the prescribed pattern so I can later execute the replication commands inside it via `docker exec`.\n\n<mini_swe_agent_bash>\ndocker run -d --init --entrypoint bash --name ppt4j zhiyuanpan/ppt4j -c 'sleep infinity'\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.269933462142944,
+        "response": {
+          "id": "chatcmpl-D0ZOxmOfedn8lhEeJiivyvLOcIUqJ",
+          "created": 1769028455,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: With the Docker image available, I should start a long-running container using the prescribed pattern so I can later execute the replication commands inside it via `docker exec`.\n\n<mini_swe_agent_bash>\ndocker run -d --init --entrypoint bash --name ppt4j zhiyuanpan/ppt4j -c 'sleep infinity'\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 222,
+            "prompt_tokens": 24042,
+            "total_tokens": 24264,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 132,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n14746c844e7d0b4cd1006a38d6eb21f4390bd1c8bdc48cb75fcf921b212de613\n</output>",
+      "exec_time": 4.047616243362427
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I need to inspect the filesystem inside the running container to locate the project root (where replicate_rq1.py and scripts live) so I can run the RQ1 replication commands for Table 2.\n\n<mini_swe_agent_bash>\ndocker exec ppt4j /bin/bash --noprofile --norc -c \"ls\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.548022031784058,
+        "response": {
+          "id": "chatcmpl-D0ZP7O32cESZudz0CsVyicH4EhZe9",
+          "created": 1769028465,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I need to inspect the filesystem inside the running container to locate the project root (where replicate_rq1.py and scripts live) so I can run the RQ1 replication commands for Table 2.\n\n<mini_swe_agent_bash>\ndocker exec ppt4j /bin/bash --noprofile --norc -c \"ls\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 258,
+            "prompt_tokens": 24187,
+            "total_tokens": 24445,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 168,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nREADME.md\nall.iml\nbaseline\ndatabase\ndownload.sh\nframework\nlib\nmisc\npom.xml\nreplicate_rq1.py\nrqs\nscripts\nurls.txt\n</output>",
+      "exec_time": 0.22205829620361328
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: To understand how RQ1 (and thus Table 2) is reproduced, I should open `replicate_rq1.py` inside the container and see what commands it runs and what outputs it produces.\n\n<mini_swe_agent_bash>\ndocker exec ppt4j /bin/bash --noprofile --norc -c \"sed -n '1,200p' replicate_rq1.py\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.714056730270386,
+        "response": {
+          "id": "chatcmpl-D0ZPC4caTT5gDnNqeAvcCUXy5cEbT",
+          "created": 1769028470,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: To understand how RQ1 (and thus Table 2) is reproduced, I should open `replicate_rq1.py` inside the container and see what commands it runs and what outputs it produces.\n\n<mini_swe_agent_bash>\ndocker exec ppt4j /bin/bash --noprofile --norc -c \"sed -n '1,200p' replicate_rq1.py\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 196,
+            "prompt_tokens": 24331,
+            "total_tokens": 24527,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 92,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nimport math\nimport os\nimport subprocess\n\nexclude = [62, 63, 67, 72, 73, 74]\nD1_RANGE = [2, 6, 7, 11, 42, 59, 60] + [i for i in range(80, 117)]\n\nD1 = [0, 0, 0, 0]\nD2 = [0, 0, 0, 0]\n\ndef classify(gt_type, score):\n    assert gt_type in ['prepatch', 'postpatch']\n    if math.isnan(score):\n        score = 0\n    assert 0 <= score <= 1\n    if gt_type == 'prepatch':\n        if score >= 0.6:\n            return 1\n        else:\n            return 2\n    elif gt_type == 'postpatch':\n        if score >= 0.6:\n            return 0\n        else:\n            return 3\n\ndef place(vul_id):\n    assert 1 <= vul_id < 117 and vul_id not in exclude\n    if vul_id in D1_RANGE:\n        return D1\n    else:\n        return D2\n\ndef acc(tp, fp, tn, fn):\n    return (tp + tn) / (tp + fp + tn + fn)\n\ndef prec(tp, fp, tn, fn):\n    return tp / (tp + fp)\n\ndef recall(tp, fp, tn, fn):\n    return tp / (tp + fn)\n\ndef f1(tp, fp, tn, fn):\n    p = prec(tp, fp, tn, fn)\n    r = recall(tp, fp, tn, fn)\n    return 2 * p * r / (p + r)\n\nos.system('mvn clean install -DskipTests >/dev/null 2>&1')\n\ndef fire_single_test(idx, gt_type):\n    ex = subprocess.Popen(f'java -cp lib/*:framework/target/classes/ ppt4j.Main analyze {idx} {gt_type} | grep \"Result:\"',\n                          shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)\n    out, _ = ex.communicate()\n    score = float(out.splitlines()[0].split()[-1])\n    print(f'#{idx} {gt_type} {score}')\n    place(idx)[classify(gt_type, score)] += 1\n\nfor idx in range(1, 117):\n    if idx in exclude:\n        continue\n    for gt_type in ['prepatch', 'postpatch']:\n        fire_single_test(idx, gt_type)\n\nprint('-----------   PPT4J   ------------')\nprint('    ACC     PREC    RECALL  F1    ')\nprint('D1  {:.4f}  {:.4f}  {:.4f}  {:.4f}'.format(acc(*D1), prec(*D1), recall(*D1), f1(*D1)))\nprint('D2  {:.4f}  {:.4f}  {:.4f}  {:.4f}'.format(acc(*D2), prec(*D2), recall(*D2), f1(*D2)))\n\n</output>",
+      "exec_time": 0.43999600410461426
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: To obtain the actual accuracy, precision, recall, and F1 values for PPT4J on D1 and D2 (which populate Table 2), I should run the provided `replicate_rq1.py` script inside the container and inspect its printed summary.\n\n<mini_swe_agent_bash>\ndocker exec ppt4j /bin/bash --noprofile --norc -c \"python replicate_rq1.py\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 10.547948360443115,
+        "response": {
+          "id": "chatcmpl-D0ZPJ3vjSwSOisamQroHgCSQkPUTL",
+          "created": 1769028477,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: To obtain the actual accuracy, precision, recall, and F1 values for PPT4J on D1 and D2 (which populate Table 2), I should run the provided `replicate_rq1.py` script inside the container and inspect its printed summary.\n\n<mini_swe_agent_bash>\ndocker exec ppt4j /bin/bash --noprofile --norc -c \"python replicate_rq1.py\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 470,
+            "prompt_tokens": 25100,
+            "total_tokens": 25570,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 362,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 24320
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n#1 prepatch 0.0\n#1 postpatch 1.0\n#2 prepatch 0.0\n#2 postpatch 1.0\n#3 prepatch 0.0\n#3 postpatch 1.0\n#4 prepatch 0.0\n#4 postpatch 1.0\n#5 prepatch 0.0\n#5 postpatch 1.0\n#6 prepatch 0.0\n#6 postpatch 1.0\n#7 prepatch 0.0\n#7 postpatch 1.0\n#8 prepatch 0.0\n#8 postpatch 1.0\n#9 prepatch 0.0\n#9 postpatch 0.8181818181818182\n#10 prepatch 0.0\n#10 postpatch 1.0\n#11 prepatch 0.047619047619047616\n#11 postpatch 1.0\n#12 prepatch 0.0\n#12 postpatch 1.0\n#13 prepatch 0.0\n#13 postpatch 0.6\n#14 prepatch 0.0\n#14 postpatch 0.9115646258503401\n#15 prepatch 0.0\n#15 postpatch 1.0\n#16 prepatch 0.0\n#16 postpatch 1.0\n#17 prepatch 0.0\n#17 postpatch 1.0\n#18 prepatch 0.0\n#18 postpatch 1.0\n#19 prepatch 0.0\n#19 postpatch 1.0\n#20 prepatch 0.0\n#20 postpatch 1.0\n#21 prepatch 0.0\n#21 postpatch 1.0\n#22 prepatch 0.0\n#22 postpatch 1.0\n#23 prepatch 0.0\n#23 postpatch 1.0\n#24 prepatch 0.0\n#24 postpatch 1.0\n#25 prepatch 0.0\n#25 postpatch 1.0\n#26 prepatch nan\n#26 postpatch nan\n#27 prepatch 0.07407407407407407\n#27 postpatch 0.9259259259259259\n#28 prepatch 0.04\n#28 postpatch 0.92\n#29 prepatch 0.19672131147540983\n#29 postpatch 0.6721311475409836\n#30 prepatch 0.0\n#30 postpatch 1.0\n#31 prepatch 0.25\n#31 postpatch 0.9583333333333334\n#32 prepatch nan\n#32 postpatch nan\n#33 prepatch 0.0\n#33 postpatch 0.8888888888888888\n#34 prepatch 0.0\n#34 postpatch 1.0\n#35 prepatch 0.0\n#35 postpatch 1.0\n#36 prepatch 0.0\n#36 postpatch 1.0\n#37 prepatch 0.0\n#37 postpatch 1.0\n#38 prepatch 0.0\n#38 postpatch 1.0\n#39 prepatch 0.42857142857142855\n#39 postpatch 1.0\n#40 prepatch 0.5\n#40 postpatch 1.0\n#41 prepatch 0.0\n#41 postpatch 1.0\n#42 prepatch 0.0\n#42 postpatch 0.9893617021276596\n#43 prepatch 0.0\n#43 postpatch 1.0\n#44 prepatch 0.0\n#44 postpatch 1.0\n#45 prepatch 0.0\n#45 postpatch 1.0\n#46 prepatch 0.0\n#46 postpatch 1.0\n#47 prepatch 0.0\n#47 postpatch 1.0\n#48 prepatch 0.0\n#48 postpatch 1.0\n#49 prepatch 0.0\n#49 postpatch 1.0\n#50 prepatch 0.3333333333333333\n#50 postpatch 1.0\n#51 prepatch 0.5\n#51 postpatch 1.0\n#52 prepatch 0.0\n#52 postpatch 0.8666666666666667\n#53 prepatch 0.0\n#53 postpatch 1.0\n#54 prepatch 0.0\n#54 postpatch 1.0\n#55 prepatch 0.3333333333333333\n#55 postpatch 1.0\n#56 prepatch 0.0\n#56 postpatch 1.0\n#57 prepatch 0.0\n#57 postpatch 1.0\n#58 prepatch 0.0\n#58 postpatch 0.75\n#59 prepatch 0.0\n#59 postpatch 1.0\n#60 prepatch 0.2\n#60 postpatch 1.0\n#61 prepatch 0.0\n#61 postpatch 1.0\n#64 prepatch 0.0\n#64 postpatch 1.0\n#65 prepatch 0.0\n#65 postpatch 1.0\n#66 prepatch 0.0\n#66 postpatch 1.0\n#68 prepatch 0.07462686567164178\n#68 postpatch 0.9104477611940298\n#69 prepatch 0.0\n#69 postpatch 1.0\n#70 prepatch 0.11904761904761904\n#70 postpatch 0.6904761904761905\n#71 prepatch 0.0\n#71 postpatch 1.0\n#75 prepatch 0.0\n#75 postpatch 1.0\n#76 prepatch 0.0\n#76 postpatch 1.0\n#77 prepatch 0.0\n#77 postpatch 1.0\n#78 prepatch 0.11538461538461539\n#78 postpatch 1.0\n#79 prepatch 0.06976744186046512\n#79 postpatch 1.0\n#80 prepatch 0.1388888888888889\n#80 postpatch 0.75\n#81 prepatch 0.5\n#81 postpatch 0.875\n#82 prepatch 0.0\n#82 postpatch 1.0\n#83 prepatch 0.11764705882352941\n#83 postpatch 0.8823529411764706\n#84 prepatch 0.0\n#84 postpatch 1.0\n#85 prepatch 0.0\n#85 postpatch 1.0\n#86 prepatch 0.10344827586206896\n#86 postpatch 0.896551724137931\n#87 prepatch 0.17543859649122806\n#87 postpatch 0.7017543859649122\n#88 prepatch 0.0\n#88 postpatch 1.0\n#89 prepatch 0.0\n#89 postpatch 1.0\n#90 prepatch 0.05982905982905983\n#90 postpatch 0.8632478632478633\n#91 prepatch 0.0\n#91 postpatch 1.0\n#92 prepatch 0.0\n#92 postpatch 1.0\n#93 prepatch 0.0\n#93 postpatch 1.0\n#94 prepatch 0.2198581560283688\n#94 postpatch 0.9347517730496454\n#95 prepatch 0.21739130434782608\n#95 postpatch 0.9565217391304348\n#96 prepatch 0.5\n#96 postpatch 1.0\n#97 prepatch 0.0\n#97 postpatch 1.0\n#98 prepatch 0.21739130434782608\n#98 postpatch 0.8260869565217391\n#99 prepatch 0.0\n#99 postpatch 1.0\n#100 prepatch 0.0\n#100 postpatch 0.7368421052631579\n#101 prepatch 0.1111111111111111\n#101 postpatch 0.7777777777777778\n#102 prepatch 0.0\n#102 postpatch 1.0\n#103 prepatch 0.0\n#103 postpatch 1.0\n#104 prepatch 0.017094017094017096\n#104 postpatch 0.9316239316239316\n#105 prepatch 0.0\n#105 postpatch 0.7857142857142857\n#106 prepatch 0.0\n#106 postpatch 1.0\n#107 prepatch 0.41139240506329117\n#107 postpatch 0.7943037974683544\n#108 prepatch 0.0\n#108 postpatch 1.0\n#109 prepatch 0.08333333333333333\n#109 postpatch 1.0\n#110 prepatch 0.016129032258064516\n#110 postpatch 0.7741935483870968\n#111 prepatch 0.0\n#111 postpatch 0.6666666666666666\n#112 prepatch 0.140625\n#112 postpatch 0.84375\n#113 prepatch 0.0\n#113 postpatch 0.75\n#114 prepatch 0.2\n#114 postpatch 0.8\n#115 prepatch 0.09647058823529411\n#115 postpatch 0.8329411764705882\n#116 prepatch 0.0\n#116 postpatch 1.0\n-----------   PPT4J   ------------\n    ACC     PREC    RECALL  F1    \nD1  1.0000  1.0000  1.0000  1.0000\nD2  0.9848  1.0000  0.9697  0.9846\n</output>",
+      "exec_time": 1428.9053130149841
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I will now create the required `repro_ppt4j_table_2.sh` script using the provided template, filling in the concrete Docker-based reproduction steps that run `replicate_rq1.py`, parse its summary metrics, generate `/workspace/repro.txt` as a Markdown table with percentages, and then submit the script via `artisan submit`.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_ppt4j_table_2.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Test results on the dataset**\n\n| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\n| ---------- | ------ | ---------------: | ----: | -----: | ----: |\n| PPT4J      | **D1** |             ???% |  ???% |   ???% |  ???% |\n|            | **D2** |            ??.?% |  ???% |  ??.?% | ??.?% |\n\nEOTABLE\n# Section 2: Artifact download\nartisan get https://github.com/pan2013e/ppt4j\n# Section 3: Reproduction commands (populate from reviewed steps)\ndocker pull zhiyuanpan/ppt4j\ndocker run -d --init --entrypoint bash --name ppt4j zhiyuanpan/ppt4j -c 'sleep infinity'\ndocker exec ppt4j /bin/bash --noprofile --norc -c \"python replicate_rq1.py\" > /workspace/rq1_raw.txt\nawk '\nfunction fmt(x) {\n  v = x * 100;\n  if (int(v + 0.5) == v) {\n    return sprintf(\"%d%%\", v);\n  } else {\n    return sprintf(\"%.1f%%\", v);\n  }\n}\nBEGIN {\n  d1_acc=d1_prec=d1_rec=d1_f1=\"\";\n  d2_acc=d2_prec=d2_rec=d2_f1=\"\";\n}\n^D1[[:space:]] {\n  d1_acc  = fmt($2);\n  d1_prec = fmt($3);\n  d1_rec  = fmt($4);\n  d1_f1   = fmt($5);\n}\n^D2[[:space:]] {\n  d2_acc  = fmt($2);\n  d2_prec = fmt($3);\n  d2_rec  = fmt($4);\n  d2_f1   = fmt($5);\n}\nEND {\n  print \"**Table 2: Test results on the dataset**\";\n  print \"\";\n  print \"| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\";\n  print \"| ---------- | ------ | ---------------: | ----: | -----: | ----: |\";\n  printf \"| PPT4J      | **D1** | %15s | %5s | %6s | %5s |\\n\", d1_acc, d1_prec, d1_rec, d1_f1;\n  printf \"|            | **D2** | %15s | %5s | %6s | %5s |\\n\", d2_acc, d2_prec, d2_rec, d2_f1;\n}\n' /workspace/rq1_raw.txt > /workspace/repro.txt\ndocker rm -f ppt4j >/dev/null 2>&1 || true\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_ppt4j_table_2.sh\nartisan submit /workspace/repro_ppt4j_table_2.sh\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 95.90145134925842,
+        "response": {
+          "id": "chatcmpl-D0ZmWZp5RAwnulg0vtDlHDNlWxLMS",
+          "created": 1769029916,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I will now create the required `repro_ppt4j_table_2.sh` script using the provided template, filling in the concrete Docker-based reproduction steps that run `replicate_rq1.py`, parse its summary metrics, generate `/workspace/repro.txt` as a Markdown table with percentages, and then submit the script via `artisan submit`.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_ppt4j_table_2.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Test results on the dataset**\n\n| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\n| ---------- | ------ | ---------------: | ----: | -----: | ----: |\n| PPT4J      | **D1** |             ???% |  ???% |   ???% |  ???% |\n|            | **D2** |            ??.?% |  ???% |  ??.?% | ??.?% |\n\nEOTABLE\n# Section 2: Artifact download\nartisan get https://github.com/pan2013e/ppt4j\n# Section 3: Reproduction commands (populate from reviewed steps)\ndocker pull zhiyuanpan/ppt4j\ndocker run -d --init --entrypoint bash --name ppt4j zhiyuanpan/ppt4j -c 'sleep infinity'\ndocker exec ppt4j /bin/bash --noprofile --norc -c \"python replicate_rq1.py\" > /workspace/rq1_raw.txt\nawk '\nfunction fmt(x) {\n  v = x * 100;\n  if (int(v + 0.5) == v) {\n    return sprintf(\"%d%%\", v);\n  } else {\n    return sprintf(\"%.1f%%\", v);\n  }\n}\nBEGIN {\n  d1_acc=d1_prec=d1_rec=d1_f1=\"\";\n  d2_acc=d2_prec=d2_rec=d2_f1=\"\";\n}\n^D1[[:space:]] {\n  d1_acc  = fmt($2);\n  d1_prec = fmt($3);\n  d1_rec  = fmt($4);\n  d1_f1   = fmt($5);\n}\n^D2[[:space:]] {\n  d2_acc  = fmt($2);\n  d2_prec = fmt($3);\n  d2_rec  = fmt($4);\n  d2_f1   = fmt($5);\n}\nEND {\n  print \"**Table 2: Test results on the dataset**\";\n  print \"\";\n  print \"| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\";\n  print \"| ---------- | ------ | ---------------: | ----: | -----: | ----: |\";\n  printf \"| PPT4J      | **D1** | %15s | %5s | %6s | %5s |\\n\", d1_acc, d1_prec, d1_rec, d1_f1;\n  printf \"|            | **D2** | %15s | %5s | %6s | %5s |\\n\", d2_acc, d2_prec, d2_rec, d2_f1;\n}\n' /workspace/rq1_raw.txt > /workspace/repro.txt\ndocker rm -f ppt4j >/dev/null 2>&1 || true\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_ppt4j_table_2.sh\nartisan submit /workspace/repro_ppt4j_table_2.sh\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 4624,
+            "prompt_tokens": 27511,
+            "total_tokens": 32135,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 3808,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>2</returncode>\n<output>\n```bash\n# (...omitted...)\n  printf \"| PPT4J      | **D1** | %15s | %5s | %6s | %5s |\\n\", d1_acc, d1_prec, d1_rec, d1_f1;\n  printf \"|            | **D2** | %15s | %5s | %6s | %5s |\\n\", d2_acc, d2_prec, d2_rec, d2_f1;\n}\n' /workspace/rq1_raw.txt > /workspace/repro.txt # <<< YOUR SCRIPT ERRORED ON THIS: Cloning into 'ppt4j'... awk: line 14: syntax error at or near ^ awk: line 20: syntax error at or near ^ Runtime Error: Command \"awk ' function fmt(x) {   v = x * 100;   if (int(v + 0.5) == v) {     return sprintf(\"%d%%\", v);   } else {     return sprintf(\"%.1f%%\", v);   } } BEGIN {   d1_acc=d1_prec=d1_rec=d1_f1=\"\";   d2_acc=d2_prec=d2_rec=d2_f1=\"\"; } ^D1[[:space:]] {   d1_acc  = fmt($2);   d1_prec = fmt($3);   d1_rec  = fmt($4);   d1_f1   = fmt($5); } ^D2[[:space:]] {   d2_acc  = fmt($2);   d2_prec = fmt($3);   d2_rec  = fmt($4);   d2_f1   = fmt($5); } END {   print \"**Table 2: Test results on the dataset**\";   print \"\";   print \"| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\";   print \"| ---------- | ------ | ---------------: | ----: | -----: | ----: |\";   printf \"| PPT4J      | **D1** | %15s | %5s | %6s | %5s |\\n\", d1_acc, d1_prec, d1_rec, d1_f1;   printf \"|            | **D2** | %15s | %5s | %6s | %5s |\\n\", d2_acc, d2_prec, d2_rec, d2_f1; } ' /workspace/rq1_raw.txt > /workspace/repro.txt\" failed at line 51 of /tmp/submission.sh with exit code 2\ndocker rm -f ppt4j >/dev/null 2>&1 || true\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n# (...omitted...)\n```\nSubmitting to judge service at http://129.69.217.153:8000/submit...\nCloned repository into ppt4j\n\nREADME PATH: ppt4j/README.md\n\nUsing default tag: latest\nlatest: Pulling from zhiyuanpan/ppt4j\n527f5363b98e: Pulling fs layer\n541944f1a010: Pulling fs layer\n86c172bdd8dd: Pulling fs layer\n62d17cf57850: Pulling fs layer\nfdec588fd8f8: Pulling fs layer\n0293575c18f5: Pulling fs layer\nd4ca37895237: Pulling fs layer\nee10ee565ba9: Pulling fs layer\n62d17cf57850: Waiting\nee10ee565ba9: Waiting\n0293575c18f5: Waiting\nfdec588fd8f8: Waiting\nd4ca37895237: Waiting\n86c172bdd8dd: Verifying Checksum\n86c172bdd8dd: Download complete\n527f5363b98e: Verifying Checksum\n527f5363b98e: Download complete\n62d17cf57850: Verifying Checksum\n62d17cf57850: Download complete\nfdec588fd8f8: Verifying Checksum\nfdec588fd8f8: Download complete\n0293575c18f5: Download complete\nee10ee565ba9: Verifying Checksum\nee10ee565ba9: Download complete\n541944f1a010: Verifying Checksum\n541944f1a010: Download complete\n527f5363b98e: Pull complete\n541944f1a010: Pull complete\n86c172bdd8dd: Pull complete\n62d17cf57850: Pull complete\nfdec588fd8f8: Pull complete\n0293575c18f5: Pull complete\nd4ca37895237: Retrying in 5 seconds\nd4ca37895237: Retrying in 4 seconds\nd4ca37895237: Retrying in 3 seconds\nd4ca37895237: Retrying in 2 seconds\nd4ca37895237: Retrying in 1 second\nd4ca37895237: Retrying in 10 seconds\nd4ca37895237: Retrying in 9 seconds\nd4ca37895237: Retrying in 8 seconds\nd4ca37895237: Retrying in 7 seconds\nd4ca37895237: Retrying in 6 seconds\nd4ca37895237: Retrying in 5 seconds\nd4ca37895237: Retrying in 4 seconds\nd4ca37895237: Retrying in 3 seconds\nd4ca37895237: Retrying in 2 seconds\nd4ca37895237: Retrying in 1 second\nd4ca37895237: Verifying Checksum\nd4ca37895237: Download complete\nd4ca37895237: Pull complete\nee10ee565ba9: Pull complete\nDigest: sha256:d7ae5999f87de67070ecf852942861cacc07752fafb21f1fc26ea28c8415a661\nStatus: Downloaded newer image for zhiyuanpan/ppt4j:latest\ndocker.io/zhiyuanpan/ppt4j:latest\na25e56817cb6a3c0434b3474566f1cf8ac3911e13b060d0bdb1208e45dfe66db\n</output>",
+      "exec_time": 3632.9893429279327
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The previous submission script failed due to invalid AWK syntax (`^D1` / `^D2` not wrapped as regular expressions). I will regenerate `repro_ppt4j_table_2.sh`, fixing the AWK patterns to `/^D1[[:space:]]/` and `/^D2[[:space:]]/`, keep the rest of the workflow the same (pull Docker image, run `replicate_rq1.py`, parse metrics into percentages, write `/workspace/repro.txt`), make the script executable, and resubmit it with `artisan submit`. I wrap all of this in a single `bash -lc` invocation to satisfy the one-command requirement.\n\n<mini_swe_agent_bash>\nbash -lc \"cat > /workspace/repro_ppt4j_table_2.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Test results on the dataset**\n\n| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\n| ---------- | ------ | ---------------: | ----: | -----: | ----: |\n| PPT4J      | **D1** |             ???% |  ???% |   ???% |  ???% |\n|            | **D2** |            ??.?% |  ???% |  ??.?% | ??.?% |\n\nEOTABLE\n# Section 2: Artifact download\nartisan get https://github.com/pan2013e/ppt4j\n# Section 3: Reproduction commands (populate from reviewed steps)\ndocker pull zhiyuanpan/ppt4j\ndocker run -d --init --entrypoint bash --name ppt4j zhiyuanpan/ppt4j -c 'sleep infinity'\ndocker exec ppt4j /bin/bash --noprofile --norc -c \\\"python replicate_rq1.py\\\" > /workspace/rq1_raw.txt\nawk '\nfunction fmt(x) {\n  v = x * 100;\n  if (int(v + 0.5) == v) {\n    return sprintf(\\\"%d%%\\\", v);\n  } else {\n    return sprintf(\\\"%.1f%%\\\", v);\n  }\n}\nBEGIN {\n  d1_acc=d1_prec=d1_rec=d1_f1=\\\"\\\";\n  d2_acc=d2_prec=d2_rec=d2_f1=\\\"\\\";\n}\n/^D1[[:space:]]/ {\n  d1_acc  = fmt(\\$2);\n  d1_prec = fmt(\\$3);\n  d1_rec  = fmt(\\$4);\n  d1_f1   = fmt(\\$5);\n}\n/^D2[[:space:]]/ {\n  d2_acc  = fmt(\\$2);\n  d2_prec = fmt(\\$3);\n  d2_rec  = fmt(\\$4);\n  d2_f1   = fmt(\\$5);\n}\nEND {\n  print \\\"**Table 2: Test results on the dataset**\\\";\n  print \\\"\\\";\n  print \\\"| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\\\";\n  print \\\"| ---------- | ------ | ---------------: | ----: | -----: | ----: |\\\";\n  printf \\\"| PPT4J      | **D1** | %15s | %5s | %6s | %5s |\\\\n\\\", d1_acc, d1_prec, d1_rec, d1_f1;\n  printf \\\"|            | **D2** | %15s | %5s | %6s | %5s |\\\\n\\\", d2_acc, d2_prec, d2_rec, d2_f1;\n}\n' /workspace/rq1_raw.txt > /workspace/repro.txt\ndocker rm -f ppt4j >/dev/null 2>&1 || true\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_ppt4j_table_2.sh\nartisan submit /workspace/repro_ppt4j_table_2.sh\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 100.27222633361816,
+        "response": {
+          "id": "chatcmpl-D0akflFk7tn9EzTlaxMUjgtBW49Km",
+          "created": 1769033645,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The previous submission script failed due to invalid AWK syntax (`^D1` / `^D2` not wrapped as regular expressions). I will regenerate `repro_ppt4j_table_2.sh`, fixing the AWK patterns to `/^D1[[:space:]]/` and `/^D2[[:space:]]/`, keep the rest of the workflow the same (pull Docker image, run `replicate_rq1.py`, parse metrics into percentages, write `/workspace/repro.txt`), make the script executable, and resubmit it with `artisan submit`. I wrap all of this in a single `bash -lc` invocation to satisfy the one-command requirement.\n\n<mini_swe_agent_bash>\nbash -lc \"cat > /workspace/repro_ppt4j_table_2.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Test results on the dataset**\n\n| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\n| ---------- | ------ | ---------------: | ----: | -----: | ----: |\n| PPT4J      | **D1** |             ???% |  ???% |   ???% |  ???% |\n|            | **D2** |            ??.?% |  ???% |  ??.?% | ??.?% |\n\nEOTABLE\n# Section 2: Artifact download\nartisan get https://github.com/pan2013e/ppt4j\n# Section 3: Reproduction commands (populate from reviewed steps)\ndocker pull zhiyuanpan/ppt4j\ndocker run -d --init --entrypoint bash --name ppt4j zhiyuanpan/ppt4j -c 'sleep infinity'\ndocker exec ppt4j /bin/bash --noprofile --norc -c \\\"python replicate_rq1.py\\\" > /workspace/rq1_raw.txt\nawk '\nfunction fmt(x) {\n  v = x * 100;\n  if (int(v + 0.5) == v) {\n    return sprintf(\\\"%d%%\\\", v);\n  } else {\n    return sprintf(\\\"%.1f%%\\\", v);\n  }\n}\nBEGIN {\n  d1_acc=d1_prec=d1_rec=d1_f1=\\\"\\\";\n  d2_acc=d2_prec=d2_rec=d2_f1=\\\"\\\";\n}\n/^D1[[:space:]]/ {\n  d1_acc  = fmt(\\$2);\n  d1_prec = fmt(\\$3);\n  d1_rec  = fmt(\\$4);\n  d1_f1   = fmt(\\$5);\n}\n/^D2[[:space:]]/ {\n  d2_acc  = fmt(\\$2);\n  d2_prec = fmt(\\$3);\n  d2_rec  = fmt(\\$4);\n  d2_f1   = fmt(\\$5);\n}\nEND {\n  print \\\"**Table 2: Test results on the dataset**\\\";\n  print \\\"\\\";\n  print \\\"| Test Suite |        | **Metrics** Acc. | Prec. | Recall |    F1 |\\\";\n  print \\\"| ---------- | ------ | ---------------: | ----: | -----: | ----: |\\\";\n  printf \\\"| PPT4J      | **D1** | %15s | %5s | %6s | %5s |\\\\n\\\", d1_acc, d1_prec, d1_rec, d1_f1;\n  printf \\\"|            | **D2** | %15s | %5s | %6s | %5s |\\\\n\\\", d2_acc, d2_prec, d2_rec, d2_f1;\n}\n' /workspace/rq1_raw.txt > /workspace/repro.txt\ndocker rm -f ppt4j >/dev/null 2>&1 || true\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_ppt4j_table_2.sh\nartisan submit /workspace/repro_ppt4j_table_2.sh\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 7074,
+            "prompt_tokens": 29703,
+            "total_tokens": 36777,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 6157,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nWrote format tool logs to /workspace/artisan-format.json\nSuccess: reproduce.sh output matches expected.md\nSubmitting to judge service at http://129.69.217.153:8000/submit...\n</output>",
+      "exec_time": 2266.4320299625397
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The reproduction script has been validated successfully, so I now finalize the task as instructed by emitting the completion marker.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.173896551132202,
+        "response": {
+          "id": "chatcmpl-D0bMqklhBxBD1BsQiLd7dr3oWYl1r",
+          "created": 1769036012,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The reproduction script has been validated successfully, so I now finalize the task as instructed by emitting the completion marker.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 96,
+            "prompt_tokens": 30678,
+            "total_tokens": 30774,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 36,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": ""
+    }
+  ],
+  "trajectory_format": "mini-swe-agent-1"
+}

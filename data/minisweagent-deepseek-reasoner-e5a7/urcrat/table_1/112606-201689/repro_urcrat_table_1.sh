@@ -1,0 +1,58 @@
+#!/usr/bin/bash
+# Section 1: Expected table
+cat > /workspace/expected.md <<'EOTABLE'
+**Table 1: Benchmark programs**
+
+| Name | C LOC | Rust LOC | #Unions | #Candidates | #Identified |
+| --- | --- | --- | --- | --- | --- |
+| bc-1.07.1 | 10810 | 16982 | 4 | 1 | 1 |
+| binn-3.0** | 5686 | 4298 | 1 | 1 | 0 |
+| brotli-1.0.9** | 13173 | 127691 | 6 | 4 | 0 |
+| cflow-1.7 | 20601 | 26375 | 5 | 4 | 3 |
+| compton* | 8748 | 14084 | 2 | 2 | 2 |
+| cpio-2.14 | 35934 | 80929 | 10 | 4 | 3 |
+| diffutils-3.10 | 59377 | 95835 | 7 | 5 | 4 |
+| enscript-1.6.6 | 34868 | 78749 | 9 | 5 | 3 |
+| findutils-4.9.0 | 80015 | 139858 | 13 | 6 | 3 |
+| gawk-5.2.2 | 58111 | 140566 | 17 | 10 | 3 |
+| glpk-5.0 | 71805 | 145738 | 18 | 14 | 3 |
+| gprolog-1.5.0 | 52193 | 74381 | 5 | 2 | 0 |
+| grep-3.11 | 64084 | 84902 | 11 | 9 | 6 |
+| gzip-1.12 | 20875 | 21605 | 4 | 2 | 1 |
+| hiredis* | 7305 | 14042 | 1 | 1 | 1 |
+| make-4.4.1 | 28911 | 36336 | 1 | 1 | 1 |
+| minilisp* | 722 | 2149 | 1 | 1 | 1 |
+| mtools-4.0.43 | 18266 | 37021 | 2 | 1 | 0 |
+| nano-7.2 | 42999 | 74994 | 6 | 4 | 3 |
+| nettle-3.9 | 61835 | 82742 | 5 | 2 | 1 |
+| patch-2.7.6 | 28215 | 103839 | 3 | 1 | 1 |
+| php-rdkafka* | 3771 | 28864 | 1 | 1 | 1 |
+| pocketlang* | 14267 | 41439 | 4 | 3 | 3 |
+| pth-2.0.7 | 7590 | 12950 | 1 | 1 | 1 |
+| raygui* | 1588 | 17218 | 1 | 1 | 1 |
+| rcs-5.10.1 | 28286 | 36267 | 1 | 1 | 1 |
+| screen-4.9.0 | 39335 | 72201 | 1 | 1 | 0 |
+| sed-4.9 | 48190 | 68465 | 8 | 7 | 4 |
+| shairport* | 4995 | 10118 | 2 | 1 | 1 |
+| tar-1.34 | 66172 | 134972 | 16 | 12 | 9 |
+| tinyproxy* | 5667 | 12825 | 5 | 2 | 2 |
+| twemproxy* | 22738 | 74593 | 8 | 7 | 5 |
+| uucp-1.07 | 51123 | 77872 | 3 | 3 | 0 |
+| webdis* | 14369 | 29474 | 2 | 2 | 2 |
+| wget-1.21.4 | 81188 | 192742 | 6 | 5 | 4 |
+| Total |  |  | 190 | 127 | 74 |
+
+EOTABLE
+# Section 2: Artifact download
+curl -L -o /workspace/results.xlsx "https://zenodo.org/api/records/13373683/files/results.xlsx/content"
+# Section 3: Reproduction commands (populate from reviewed steps)
+# Convert Excel to CSV and extract Table 1 data
+uvx xlsx2csv /workspace/results.xlsx /workspace/results.csv
+# Extract columns 1-6 (Name, C LOC, Rust LOC, Unions, Candidates, Identified)
+awk -F',' 'NR==1 {print "**Table 1: Benchmark programs**\n"; print "| Name | C LOC | Rust LOC | #Unions | #Candidates | #Identified |"; print "| --- | --- | --- | --- | --- | --- |"} NR>1 {printf "| %s | %s | %s | %s | %s | %s |\n", $1, $2, $3, $4, $5, $6+0}' /workspace/results.csv > /workspace/table.md
+# Calculate totals for columns 4-6
+awk -F',' 'NR>1 {u+=$4; c+=$5; i+=$6+0} END {printf "| Total |  |  | %s | %s | %s |\n", u, c, i}' /workspace/results.csv >> /workspace/table.md
+# Section 4: Formatting and submission block
+echo '<artisan_submit>'
+cat /workspace/table.md
+echo '</artisan_submit>'

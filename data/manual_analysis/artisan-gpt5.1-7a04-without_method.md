@@ -1,0 +1,53 @@
+Full
+- "action-t4-r1": OK
+- "bcia-t3-r1": LASTMILE_REPRO, skips raw data generation
+- "dypybench-t3-r1": LASTMILE_REPRO, skips raw data generation
+- "lasapp-t2-r1": OK 
+- "pmsat-t4-r1": OK
+- "pmsat-t6-r1": OK
+- "ppt4j-t2-r1": OK
+- "pythonic-t2-r1": OK
+- "pythonic-t6-r1": OK
+- "pythonic-t9-r1": OK
+
+Lastmile
+- "action-t1-r1": OK
+- "bazel-t5-r1": OK, no more complete repro possible due to manual analysis
+- "bloat-t2-r1": OK
+- "crossover-t2-r1": OK
+- "crossover-t4-r1": OK
+- "interference-t2-r1": COPY_REPRO, copy checked-in file
+- "mutation-t2-r1": OK
+- "neurojit-t3-r1": OK, no more complete repro possible
+- "npetest-t4-r1": OK
+- "pmsat-t3-r1": OK
+- "roam-t4-r1": OK
+- "rust-t1-r1": OK
+- "rust-t2-r1": OK
+- "rust-t3-r1": OK
+- "rust-t5-r1": OK
+- "unimocg-t2-r1": OK
+- "urcrat-t1-r1": COPY_REPRO, copy checked-in file
+
+Copy
+- "action-t2-r1": OK, hard code expected value
+- "action-t3-r1": OK, hard code expected value
+- "axa-t1-r1": OK, copy from paper texts
+- "axa-t2-r1": OK, no format logic
+- "bloat-t1-r1": OK, hard code expected value
+- "bloat-t3-r1": OK, hard code expected value
+- "goblinupdater-t2-r1": OK, hard code expected value
+- "llm-t3-r1": OK, hard code expected value
+- "pmsat-t2-r1": OK
+- "provenfix-t2-r1": OK, hard code expected value
+- "provenfix-t3-r1": OK, hard code expected value
+- "provenfix-t4-r1": OK, hard code expected value
+- "pythonic-t3-r1": OK, hard code expected value
+- "pythonic-t4-r1": OK, hard code expected value
+- "pythonic-t4-r1": OK, hard code expected value
+- "pythonic-t7-r1": FULL_REPRO, copy output of reproduction
+- "pythonic-t8-r1": OK, hard code expected value
+- "roam-t3-r1": LASTMILE_REPRO, perform analysis
+- "roam-t5-r1": OK, hard code expected value
+- "unimocg-t1-r1": OK, hard code expected value
+- "unimocg-t4-r1": OK, hard code expected value

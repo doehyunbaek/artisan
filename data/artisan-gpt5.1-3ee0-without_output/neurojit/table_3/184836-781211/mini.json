@@ -1,0 +1,976 @@
+{
+  "info": {
+    "exit_status": "Submitted",
+    "submission": "",
+    "model_stats": {
+      "instance_cost": 0.16051625,
+      "api_calls": 16,
+      "llm_time": 195.87180995941162
+    },
+    "mini_version": "1.14.4",
+    "config": {
+      "agent": {
+        "system_template": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected.",
+        "instance_template": "Please reproduce the results reported in Table {{ table_index }} of the target paper.\n\n<expected_table>\n{{ expected_table }}\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `artisan get`: Download and extract the artifact from the official URL.\n- `artisan format --expected /workspace/expected.md --repro /workspace/repro.txt`: Render final tables.\n- `artisan submit`: Submit your reproduction script for evaluation.\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from {{ artifact_url }}.\n   - You MUST use`artisan get {{ artifact_url }}`.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table {{ table_index }}:\n   - `grep -in docker README.md`\n   - `grep -in \"Table {{ table_index }}\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_{{ artifact_name }}_table_{{ table_index }}.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n{{ expected_table }}\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\nartisan get {{ artifact_url }}\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh\nartisan submit /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward.",
+        "timeout_template": "The last command <command>{{action['action']}}</command> timed out and has been killed.\nThe output of the command was:\n<output>\n{{output}}\n</output>\nPlease try another command and make sure to avoid those requiring interactive input.\n",
+        "format_error_template": "Please always provide EXACTLY ONE action in <mini_swe_agent_bash>, found {{actions|length}} actions.\nIf you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\nwithout any other command.\nElse, please format your response exactly as follows:\n\n<response_example>\nHere are some thoughts about why you want to perform the action.\n\n<mini_swe_agent_bash>\n<action>\n</mini_swe_agent_bash>\n</response_example>\n",
+        "action_observation_template": "<returncode>{{output.returncode}}</returncode>\n{% if output.output | length < 100000 -%}\n<output>\n{{ output.output -}}\n</output>\n{%- else -%}\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning>\n{%- set elided_chars = output.output | length - 100000 -%}\n<output_head>\n{{ output.output[:5000] }}\n</output_head>\n<elided_chars>\n{{ elided_chars }} characters elided\n</elided_chars>\n<output_tail>\n{{ output.output[-5000:] }}\n</output_tail>\n{%- endif -%}\n",
+        "step_limit": 30.0,
+        "cost_limit": 1.0
+      },
+      "model": {
+        "model_name": "gpt-5.1-2025-11-13",
+        "model_kwargs": {
+          "drop_params": true,
+          "reasoning_effort": "medium"
+        },
+        "litellm_model_registry": null,
+        "set_cache_control": null
+      },
+      "environment": {
+        "image": "doehyunbaek1/artisan:c268b22",
+        "container_name": "agent-neurojit-t3-2158",
+        "cwd": "/workspace",
+        "env": {
+          "PAGER": "cat",
+          "MANPAGER": "cat",
+          "LESS": "-R",
+          "PIP_PROGRESS_BAR": "off",
+          "TQDM_DISABLE": "1",
+          "MSWEA_SILENT_STARTUP": "1"
+        },
+        "forward_env": [],
+        "timeout": 28800,
+        "executable": "docker",
+        "run_args": [
+          "--rm",
+          "--privileged",
+          "-e",
+          "OPENAI_API_KEY",
+          "-e",
+          "MSWEA_SILENT_STARTUP",
+          "-v",
+          "/home/doehyunbaek/artisan/logs/artisan-gpt5.1-3ee0-without_output/neurojit/table_3/184836-781211:/workspace:rw",
+          "-e",
+          "ARTISAN_JUDGE_URL=http://129.69.217.153:8000/submit",
+          "-e",
+          "ARTISAN_MITM_URL=http://129.69.217.153:8082",
+          "-e",
+          "ARTISAN_CACHE_DIR=/root/.cache/artisan",
+          "-v",
+          "/home/doehyunbaek/.cache:/root/.cache/artisan",
+          "--group-add",
+          "999"
+        ],
+        "container_timeout": "8h",
+        "pull_timeout": 3000
+      },
+      "agent_type": "evaluation.agents.artisan.DefaultAgentWithLogs",
+      "model_type": "minisweagent.models.litellm_model.LitellmModel",
+      "environment_type": "minisweagent.environments.docker.DockerEnvironment"
+    },
+    "format": [],
+    "speedometer": [
+      {
+        "timestamp": "2026-01-21T19:09:50Z",
+        "model": "gpt-5-mini-2025-08-07",
+        "input": [
+          {
+            "role": "system",
+            "content": "\nYou are an expert research engineer specializing in reproducing scientific papers.\nAnalyze the provided Bash script to estimate the completeness of the reproduction process.\n\nCLASSIFICATION RULES:\n- \"copy\": The script just copies the results without actually reproducing. Examples:\n    - The result is hard-coded without any process to generate it.\n    - The result is copied from checked-in files as-is. NOTE: commands like `cp`.\n- \"lastmile\": The script performs lightweight reproduction and skips heavy computations. Examples:\n    - The result is generated using baked-in raw data.\n    - The script performs statistical analysis on precomputed outputs.\n- \"full\": The script performs complete reproduction. Examples:\n    - Raw data is generated from scratch from the input dataset.\n    - NOTE: Even if the script downloads artifact from repositories like Zenodo, FigShare, GitHub Releases, etc., if it performs the full computation to generate the final results, classify as \"full\".\n    - NOTE: Even if the script uses Docker images or prebuilt environments, if it performs the full computation to generate the final results, classify as \"full\".\n\nIMPORTANT POINTS:\n- The script should be classified with a fastest path it can possibly take. If a script contains both \"copy\" and \"lastmile\" reproduction, you should classify it as \"copy\"\n\nFILES TO EXCLUDE:\nIdentify file paths or names referenced in the script (e.g., in `wget`, `curl`, `tar`, `python` args) that are checked-in results or raw data and should be excluded to make reproduction more complete. Look for extensions like .pth, .ckpt, .bin, .tar.gz, .zip, .h5.\n- NOTE: FILES TO EXCLUDE should be output only when speed is classified as \"copy\" or \"lastmile\". If these files are excluded the script should be more likely to be judged as \"full\".\n\nOUTPUT FORMAT:\nReturn ONLY a valid JSON object. No markdown formatting, no code fences.\n{\n    \"speed\": \"copy\" | \"lastmile\" | \"full\",\n    \"reason\": \"A concise justification for the classification.\",\n    \"files_to_exclude\": [\"list\", \"of\", \"filenames\", \"or\", \"paths\"]\n}\n"
+          },
+          {
+            "role": "user",
+            "content": "You will see reference speedometer examples (script -> JSON output). Use them for calibration before evaluating the new script.\n\n<example name=\"hypertesting_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/10451088\n    (\n      printf \"### Table 1: Correlation results\\n\\n| Sample (UnsecureOnlyDataset) | R | p-value |\\n| :--- | :--- | :--- |\\n\"\n      tar -xOf ReplicationPackage/submission-results.tar.xz RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json       | sed -n '/\"csvTable\": [/,/]/p'       | sed -E 's/^([^;]+);([^;]+);([^;]+)$/| \\1 | \\2 | \\3 |/'\n    ) > /workspace/repro.txt\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Streams the ready-made RQ1 CSV rows out of submission-results.tar.xz instead of rerunning HyperTesting.\",\n  \"files_to_exclude\": [\n    \"ReplicationPackage/submission-results.tar.xz\",\n    \"RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json\"\n  ]\n}\n</example>\n\n<example name=\"baro_t2\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/11094092\n    cat > /workspace/repro.txt <<'EOREPRO'\n    Method: N-Sigma\n    Dataset: Online Boutique\n    Precision: 0.54\n    Recall   : 1\n    F1       : 0.70\n\n    Method: BARO (Ours)\n    Dataset: Online Boutique\n    Precision: 0.69\n    Recall   : 1\n    F1       : 0.82\n    EOREPRO\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Hard-codes every BARO metric via heredoc instead of running any detectors.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<example name=\"sja_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/12670597\n    python3 - << 'PY' > /workspace/repro.txt\n    import math\n    gt = 662208\n    fns = {\"sja\":1451, \"dyninst\":60463}\n    fps = {\"sja\":17347, \"dyninst\":3143}\n    def prec(fp, gt): return 100.0/(1.0 + (fp/gt))\n    def rec(fn, gt):  return 100.0/(1.0 + (fn/gt))\n    def f1(p, r): return 0.0 if (p+r)==0 else 2.0*p*r/(p+r)\n    print(f\"| **Precision** | {prec(fps['dyninst'], gt):.1f} | {prec(fps['sja'], gt):.1f} |\")\n    print(f\"| **Recall** | {rec(fns['dyninst'], gt):.1f} | {rec(fns['sja'], gt):.1f} |\")\n    print(f\"| **F?-score** | {f1(prec(fps['dyninst'], gt), rec(fns['dyninst'], gt)):.1f} | {f1(prec(fps['sja'], gt), rec(fns['sja'], gt)):.1f} |\")\n    PY\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Computes percentages from hard-coded FP/FN counts, so no binaries or datasets ever run.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<task>\n[script]\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: Average Ratios of Actionable Features within Top 5 Contribution Rankings of LIME Explanations**\n\n| Project | Random Forest (%) | | XGBoost (%) |  | \n| --- | --- | --- | --- | --- |\n| | baseline | combined (\u03b4) | baseline | combined |  |\n| ActiveMQ | ??.? | ??.? (l) | ??.? | ??.? (l) |\n| Camel | ??.? | ??.? | ??.? | ??.? |\n| Flink | ??.? | ??.? (s) | ??.? | ??.? (l) |\n| Groovy | ??.? | ??.? (l) | ??.? | ??.? (s) |\n| Cassandra | ??.? | ??.? (l) | ??.? | ??.? (l) |\n| HBase | ??.? | ??.? (s) | ??.? | ??.? (l) |\n| Hive | ??.? | ??.? (n) | ??.? | ??.? (l) |\n| Ignite | ??.? | ??.? (l) | ??.? | ??.? (m) |\n| Average (%) | ??.? | ??.? | ??.? | ??.? |\n\nEOTABLE\n# Section 2: Artifact download\ncd /workspace\nartisan get https://zenodo.org/records/13744025\nunzip -qo NeuroJIT.zip -d NeuroJIT\n# Section 3: Reproduction commands (populate from reviewed steps)\ncd /workspace/NeuroJIT\ndocker-compose build\ndocker-compose run --rm neurojit-ase scripts/extract_pickles.sh\ndocker-compose run --rm neurojit-ase python scripts/jit_sdp.py actionable random_forest --display\ndocker-compose run --rm neurojit-ase python scripts/jit_sdp.py actionable xgboost --display\ndocker-compose run --rm neurojit-ase python scripts/analysis.py table-actionable data/output/actionable_random_forest.csv --fmt github > /workspace/repro.txt\ndocker-compose run --rm neurojit-ase python scripts/analysis.py table-actionable data/output/actionable_xgboost.csv --fmt github >> /workspace/repro.txt\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n</task>\nReturn only the JSON object described above."
+          }
+        ],
+        "output": {
+          "speed": "full",
+          "reason": "Downloads the NeuroJIT artifact but builds the Docker environment and runs data-extraction and analysis scripts (jit_sdp.py and analysis.py) to generate the actionable CSVs and the final table \u2014 it does not simply copy precomputed results.",
+          "files_to_exclude": []
+        },
+        "duration_seconds": 7.646181344985962,
+        "cost_usd": 0.001279,
+        "tokens": {
+          "input": 1980,
+          "cached_input": 0,
+          "output": 392,
+          "reasoning_output": 320,
+          "total": 2372
+        },
+        "reason": "submit_validation"
+      },
+      {
+        "timestamp": "2026-01-21T19:10:03Z",
+        "model": "gpt-5-mini-2025-08-07",
+        "input": [
+          {
+            "role": "system",
+            "content": "\nYou are an expert research engineer specializing in reproducing scientific papers.\nAnalyze the provided Bash script to estimate the completeness of the reproduction process.\n\nCLASSIFICATION RULES:\n- \"copy\": The script just copies the results without actually reproducing. Examples:\n    - The result is hard-coded without any process to generate it.\n    - The result is copied from checked-in files as-is. NOTE: commands like `cp`.\n- \"lastmile\": The script performs lightweight reproduction and skips heavy computations. Examples:\n    - The result is generated using baked-in raw data.\n    - The script performs statistical analysis on precomputed outputs.\n- \"full\": The script performs complete reproduction. Examples:\n    - Raw data is generated from scratch from the input dataset.\n    - NOTE: Even if the script downloads artifact from repositories like Zenodo, FigShare, GitHub Releases, etc., if it performs the full computation to generate the final results, classify as \"full\".\n    - NOTE: Even if the script uses Docker images or prebuilt environments, if it performs the full computation to generate the final results, classify as \"full\".\n\nIMPORTANT POINTS:\n- The script should be classified with a fastest path it can possibly take. If a script contains both \"copy\" and \"lastmile\" reproduction, you should classify it as \"copy\"\n\nFILES TO EXCLUDE:\nIdentify file paths or names referenced in the script (e.g., in `wget`, `curl`, `tar`, `python` args) that are checked-in results or raw data and should be excluded to make reproduction more complete. Look for extensions like .pth, .ckpt, .bin, .tar.gz, .zip, .h5.\n- NOTE: FILES TO EXCLUDE should be output only when speed is classified as \"copy\" or \"lastmile\". If these files are excluded the script should be more likely to be judged as \"full\".\n\nOUTPUT FORMAT:\nReturn ONLY a valid JSON object. No markdown formatting, no code fences.\n{\n    \"speed\": \"copy\" | \"lastmile\" | \"full\",\n    \"reason\": \"A concise justification for the classification.\",\n    \"files_to_exclude\": [\"list\", \"of\", \"filenames\", \"or\", \"paths\"]\n}\n"
+          },
+          {
+            "role": "user",
+            "content": "You will see reference speedometer examples (script -> JSON output). Use them for calibration before evaluating the new script.\n\n<example name=\"hypertesting_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/10451088\n    (\n      printf \"### Table 1: Correlation results\\n\\n| Sample (UnsecureOnlyDataset) | R | p-value |\\n| :--- | :--- | :--- |\\n\"\n      tar -xOf ReplicationPackage/submission-results.tar.xz RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json       | sed -n '/\"csvTable\": [/,/]/p'       | sed -E 's/^([^;]+);([^;]+);([^;]+)$/| \\1 | \\2 | \\3 |/'\n    ) > /workspace/repro.txt\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Streams the ready-made RQ1 CSV rows out of submission-results.tar.xz instead of rerunning HyperTesting.\",\n  \"files_to_exclude\": [\n    \"ReplicationPackage/submission-results.tar.xz\",\n    \"RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json\"\n  ]\n}\n</example>\n\n<example name=\"baro_t2\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/11094092\n    cat > /workspace/repro.txt <<'EOREPRO'\n    Method: N-Sigma\n    Dataset: Online Boutique\n    Precision: 0.54\n    Recall   : 1\n    F1       : 0.70\n\n    Method: BARO (Ours)\n    Dataset: Online Boutique\n    Precision: 0.69\n    Recall   : 1\n    F1       : 0.82\n    EOREPRO\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Hard-codes every BARO metric via heredoc instead of running any detectors.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<example name=\"sja_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/12670597\n    python3 - << 'PY' > /workspace/repro.txt\n    import math\n    gt = 662208\n    fns = {\"sja\":1451, \"dyninst\":60463}\n    fps = {\"sja\":17347, \"dyninst\":3143}\n    def prec(fp, gt): return 100.0/(1.0 + (fp/gt))\n    def rec(fn, gt):  return 100.0/(1.0 + (fn/gt))\n    def f1(p, r): return 0.0 if (p+r)==0 else 2.0*p*r/(p+r)\n    print(f\"| **Precision** | {prec(fps['dyninst'], gt):.1f} | {prec(fps['sja'], gt):.1f} |\")\n    print(f\"| **Recall** | {rec(fns['dyninst'], gt):.1f} | {rec(fns['sja'], gt):.1f} |\")\n    print(f\"| **F?-score** | {f1(prec(fps['dyninst'], gt), rec(fns['dyninst'], gt)):.1f} | {f1(prec(fps['sja'], gt), rec(fns['sja'], gt)):.1f} |\")\n    PY\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Computes percentages from hard-coded FP/FN counts, so no binaries or datasets ever run.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<task>\n[script]\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: Average Ratios of Actionable Features within Top 5 Contribution Rankings of LIME Explanations**\n\n| Project | Random Forest (%) | | XGBoost (%) |  | \n| --- | --- | --- | --- | --- |\n| | baseline | combined (\u03b4) | baseline | combined |  |\n| ActiveMQ | ??.? | ??.? (l) | ??.? | ??.? (l) |\n| Camel | ??.? | ??.? | ??.? | ??.? |\n| Flink | ??.? | ??.? (s) | ??.? | ??.? (l) |\n| Groovy | ??.? | ??.? (l) | ??.? | ??.? (s) |\n| Cassandra | ??.? | ??.? (l) | ??.? | ??.? (l) |\n| HBase | ??.? | ??.? (s) | ??.? | ??.? (l) |\n| Hive | ??.? | ??.? (n) | ??.? | ??.? (l) |\n| Ignite | ??.? | ??.? (l) | ??.? | ??.? (m) |\n| Average (%) | ??.? | ??.? | ??.? | ??.? |\n\nEOTABLE\n# Section 2: Artifact download\ncd /workspace\nartisan get https://zenodo.org/records/13744025\nunzip -qo NeuroJIT.zip -d NeuroJIT\n# Section 3: Reproduction commands (populate from reviewed steps)\ncd /workspace/NeuroJIT\ndocker-compose build\ndocker-compose run --rm neurojit-ase scripts/extract_pickles.sh\ndocker-compose run --rm neurojit-ase python scripts/jit_sdp.py actionable random_forest --display\ndocker-compose run --rm neurojit-ase python scripts/jit_sdp.py actionable xgboost --display\ndocker-compose run --rm neurojit-ase python scripts/analysis.py table-actionable data/output/actionable_random_forest.csv --fmt github > /workspace/repro.txt\ndocker-compose run --rm neurojit-ase python scripts/analysis.py table-actionable data/output/actionable_xgboost.csv --fmt github >> /workspace/repro.txt\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n</task>\nReturn only the JSON object described above."
+          }
+        ],
+        "output": {
+          "speed": "full",
+          "reason": "Builds the Docker environment, extracts the artifact, runs the data-extraction and analysis scripts to generate the actionable-feature tables from the NeuroJIT artifact rather than just copying precomputed tables.",
+          "files_to_exclude": []
+        },
+        "duration_seconds": 9.623724937438965,
+        "cost_usd": 0.0013678,
+        "tokens": {
+          "input": 1980,
+          "cached_input": 1792,
+          "output": 638,
+          "reasoning_output": 576,
+          "total": 2618
+        },
+        "reason": "exit_validation"
+      }
+    ]
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected."
+    },
+    {
+      "role": "user",
+      "content": "Please reproduce the results reported in Table 3 of the target paper.\n\n<expected_table>\n**Table 3: Average Ratios of Actionable Features within Top 5 Contribution Rankings of LIME Explanations**\n\n| Project | Random Forest (%) | | XGBoost (%) |  | \n| --- | --- | --- | --- | --- |\n| | baseline | combined (\u03b4) | baseline | combined |  |\n| ActiveMQ | ??.? | ??.? (l) | ??.? | ??.? (l) |\n| Camel | ??.? | ??.? | ??.? | ??.? |\n| Flink | ??.? | ??.? (s) | ??.? | ??.? (l) |\n| Groovy | ??.? | ??.? (l) | ??.? | ??.? (s) |\n| Cassandra | ??.? | ??.? (l) | ??.? | ??.? (l) |\n| HBase | ??.? | ??.? (s) | ??.? | ??.? (l) |\n| Hive | ??.? | ??.? (n) | ??.? | ??.? (l) |\n| Ignite | ??.? | ??.? (l) | ??.? | ??.? (m) |\n| Average (%) | ??.? | ??.? | ??.? | ??.? |\n\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `artisan get`: Download and extract the artifact from the official URL.\n- `artisan format --expected /workspace/expected.md --repro /workspace/repro.txt`: Render final tables.\n- `artisan submit`: Submit your reproduction script for evaluation.\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from https://zenodo.org/records/13744025.\n   - You MUST use`artisan get https://zenodo.org/records/13744025`.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table 3:\n   - `grep -in docker README.md`\n   - `grep -in \"Table 3\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_neurojit_table_3.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_neurojit_table_3.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: Average Ratios of Actionable Features within Top 5 Contribution Rankings of LIME Explanations**\n\n| Project | Random Forest (%) | | XGBoost (%) |  | \n| --- | --- | --- | --- | --- |\n| | baseline | combined (\u03b4) | baseline | combined |  |\n| ActiveMQ | ??.? | ??.? (l) | ??.? | ??.? (l) |\n| Camel | ??.? | ??.? | ??.? | ??.? |\n| Flink | ??.? | ??.? (s) | ??.? | ??.? (l) |\n| Groovy | ??.? | ??.? (l) | ??.? | ??.? (s) |\n| Cassandra | ??.? | ??.? (l) | ??.? | ??.? (l) |\n| HBase | ??.? | ??.? (s) | ??.? | ??.? (l) |\n| Hive | ??.? | ??.? (n) | ??.? | ??.? (l) |\n| Ignite | ??.? | ??.? (l) | ??.? | ??.? (m) |\n| Average (%) | ??.? | ??.? | ??.? | ??.? |\n\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\nartisan get https://zenodo.org/records/13744025\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_neurojit_table_3.sh\nartisan submit /workspace/repro_neurojit_table_3.sh\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward."
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Begin by downloading and extracting the artifact from the official Zenodo URL as required in step 1. This will provide the code and data needed to later locate the scripts and instructions for reproducing Table 3.\n\n<mini_swe_agent_bash>\nartisan get https://zenodo.org/records/13744025\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 8.199539422988892,
+        "response": {
+          "id": "chatcmpl-D0XXrLxrq1C4XAbyE7PfNWo71ZjsH",
+          "created": 1769021319,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Begin by downloading and extracting the artifact from the official Zenodo URL as required in step 1. This will provide the code and data needed to later locate the scripts and instructions for reproducing Table 3.\n\n<mini_swe_agent_bash>\nartisan get https://zenodo.org/records/13744025\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 267,
+            "prompt_tokens": 1569,
+            "total_tokens": 1836,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 182,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning><output_head>\n\nDownloading LICENSE 100% (10783/10783 bytes)\n\nDownloading README.md 100% (16141/16141 bytes)\n\nDownloading reproduced_results.png 3% (65536/2092563 bytes)\nDownloading reproduced_results.png 6% (131072/2092563 bytes)\nDownloading reproduced_results.png 9% (196608/2092563 bytes)\nDownloading reproduced_results.png 12% (262144/2092563 bytes)\nDownloading reproduced_results.png 15% (327680/2092563 bytes)\nDownloading reproduced_results.png 18% (393216/2092563 bytes)\nDownloading reproduced_results.png 21% (458752/2092563 bytes)\nDownloading reproduced_results.png 25% (524288/2092563 bytes)\nDownloading reproduced_results.png 28% (589824/2092563 bytes)\nDownloading reproduced_results.png 31% (655360/2092563 bytes)\nDownloading reproduced_results.png 34% (720896/2092563 bytes)\nDownloading reproduced_results.png 37% (786432/2092563 bytes)\nDownloading reproduced_results.png 40% (851968/2092563 bytes)\nDownloading reproduced_results.png 43% (917504/2092563 bytes)\nDownloading reproduced_results.png 46% (983040/2092563 bytes)\nDownloading reproduced_results.png 50% (1048576/2092563 bytes)\nDownloading reproduced_results.png 53% (1114112/2092563 bytes)\nDownloading reproduced_results.png 56% (1179648/2092563 bytes)\nDownloading reproduced_results.png 59% (1245184/2092563 bytes)\nDownloading reproduced_results.png 62% (1310720/2092563 bytes)\nDownloading reproduced_results.png 65% (1376256/2092563 bytes)\nDownloading reproduced_results.png 68% (1441792/2092563 bytes)\nDownloading reproduced_results.png 72% (1507328/2092563 bytes)\nDownloading reproduced_results.png 75% (1572864/2092563 bytes)\nDownloading reproduced_results.png 78% (1638400/2092563 bytes)\nDownloading reproduced_results.png 81% (1703936/2092563 bytes)\nDownloading reproduced_results.png 84% (1769472/2092563 bytes)\nDownloading reproduced_results.png 87% (1835008/2092563 bytes)\nDownloading reproduced_results.png 90% (1900544/2092563 bytes)\nDownloading reproduced_results.png 93% (1966080/2092563 bytes)\nDownloading reproduced_results.png 97% (2031616/2092563 bytes)\nDownloading reproduced_results.png 100% (2092563/2092563 bytes)\n\nDownloading NeuroJIT.zip 0% (65536/685220029 bytes)\nDownloading NeuroJIT.zip 0% (131072/685220029 bytes)\nDownloading NeuroJIT.zip 0% (196608/685220029 bytes)\nDownloading NeuroJIT.zip 0% (262144/685220029 bytes)\nDownloading NeuroJIT.zip 0% (327680/685220029 bytes)\nDownloading NeuroJIT.zip 0% (393216/685220029 bytes)\nDownloading NeuroJIT.zip 0% (458752/685220029 bytes)\nDownloading NeuroJIT.zip 0% (524288/685220029 bytes)\nDownloading NeuroJIT.zip 0% (589824/685220029 bytes)\nDownloading NeuroJIT.zip 0% (655360/685220029 bytes)\nDownloading NeuroJIT.zip 0% (720896/685220029 bytes)\nDownloading NeuroJIT.zip 0% (786432/685220029 bytes)\nDownloading NeuroJIT.zip 0% (851968/685220029 bytes)\nDownloading NeuroJIT.zip 0% (917504/685220029 bytes)\nDownloading NeuroJIT.zip 0% (983040/685220029 bytes)\nDownloading NeuroJIT.zip 0% (1048576/685220029 bytes)\nDownloading NeuroJIT.zip 0% (1114112/685220029 bytes)\nDownloading NeuroJIT.zip 0% (1179648/685220029 bytes)\nDownloading NeuroJIT.zip 0% (1245184/685220029 bytes)\nDownloading NeuroJIT.zip 0% (1310720/685220029 bytes)\nDownloading NeuroJIT.zip 0% (1376256/685220029 bytes)\nDownloading NeuroJIT.zip 0% (1441792/685220029 bytes)\nDownloading NeuroJIT.zip 0% (1507328/685220029 bytes)\nDownloading NeuroJIT.zip 0% (1572864/685220029 bytes)\nDownloading NeuroJIT.zip 0% (1638400/685220029 bytes)\nDownloading NeuroJIT.zip 0% (1703936/685220029 bytes)\nDownloading NeuroJIT.zip 0% (1769472/685220029 bytes)\nDownloading NeuroJIT.zip 0% (1835008/685220029 bytes)\nDownloading NeuroJIT.zip 0% (1900544/685220029 bytes)\nDownloading NeuroJIT.zip 0% (1966080/685220029 bytes)\nDownloading NeuroJIT.zip 0% (2031616/685220029 bytes)\nDownloading NeuroJIT.zip 0% (2097152/685220029 bytes)\nDownloading NeuroJIT.zip 0% (2162688/685220029 bytes)\nDownloading NeuroJIT.zip 0% (2228224/685220029 bytes)\nDownloading NeuroJIT.zip 0% (2293760/685220029 bytes)\nDownloading NeuroJIT.zip 0% (2359296/685220029 bytes)\nDownloading NeuroJIT.zip 0% (2424832/685220029 bytes)\nDownloading NeuroJIT.zip 0% (2490368/685220029 bytes)\nDownloading NeuroJIT.zip 0% (2555904/685220029 bytes)\nDownloading NeuroJIT.zip 0% (2621440/685220029 bytes)\nDownloading NeuroJIT.zip 0% (2686976/685220029 bytes)\nDownloading NeuroJIT.zip 0% (2752512/685220029 bytes)\nDownloading NeuroJIT.zip 0% (2818048/685220029 bytes)\nDownloading NeuroJIT.zip 0% (2883584/685220029 bytes)\nDownloading NeuroJIT.zip 0% (2949120/685220029 bytes)\nDownloading NeuroJIT.zip 0% (3014656/685220029 bytes)\nDownloading NeuroJIT.zip 0% (3080192/685220029 bytes)\nDownloading NeuroJIT.zip 0% (3145728/685220029 bytes)\nDownloading NeuroJIT.zip 0% (3211264/685220029 bytes)\nDownloading NeuroJIT.zip 0% (3276800/685220029 bytes)\nDownloading NeuroJIT.zip 0% (3342336/685220029 bytes)\nDownloading NeuroJIT.zip 0% (3407872/685220029 bytes)\nDownloading NeuroJIT.zip 0% (3473408/685220029 bytes)\nDownloading NeuroJIT.zip 0% (3538944/685220029 bytes)\nDownlo\n</output_head>\n<elided_chars>\n495529 characters elided\n</elided_chars>\n<output_tail>\n9% (679739392/685220029 bytes)\nDownloading NeuroJIT.zip 99% (679804928/685220029 bytes)\nDownloading NeuroJIT.zip 99% (679870464/685220029 bytes)\nDownloading NeuroJIT.zip 99% (679936000/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680001536/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680067072/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680132608/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680198144/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680263680/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680329216/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680394752/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680460288/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680525824/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680591360/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680656896/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680722432/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680787968/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680853504/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680919040/685220029 bytes)\nDownloading NeuroJIT.zip 99% (680984576/685220029 bytes)\nDownloading NeuroJIT.zip 99% (681050112/685220029 bytes)\nDownloading NeuroJIT.zip 99% (681115648/685220029 bytes)\nDownloading NeuroJIT.zip 99% (681181184/685220029 bytes)\nDownloading NeuroJIT.zip 99% (681246720/685220029 bytes)\nDownloading NeuroJIT.zip 99% (681312256/685220029 bytes)\nDownloading NeuroJIT.zip 99% (681377792/685220029 bytes)\nDownloading NeuroJIT.zip 99% (681443328/685220029 bytes)\nDownloading NeuroJIT.zip 99% (681508864/685220029 bytes)\nDownloading NeuroJIT.zip 99% (681574400/685220029 bytes)\nDownloading NeuroJIT.zip 99% (681639936/685220029 bytes)\nDownloading NeuroJIT.zip 99% (681705472/685220029 bytes)\nDownloading NeuroJIT.zip 99% (681771008/685220029 bytes)\nDownloading NeuroJIT.zip 99% (681836544/685220029 bytes)\nDownloading NeuroJIT.zip 99% (681902080/685220029 bytes)\nDownloading NeuroJIT.zip 99% (681967616/685220029 bytes)\nDownloading NeuroJIT.zip 99% (682033152/685220029 bytes)\nDownloading NeuroJIT.zip 99% (682098688/685220029 bytes)\nDownloading NeuroJIT.zip 99% (682164224/685220029 bytes)\nDownloading NeuroJIT.zip 99% (682229760/685220029 bytes)\nDownloading NeuroJIT.zip 99% (682295296/685220029 bytes)\nDownloading NeuroJIT.zip 99% (682360832/685220029 bytes)\nDownloading NeuroJIT.zip 99% (682426368/685220029 bytes)\nDownloading NeuroJIT.zip 99% (682491904/685220029 bytes)\nDownloading NeuroJIT.zip 99% (682557440/685220029 bytes)\nDownloading NeuroJIT.zip 99% (682622976/685220029 bytes)\nDownloading NeuroJIT.zip 99% (682688512/685220029 bytes)\nDownloading NeuroJIT.zip 99% (682754048/685220029 bytes)\nDownloading NeuroJIT.zip 99% (682819584/685220029 bytes)\nDownloading NeuroJIT.zip 99% (682885120/685220029 bytes)\nDownloading NeuroJIT.zip 99% (682950656/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683016192/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683081728/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683147264/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683212800/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683278336/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683343872/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683409408/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683474944/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683540480/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683606016/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683671552/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683737088/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683802624/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683868160/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683933696/685220029 bytes)\nDownloading NeuroJIT.zip 99% (683999232/685220029 bytes)\nDownloading NeuroJIT.zip 99% (684064768/685220029 bytes)\nDownloading NeuroJIT.zip 99% (684130304/685220029 bytes)\nDownloading NeuroJIT.zip 99% (684195840/685220029 bytes)\nDownloading NeuroJIT.zip 99% (684261376/685220029 bytes)\nDownloading NeuroJIT.zip 99% (684326912/685220029 bytes)\nDownloading NeuroJIT.zip 99% (684392448/685220029 bytes)\nDownloading NeuroJIT.zip 99% (684457984/685220029 bytes)\nDownloading NeuroJIT.zip 99% (684523520/685220029 bytes)\nDownloading NeuroJIT.zip 99% (684589056/685220029 bytes)\nDownloading NeuroJIT.zip 99% (684654592/685220029 bytes)\nDownloading NeuroJIT.zip 99% (684720128/685220029 bytes)\nDownloading NeuroJIT.zip 99% (684785664/685220029 bytes)\nDownloading NeuroJIT.zip 99% (684851200/685220029 bytes)\nDownloading NeuroJIT.zip 99% (684916736/685220029 bytes)\nDownloading NeuroJIT.zip 99% (684982272/685220029 bytes)\nDownloading NeuroJIT.zip 99% (685047808/685220029 bytes)\nDownloading NeuroJIT.zip 99% (685113344/685220029 bytes)\nDownloading NeuroJIT.zip 99% (685178880/685220029 bytes)\nDownloading NeuroJIT.zip 100% (685220029/685220029 bytes)\nSaved to LICENSE (10783 bytes)\n\nSaved to README.md (16141 bytes)\n\nSaved to reproduced_results.png (2092563 bytes)\n\nSaved to NeuroJIT.zip (685220029 bytes)\n\nREADME PATH: README.md\n\n\n</output_tail>",
+      "exec_time": 34.395862102508545
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Inspect the beginning of the artifact\u2019s README to understand the overall structure and to later locate the specific instructions for reproducing Table 3, including any Docker usage details.\n\n<mini_swe_agent_bash>\nsed -n '1,160p' README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 2.7322421073913574,
+        "response": {
+          "id": "chatcmpl-D0XYYTm7lPD01DmeKqDiOQ6g8H9sF",
+          "created": 1769021362,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Inspect the beginning of the artifact\u2019s README to understand the overall structure and to later locate the specific instructions for reproducing Table 3, including any Docker usage details.\n\n<mini_swe_agent_bash>\nsed -n '1,160p' README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 136,
+            "prompt_tokens": 4881,
+            "total_tokens": 5017,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 62,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 1536
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n# NeuroJIT Replication Package\n\nThis document introduces the replication package for the paper titled *NeuroJIT: Improving Just-In-Time Defect Prediction Using Neurophysiological and Empirical Perceptions of Modern Developers* and provides detailed instructions on its usage. The package contains the core modules of NeuroJIT, along with the scripts and datasets required to replicate the results presented in the paper. This package can be used to reproduce the paper\u2019s results or to implement a customized version of NeuroJIT for experiments tailored to your specific needs. If you have any questions about the package or the content of the paper, please do not hesitate to contact us via email at fantasyopy@hanyang.ac.kr or sparky@hanyang.ac.kr.\n\n## License\n\nThis project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.\n\n## Contents\n\n- [1. Brief Descriptions of the Replication Package](#1-brief-descriptions-of-the-replication-package)\n  - [Structure](#structure)\n  - [Dataset](#dataset)\n  - [NeuroJIT](#neurojit)\n- [2. Step-by-step Explanations for NeuroJIT Replication](#2-step-by-step-explanations-for-neurojit-replication)\n  - [2-1. Setup](#2-1-setup)\n    - [1) Hardware/Software Requirements](#1-hardwaresoftware-requirements)\n    - [2) Docker Setup](#2-docker-setup)\n  - [2-2. Usage](#2-2-usage)\n    - [1) Reproducing the Experimental Results](#1-reproducing-the-experimental-results)\n    - [2) Additional Experiments for the Validity](#2-additional-experiments-for-the-validity)\n    - [3) An Example of NeuroJIT Usage](#3-an-example-of-neurojit-usage)\n- [3. Customizing NeuroJIT](#3-customizing-neurojit)\n\n## 1. Brief Descriptions of the Replication Package (NeuroJIT.zip)\n\n### Structure\n\n```Shell\n\u251c\u2500\u2500 archive # zipped trained models (pickles) in our experiment\n\u251c\u2500\u2500 data\n\u2502  \u251c\u2500\u2500 dataset # dataset used in the experiments\n\u2502  \u251c\u2500\u2500 output # output of the experiments\n\u2502  \u2514\u2500\u2500 plots  # plots generated in the experiments\n\u251c\u2500\u2500 dist # neurojit package distribution\n\u251c\u2500\u2500 Dockerfile\n\u251c\u2500\u2500 docker-compose.yml\n\u251c\u2500\u2500 src/neurojit # core module\n\u2514\u2500\u2500 scripts \n# main scripts\n   \u251c\u2500\u2500 data_utils.py # data preprocessing and caching\n   \u251c\u2500\u2500 calculate.py # calculate commit understandability features and LT of Kamei et al.\n   \u251c\u2500\u2500 pre_analysis.py # analyze statistics of the dataset\n   \u251c\u2500\u2500 jit_sdp.py # machine learning algorithm training and evaluation for just-in-time defect prediction\n   \u251c\u2500\u2500 analysis.py # analyze the ML models\n# sub-modules\n   \u251c\u2500\u2500 correlation.py # modules for correlation analysis\n   \u251c\u2500\u2500 environment.py # environment variables for main scripts\n   \u251c\u2500\u2500 visualization.py # visualization tools\n# for replication\n   \u251c\u2500\u2500 reproduce.sh # a script to reproduce the major experimental results of the paper\n   \u251c\u2500\u2500 commit_distribution.ipynb # a notebook for commit distribution analysis (external validity)\n   \u2514\u2500\u2500 neurojit_cli.py # an example of utilizing NeuroJIT for user's objectives\n```\n\n### Dataset\n\nOur dataset includes widely adopted just-in-time defect prediction features as well as the commit understandability features of NeuroJIT, derived from a total of eight Apache projects. Each CSV file in the `data/dataset` directory represents intermediate outputs generated at data preprocessing stages described in the paper, while each CSV file in the `combined` directory represents the final output for each project.\n\n```Shell\ndata/dataset\n\u251c\u2500\u2500 apachejit_total.csv # original ApacheJIT dataset\n\u251c\u2500\u2500 apachejit_date.csv # ApacheJIT dataset with bug_fix_date\n\u251c\u2500\u2500 apachejit_gap.csv # gap between commit date and bug_fix_date in ApacheJIT dataset\n\u251c\u2500\u2500 apache_metrics_kamei.csv # traditional just-in-time features in ApacheJIT dataset\n\u251c\u2500\u2500 baseline/  # LT added and preprocessed ApacheJIT dataset\n\u2502  \u251c\u2500\u2500 activemq.csv\n\u2502  \u251c\u2500\u2500 ...\n\u251c\u2500\u2500 combined/*.csv   # the dataset used in the research\n\u2514\u2500\u2500 cuf/*.csv      # 9 commit understandability features of target commits\n```\n\nIf you wish to build the dataset from scratch, the following scripts can be used:\n\n```Shell\n (1) Usage: python scripts/data_utils.py COMMAND [ARGS]...\n\n Data preprocessing and caching\n\n\u256d\u2500 Commands \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 combine-dataset   Combine the baseline and commit understandability features datasets                                         \u2502\n\u2502 filter-commits    Filter method changes for each commit in the dataset and save methods to cache                              \u2502\n\u2502 prepare-data      ApacheJIT (bug_date column added) dataset                                                                   \u2502\n\u2502 save-methods      Save the change contexts for commits that modified existing methods                                         \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\n (2) Usage: python scripts/calculate.py COMMAND [ARGS]...\n\n Calculate metrics for CUF and Baseline\n\n\u256d\u2500 Commands \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 cuf-all       Calculate all commit understandability features for a project                                                   \u2502\n\u2502 cuf-metrics   Calculate specific commit understandability features metrics for a project                                      \u2502\n\u2502 lt            Calculate LT for apachejit_metrics (baseline)                                                                   \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n```\n\n### NeuroJIT\n\nThe `neurojit` module offers commit understandability feature calculators and the implementation of the sliding window method. The module is structured as follows:\n\n```Shell\nsrc/neurojit\n\u251c\u2500\u2500 commit.py # commit filtering and saving\n\u251c\u2500\u2500 cuf\n\u2502  \u251c\u2500\u2500 cfg.py # control flow graph for DD\n\u2502  \u251c\u2500\u2500 halstead.py # halstead metrics\n\u2502  \u251c\u2500\u2500 metrics.py  # commit understandability features calculation \n\u2502  \u2514\u2500\u2500 rii.py # II feature calculation with Checkstyle\n\u2514\u2500\u2500 tools\n    \u2514\u2500\u2500 data_utils.py # the implementation of sliding window method for chronological order, verification latency, and concept drifts\n```\n\n`neurojit` is available at [PyPI](https://pypi.org/project/neurojit/), and you can install it using the following command:\n\n```Shell\n$ pip install neurojit\n```\nNow, you can use the NeuroJIT module in your Python project.\n\nIf you want to install all the dependencies for the replication package, add the `[replication]` option:\n```Shell\n$ pip install neurojit[replication]\n```\n\n\n## 2. Step-by-step Explanations for NeuroJIT Replication\n### 2-1. Setup\n\n#### 1) Hardware/Software Requirements\n\nWe tested the replication package on the following devices:\n\n - Windows 11\n   - CPU: AMD Ryzen 5 5600X\n   - RAM: 32GB\n - Ubuntu 20.04.6\n   - Device: NVIDIA DGX Station V100, 2019\n   - CPU: Intel Xeon(R) E5-2698 v4 @ 2.20GHz\n   - RAM: 256GB\n - MacOS 14.6.1\n   - Device: MacBook Air M2, 2022\n   - CPU: Apple M2\n   - RAM: 24GB\n - Docker version 4.33.1\n  \n#### 2) Docker Setup\n\nTo install Docker, refer to the official installation guide at [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/). \nAfter downloading and extracting `NeuroJIT.zip`, navigate to the directory via CLI. \nTo build the image using `docker-compose`, execute the following command:\n\n```Shell\n$ docker-compose build\n...\n\n$ docker image ls\nREPOSITORY     TAG       IMAGE ID       CREATED          SIZE\nneurojit-ase   latest    12e828b38d59   18 seconds ago   3.57GB\n```\n</output>",
+      "exec_time": 0.08718609809875488
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Search the README for all mentions of Docker to understand how the authors expect the environment and containers to be used for reproducing results, including any docker-compose instructions.\n\n<mini_swe_agent_bash>\ngrep -in docker README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.447106838226318,
+        "response": {
+          "id": "chatcmpl-D0XYbp568b1lXF3iAtRpEukg0Ypvy",
+          "created": 1769021365,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Search the README for all mentions of Docker to understand how the authors expect the environment and containers to be used for reproducing results, including any docker-compose instructions.\n\n<mini_swe_agent_bash>\ngrep -in docker README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 189,
+            "prompt_tokens": 6735,
+            "total_tokens": 6924,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 121,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n18:    - [2) Docker Setup](#2-docker-setup)\n36:\u251c\u2500\u2500 Dockerfile\n37:\u251c\u2500\u2500 docker-compose.yml\n145: - Docker version 4.33.1\n147:#### 2) Docker Setup\n149:To install Docker, refer to the official installation guide at [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/). \n151:To build the image using `docker-compose`, execute the following command:\n154:$ docker-compose build\n157:$ docker image ls\n165:$ docker-compose up --build\n182:$ docker-compose run --rm neurojit-ase scripts/reproduce.sh # or docker-compose up \n198:    $ docker-compose run --rm neurojit-ase python scripts/analysis.py table-set-relationships data/output/random_forest_cuf.json data/output/random_forest_baseline.json --fmt fancy_outline --no-only-tp\n213:    $ docker-compose run --rm neurojit-ase python scripts/analysis.py table-set-relationships data/output/xgboost_cuf.json data/output/xgboost_baseline.json --fmt fancy_outline --no-only-tp\n231:    $ docker-compose run --rm neurojit-ase python scripts/pre_analysis.py plot-commit-distribution --ours\n235:    $ docker-compose run --rm neurojit-ase python scripts/pre_analysis.py plot-commit-distribution\n247:$ docker-compose run --rm neurojit-ase python scripts/neurojit_cli.py calculate --project REPONAME --commit-hash COMMIT_HASH\n253:$ docker-compose run --rm neurojit-ase python scripts/neurojit_cli.py calculate --project activemq --commit-hash 8f40a7\n261:$ docker-compose run --rm neurojit-ase python scripts/neurojit_cli.py calculate --project groovy --commit-hash 7b84807\n269:$ docker-compose run --rm neurojit-ase python scripts/neurojit_cli.py calculate --project spring-projects/spring-framework --commit-hash 0101945\n</output>",
+      "exec_time": 0.08020210266113281
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Locate the specific README instructions related to reproducing Table 3 so I can identify the exact docker-compose or analysis commands that generate the actionable-feature ratios.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 3\" README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 2.6788265705108643,
+        "response": {
+          "id": "chatcmpl-D0XYgTaAD6ssSOoEaVP8ypwiSBh6J",
+          "created": 1769021370,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Locate the specific README instructions related to reproducing Table 3 so I can identify the exact docker-compose or analysis commands that generate the actionable-feature ratios.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 3\" README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 104,
+            "prompt_tokens": 7247,
+            "total_tokens": 7351,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 34,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>1</returncode>\n<output>\n</output>",
+      "exec_time": 0.09448075294494629
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Continue reading the README further down to find the section on reproducing experimental results and any commands that generate tables or specifically relate to LIME explanations and actionable feature ratios.\n\n<mini_swe_agent_bash>\nsed -n '160,260p' README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 4.348763465881348,
+        "response": {
+          "id": "chatcmpl-D0XYjlnuVCMrQKlEghHc3gUTMEXMq",
+          "created": 1769021373,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Continue reading the README further down to find the section on reproducing experimental results and any commands that generate tables or specifically relate to LIME explanations and actionable feature ratios.\n\n<mini_swe_agent_bash>\nsed -n '160,260p' README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 162,
+            "prompt_tokens": 7333,
+            "total_tokens": 7495,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 88,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 4864
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n```\n\nOr you can build the image and run the replication script in one command:\n\n```Shell\n$ docker-compose up --build\n...\n\u2714 Container neurojit-ase  Started\nAttaching to neurojit-ase\n...\n```\n\n`neurojit-ase` container is created and `scripts/reproduce.sh` is executed automatically.\n\n\n### 2-2. Usage\n\n#### 1) Reproducing the Experimental Results\n\nAfter you build the image, to reproduce the major results of the paper, execute the following command:\n\n```Shell\n$ docker-compose run --rm neurojit-ase scripts/reproduce.sh # or docker-compose up \n``` \n\nIf the script is executed successfully, you can see the identical results as `reproduced_results.png`:\n\n![reproduced_results.png](reproduced_results.png)\n\nIn addition to the tables shown in the capture, you can find the figures in the saved directory.\n\nFor a detailed explanation of reproduce.sh, please refer to `reproduce_sh.md`.\n\n#### 2) Additional Experiments for the Validity\n\n1) The result presented in Figure 5 on page 7 of the paper, which demonstrates that commit understandability features provide exclusive information, applies to all positives, not just true positives. You can verify the results for all positives by executing the following commands with the `--no-only-tp` option:\n\n    ```Shell\n    $ docker-compose run --rm neurojit-ase python scripts/analysis.py table-set-relationships data/output/random_forest_cuf.json data/output/random_forest_baseline.json --fmt fancy_outline --no-only-tp\n\n    \u2552\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2564\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2564\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2564\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2555\n    \u2502 Project   \u2502   cuf only \u2502   Intersection \u2502   baseline only \u2502\n    \u255e\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u256a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u256a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u256a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2561\n    \u2502 Groovy    \u2502       58.2 \u2502           15.7 \u2502            26.1 \u2502\n    \u2502 Camel     \u2502       53.7 \u2502           17.9 \u2502            28.4 \u2502\n    \u2502 Flink     \u2502       47.1 \u2502           13.4 \u2502            39.5 \u2502\n    \u2502 Ignite    \u2502       41.9 \u2502           10.2 \u2502            47.9 \u2502\n    \u2502 Cassandra \u2502       33.8 \u2502           17.2 \u2502            48.9 \u2502\n    \u2502 HBase     \u2502       31.4 \u2502           35.6 \u2502            33.0 \u2502\n    \u2502 ActiveMQ  \u2502       30.3 \u2502           14.7 \u2502            54.9 \u2502\n    \u2502 Hive      \u2502       29.8 \u2502           40.3 \u2502            29.9 \u2502\n    \u2558\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2567\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2567\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2567\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255b\n\n    $ docker-compose run --rm neurojit-ase python scripts/analysis.py table-set-relationships data/output/xgboost_cuf.json data/output/xgboost_baseline.json --fmt fancy_outline --no-only-tp\n\n    \u2552\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2564\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2564\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2564\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2555\n    \u2502 Project   \u2502   cuf only \u2502   Intersection \u2502   baseline only \u2502\n    \u255e\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u256a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u256a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u256a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2561\n    \u2502 Groovy    \u2502       60.2 \u2502           15.9 \u2502            23.9 \u2502\n    \u2502 Camel     \u2502       57.2 \u2502           17.0 \u2502            25.8 \u2502\n    \u2502 Flink     \u2502       49.3 \u2502           13.0 \u2502            37.7 \u2502\n    \u2502 Ignite    \u2502       45.0 \u2502           10.1 \u2502            44.9 \u2502\n    \u2502 Cassandra \u2502       40.4 \u2502           18.2 \u2502            41.4 \u2502\n    \u2502 HBase     \u2502       39.8 \u2502           31.6 \u2502            28.6 \u2502\n    \u2502 ActiveMQ  \u2502       34.9 \u2502           16.0 \u2502            49.1 \u2502\n    \u2502 Hive      \u2502       29.2 \u2502           37.9 \u2502            32.9 \u2502\n    \u2558\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2567\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2567\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2567\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255b\n    ```\n2) To obtain the results mentioned in the External Validity section on page 10 of the paper, which states that the dataset used in this study shows a different distribution compared to the dataset used in cited study, execute the following commands:\n  \n    ```Shell\n    $ docker-compose run --rm neurojit-ase python scripts/pre_analysis.py plot-commit-distribution --ours\n\n    Saved plot to data/plots/commit_distribution_ours.png\n\n    $ docker-compose run --rm neurojit-ase python scripts/pre_analysis.py plot-commit-distribution\n\n    Saved plot to data/plots/commit_distribution_apachejit.png\n    ```\n\n    Please check the figures saved in the corresponding directory.\n\n#### 3) An Example of NeuroJIT Usage\n\nNeuroJIT is currently designed to calculate commit understandability features from method-level commits of projects. You can calculate the features using the following `neurojit_cli.py` script:\n\n```Shell\n$ docker-compose run --rm neurojit-ase python scripts/neurojit_cli.py calculate --project REPONAME --commit-hash COMMIT_HASH\n```\n\nFor example, to calculate the features for the `8f40a7` commit in the `ActiveMQ` project, execute the following command:\n\n```Shell\n$ docker-compose run --rm neurojit-ase python scripts/neurojit_cli.py calculate --project activemq --commit-hash 8f40a7\n\n{'NOGV': 1.0, 'MDNL': 0.0, 'TE': 3.5122864969277017, 'II': 0.03225806451612903, 'NOP': 0.0, 'NB': 0.0, 'EC': 0.5, 'DD_HV': 0.04324106779539902, 'NOMT': 9.0}\n```\n\nIf the commit is not a method changes commit, you will see a message like this:\n\n```Shell\n</output>",
+      "exec_time": 0.09173202514648438
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Extract the NeuroJIT replication package from NeuroJIT.zip so that the scripts (including reproduce.sh and reproduce_sh.md) and docker-compose.yml referenced in the README become accessible for further inspection; suppress verbose unzip output to avoid overwhelming logs.\n\n<mini_swe_agent_bash>\nunzip -q NeuroJIT.zip -d NeuroJIT\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 9.857914447784424,
+        "response": {
+          "id": "chatcmpl-D0XYo1zK8kwlNuylIJVhnHPv8NG4g",
+          "created": 1769021378,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Extract the NeuroJIT replication package from NeuroJIT.zip so that the scripts (including reproduce.sh and reproduce_sh.md) and docker-compose.yml referenced in the README become accessible for further inspection; suppress verbose unzip output to avoid overwhelming logs.\n\n<mini_swe_agent_bash>\nunzip -q NeuroJIT.zip -d NeuroJIT\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 479,
+            "prompt_tokens": 8768,
+            "total_tokens": 9247,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 388,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 7168
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>1</returncode>\n<output>\nreplace NeuroJIT/.dockerignore? [y]es, [n]o, [A]ll, [N]one, [r]ename:  NULL\n(EOF or read error, treating as \"[N]one\" ...)\n</output>",
+      "exec_time": 0.09584522247314453
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Re-run the extraction in a non-interactive, quiet, and overwrite-safe way so that the NeuroJIT directory is fully populated with the replication package contents needed for subsequent docker-compose and script inspection.\n\n<mini_swe_agent_bash>\nunzip -qo NeuroJIT.zip -d NeuroJIT\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 6.396905183792114,
+        "response": {
+          "id": "chatcmpl-D0XYyKe5cVzhbtuchAdi5JJiT4ySl",
+          "created": 1769021388,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Re-run the extraction in a non-interactive, quiet, and overwrite-safe way so that the NeuroJIT directory is fully populated with the replication package contents needed for subsequent docker-compose and script inspection.\n\n<mini_swe_agent_bash>\nunzip -qo NeuroJIT.zip -d NeuroJIT\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 256,
+            "prompt_tokens": 8925,
+            "total_tokens": 9181,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 173,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 7296
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n</output>",
+      "exec_time": 7.809054374694824
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Inspect the reproduction script documentation to identify which commands are responsible for generating the LIME explanation results and specifically Table 3.\n\n<mini_swe_agent_bash>\nsed -n '1,200p' NeuroJIT/reproduce_sh.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.2424657344818115,
+        "response": {
+          "id": "chatcmpl-D0XZCCEcskuqiOx8Z7IGOdYmkpgx9",
+          "created": 1769021402,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Inspect the reproduction script documentation to identify which commands are responsible for generating the LIME explanation results and specifically Table 3.\n\n<mini_swe_agent_bash>\nsed -n '1,200p' NeuroJIT/reproduce_sh.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 224,
+            "prompt_tokens": 9024,
+            "total_tokens": 9248,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 154,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 8704
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n`reproduce.sh` \uc2a4\ud06c\ub9bd\ud2b8\ub294 \ub17c\ubb38\uc758 \ud575\uc2ec \uacb0\uacfc\ub97c \uc7ac\ud604\ud558\ub294 \ub370 \uc0ac\uc6a9\ub429\ub2c8\ub2e4. \ub2e4\uc74c\uacfc \uac19\uc774 \ud06c\uac8c 3\uac00\uc9c0 \ud30c\uc774\uc36c \uc2a4\ud06c\ub9bd\ud2b8\ub97c \uc2e4\ud589\ud569\ub2c8\ub2e4:\n\n```Shell\n(1) Usage: python scripts/pre_analysis.py COMMAND [ARGS]...\n\n\u256d\u2500 Commands \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 plot-corr                   (RQ1) Generate plots for Correlations between cuf Features and Defect-inducing Risks              \u2502\n\u2502 plot-hmap                   Generate plots for Collinearity between Features                                                  \u2502\n\u2502 table-distribution          Tabulate the distribution of the dataset                                                          \u2502\n\u2502 table-group-diff            (RQ1) Tabulate the group differences between buggy and clean commits for cuf                      \u2502\n\u2502 table-group-diff-projects   Tabulate the group differences between buggy and clean commits for cuf (each project)             \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\n(2) Usage: python scripts/jit_sdp.py COMMAND [ARGS]...\n\nExperiments for Just-In-Time Software Defect Prediction (JIT-SDP)\n\n\u256d\u2500 Commands \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 actionable   Compute the ratios of actionable features for the baseline and combined models for the true positive samples in  \u2502\n\u2502              the 20 folds JIT-SDP                                                                                             \u2502\n\u2502 train-test   Train and test the baseline/cuf/combined model with 20 folds JIT-SDP                                             \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\n(3) Usage: python scripts/analysis.py COMMAND [ARGS]...\n\nTable and plot generation for analysis\n\n\u256d\u2500 Commands \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 plot-radars               (RQ3) Generate radar charts for performance comparison between models                               \u2502\n\u2502 plot-set-relationships    (RQ2) Generate plots for TPs predicted by baseline model only vs cuf model only                     \u2502\n\u2502 table-actionable          (Toward More Actionable Guidance) Tabulate the results of the actionable features                   \u2502\n\u2502 table-performances        (RQ3) Generate table for performance comparison between models                                      \u2502\n\u2502 table-set-relationships   (RQ2) Generate table for TPs predicted by baseline model only vs cuf model only                     \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n```\n\n\uac01 \uc2a4\ud06c\ub9bd\ud2b8 \ub0b4 \uc11c\ube0c \ucee4\ub9e8\ub4dc\uc5d0 \ub300\ud55c \uc790\uc138\ud55c \ub0b4\uc6a9\uc740 `--help` \uc635\uc158\uc744 \uc0ac\uc6a9\ud558\uba74 \ud655\uc778\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4.\n</output>",
+      "exec_time": 0.07887077331542969
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Examine the reproduction script itself to see the exact sequence of commands used to generate actionable-feature results and which one corresponds to the table we need to reproduce.\n\n<mini_swe_agent_bash>\nsed -n '1,200p' NeuroJIT/scripts/reproduce.sh\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.825263261795044,
+        "response": {
+          "id": "chatcmpl-D0XZHWzbp32GJMxvwU2z1DblOhpfS",
+          "created": 1769021407,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Examine the reproduction script itself to see the exact sequence of commands used to generate actionable-feature results and which one corresponds to the table we need to reproduce.\n\n<mini_swe_agent_bash>\nsed -n '1,200p' NeuroJIT/scripts/reproduce.sh\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 296,
+            "prompt_tokens": 9654,
+            "total_tokens": 9950,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 220,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 8832
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n#!/bin/sh\n\nscripts/extract_pickles.sh\n\necho \"  _   _                          _ ___ _____ \n | \\ | | ___ _   _ _ __ ___     | |_ _|_   _|\n |  \\| |/ _ \\ | | | '__/ _ \\ _  | || |  | |  \n | |\\  |  __/ |_| | | | (_) | |_| || |  | |  \n |_| \\_|\\___|\\__,_|_|  \\___/ \\___/|___| |_|  \n                                             \"\necho \"[Figure 2] Correlations of Features in Each Group\"\npython scripts/pre_analysis.py plot-hmap\n\necho \"=====================[RQ1]=====================\"\necho \"[Figure 4] Predictive Power of Understandability Features\"\necho \"(a) understandability features' odds ratio & (b) combined features' odds ratio\"\npython scripts/pre_analysis.py plot-corr\necho \"(c) group difference between defective and clean commits\"\npython scripts/pre_analysis.py table-group-diff --fmt fancy_outline\n\necho \"=====================[RQ2]=====================\"\necho \"** Evaluating baseline/cuf models for random forest and xgboost **\"\npython scripts/jit_sdp.py train-test random_forest baseline --load-model --display\npython scripts/jit_sdp.py train-test random_forest cuf --load-model --display\npython scripts/jit_sdp.py train-test xgboost baseline --load-model --display\npython scripts/jit_sdp.py train-test xgboost cuf --load-model --display\necho \"[Figure 5] Set Relationships between True Positives Predicted by Understandability Models and Baseline Models\"\necho \"(a) Random Forest\"\npython scripts/analysis.py table-set-relationships data/output/random_forest_cuf.json data/output/random_forest_baseline.json --fmt fancy_outline\necho \"(b) XGBoost\"\npython scripts/analysis.py table-set-relationships data/output/xgboost_cuf.json data/output/xgboost_baseline.json --fmt fancy_outline\necho \"** Generating Figure 5 **\"\npython scripts/analysis.py plot-set-relationships data/output/random_forest_cuf.json data/output/random_forest_baseline.json --save-path data/output/plots/analysis/rf_diff_plot.svg\npython scripts/analysis.py plot-set-relationships data/output/xgboost_cuf.json data/output/xgboost_baseline.json  --save-path data/output/plots/analysis/xgb_diff_plot.svg\n\necho \"=====================[RQ3]=====================\"\necho \"** Evaluating combined models for random forest and xgboost **\"\npython scripts/jit_sdp.py train-test random_forest combined --load-model --display\npython scripts/jit_sdp.py train-test xgboost combined --load-model --display\n\necho \"[Figure 7] Performance Comparison between Baseline Models and Baseline+Understandability Models\"\necho \"Random Forest\"\npython scripts/analysis.py table-performances data/output/random_forest_baseline.json data/output/random_forest_combined.json --fmt fancy_outline\necho \"XGBoost\"\npython scripts/analysis.py table-performances data/output/xgboost_baseline.json data/output/xgboost_combined.json --fmt fancy_outline\necho \"** Generating Figure 7 components **\"\npython scripts/analysis.py plot-radars data/output/random_forest_baseline.json data/output/random_forest_combined.json\npython scripts/analysis.py plot-radars data/output/xgboost_baseline.json data/output/xgboost_combined.json\n\n\necho \"========[Toward More Actionable Guidance]=======\"\necho \"[Table 3] Average Ratios of Actionable Features within Top 5 Contribution Rankings of LIME Explanations\"\necho \"** Generating LIME explanations for random forest and xgboost **\"\npython scripts/jit_sdp.py actionable random_forest --display\npython scripts/jit_sdp.py actionable xgboost --display\necho \"Random Forest\"\npython scripts/analysis.py table-actionable data/output/actionable_random_forest.csv --fmt fancy_outline\necho \"XGBoost\"\npython scripts/analysis.py table-actionable data/output/actionable_xgboost.csv --fmt fancy_outline\n\necho \"=====================[END]=====================\"</output>",
+      "exec_time": 0.08460855484008789
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Build the NeuroJIT Docker image via docker-compose inside the extracted NeuroJIT directory, as specified in the README, to prepare the environment for running reproduce.sh and generating Table 3.\n\n<mini_swe_agent_bash>\ncd NeuroJIT && docker-compose build\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 8.005146265029907,
+        "response": {
+          "id": "chatcmpl-D0XZNvKges2NRIeyx3YMTnWtZE4eq",
+          "created": 1769021413,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Build the NeuroJIT Docker image via docker-compose inside the extracted NeuroJIT directory, as specified in the README, to prepare the environment for running reproduce.sh and generating Table 3.\n\n<mini_swe_agent_bash>\ncd NeuroJIT && docker-compose build\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 397,
+            "prompt_tokens": 10615,
+            "total_tokens": 11012,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 321,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 8960
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning><output_head>\n Image neurojit-ase Building \n#1 [internal] load local bake definitions\n#1 reading from stdin 507B done\n#1 DONE 0.0s\n\n#2 [internal] load build definition from Dockerfile\n#2 transferring dockerfile: 616B done\n#2 DONE 0.1s\n\n#3 [internal] load metadata for docker.io/library/python:3.12-slim\n#3 DONE 1.9s\n\n#4 [internal] load .dockerignore\n#4 transferring context: 164B done\n#4 DONE 0.1s\n\n#5 [internal] load build context\n#5 DONE 0.0s\n\n#6 [build-stage 1/5] FROM docker.io/library/python:3.12-slim@sha256:5e2dbd4bbdd9c0e67412aea9463906f74a22c60f89eb7b5bbb7d45b66a2b68a6\n#6 resolve docker.io/library/python:3.12-slim@sha256:5e2dbd4bbdd9c0e67412aea9463906f74a22c60f89eb7b5bbb7d45b66a2b68a6 0.1s done\n#6 sha256:5e2dbd4bbdd9c0e67412aea9463906f74a22c60f89eb7b5bbb7d45b66a2b68a6 10.37kB / 10.37kB done\n#6 sha256:ef24548e6db34726360ab68d85d8054197c409650aa1796dd2694fcbb1e8d633 1.75kB / 1.75kB done\n#6 sha256:c78a70d7588fc2f2a6d4a9777b09c4a1a22beb89586a8de86532be0c8e9eb20f 5.68kB / 5.68kB done\n#6 sha256:83e2eb8c4c73235e21df3ea0ce6aa840fcb84f4cb368fb6b443a8a87d95850d0 0B / 1.29MB 0.2s\n#6 sha256:119d43eec815e5f9a47da3a7d59454581b1e204b0c34db86f171b7ceb3336533 0B / 29.77MB 0.3s\n#6 sha256:671677b67e7671119d142c2f8548882641edfad92863ee1ccff2cd84c3b14a2a 0B / 12.11MB 0.4s\n#6 sha256:83e2eb8c4c73235e21df3ea0ce6aa840fcb84f4cb368fb6b443a8a87d95850d0 1.29MB / 1.29MB 0.5s\n#6 sha256:83e2eb8c4c73235e21df3ea0ce6aa840fcb84f4cb368fb6b443a8a87d95850d0 1.29MB / 1.29MB 0.5s done\n#6 sha256:119d43eec815e5f9a47da3a7d59454581b1e204b0c34db86f171b7ceb3336533 4.19MB / 29.77MB 0.6s\n#6 sha256:3d6ef8a4ce0aaaaa35261feb115464317fcb4910873cba90171f7ad544a9964e 0B / 249B 0.6s\n#6 sha256:119d43eec815e5f9a47da3a7d59454581b1e204b0c34db86f171b7ceb3336533 11.53MB / 29.77MB 0.7s\n#6 sha256:119d43eec815e5f9a47da3a7d59454581b1e204b0c34db86f171b7ceb3336533 29.77MB / 29.77MB 0.9s\n#6 sha256:671677b67e7671119d142c2f8548882641edfad92863ee1ccff2cd84c3b14a2a 12.11MB / 12.11MB 0.8s done\n#6 sha256:3d6ef8a4ce0aaaaa35261feb115464317fcb4910873cba90171f7ad544a9964e 249B / 249B 0.9s\n#6 sha256:119d43eec815e5f9a47da3a7d59454581b1e204b0c34db86f171b7ceb3336533 29.77MB / 29.77MB 0.9s done\n#6 sha256:3d6ef8a4ce0aaaaa35261feb115464317fcb4910873cba90171f7ad544a9964e 249B / 249B 0.9s done\n#6 extracting sha256:119d43eec815e5f9a47da3a7d59454581b1e204b0c34db86f171b7ceb3336533\n#6 extracting sha256:119d43eec815e5f9a47da3a7d59454581b1e204b0c34db86f171b7ceb3336533 1.9s done\n#6 extracting sha256:83e2eb8c4c73235e21df3ea0ce6aa840fcb84f4cb368fb6b443a8a87d95850d0\n#6 extracting sha256:83e2eb8c4c73235e21df3ea0ce6aa840fcb84f4cb368fb6b443a8a87d95850d0 0.2s done\n#6 extracting sha256:671677b67e7671119d142c2f8548882641edfad92863ee1ccff2cd84c3b14a2a\n#6 extracting sha256:671677b67e7671119d142c2f8548882641edfad92863ee1ccff2cd84c3b14a2a 1.8s done\n#6 extracting sha256:3d6ef8a4ce0aaaaa35261feb115464317fcb4910873cba90171f7ad544a9964e done\n#6 DONE 7.0s\n\n#5 [internal] load build context\n#5 transferring context: 540.48MB 6.7s\n#5 ...\n\n#7 [build-stage 2/5] WORKDIR /app\n#7 DONE 0.8s\n\n#5 [internal] load build context\n#5 ...\n\n#8 [stage-1 3/6] RUN apt-get update && apt-get install -y     default-jdk     git     && apt-get clean\n#8 0.518 Hit:1 http://deb.debian.org/debian trixie InRelease\n#8 0.518 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]\n#8 0.521 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]\n#8 0.557 Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9670 kB]\n#8 ...\n\n#5 [internal] load build context\n#5 transferring context: 654.17MB 8.0s done\n#5 DONE 8.4s\n\n#8 [stage-1 3/6] RUN apt-get update && apt-get install -y     default-jdk     git     && apt-get clean\n#8 0.658 Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [5412 B]\n#8 0.658 Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [96.3 kB]\n#8 2.521 Fetched 9863 kB in 2s (4856 kB/s)\n#8 2.521 Reading package lists...\n#8 4.110 Reading package lists...\n#8 ...\n\n#9 [build-stage 3/5] COPY . .\n#9 DONE 3.6s\n\n#10 [build-stage 4/5] RUN apt-get update && apt-get install -y     build-essential     curl     && apt-get clean\n#10 0.658 Hit:1 http://deb.debian.org/debian trixie InRelease\n#10 0.658 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]\n#10 0.661 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]\n#10 0.701 Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9670 kB]\n#10 0.887 Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [5412 B]\n#10 0.910 Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [96.3 kB]\n#10 2.172 Fetched 9863 kB in 2s (6332 kB/s)\n#10 2.172 Reading package lists...\n#10 3.248 Reading package lists...\n#10 4.395 Building dependency tree...\n#10 4.657 Reading state information...\n#10 5.301 The following additional packages will be installed:\n#10 5.301   bash-completion binutils binutils-common binutils-x86-64-linux-gnu bzip2 cpp\n#10 5.302   cpp-14 c\n</output_head>\n<elided_chars>\n74818 characters elided\n</elided_chars>\n<output_tail>\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 7.0/7.0 MB 52.2 MB/s eta 0:00:00\n#12 17.75 Downloading pygments-2.19.2-py3-none-any.whl (1.2 MB)\n#12 17.82    \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 1.2/1.2 MB 14.4 MB/s eta 0:00:00\n#12 17.83 Downloading pyparsing-3.3.2-py3-none-any.whl (122 kB)\n#12 17.88 Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)\n#12 17.91 Downloading scikit_image-0.26.0-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (13.6 MB)\n#12 18.06    \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 13.6/13.6 MB 93.5 MB/s eta 0:00:00\n#12 18.08 Downloading shellingham-1.5.4-py2.py3-none-any.whl (9.8 kB)\n#12 18.11 Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)\n#12 18.14 Downloading threadpoolctl-3.6.0-py3-none-any.whl (18 kB)\n#12 18.18 Downloading typing_extensions-4.15.0-py3-none-any.whl (44 kB)\n#12 18.24 Downloading gitpython-3.1.46-py3-none-any.whl (208 kB)\n#12 18.31 Downloading imbalanced_learn-0.14.1-py3-none-any.whl (235 kB)\n#12 18.36 Downloading lizard-1.20.0-py2.py3-none-any.whl (97 kB)\n#12 18.39 Downloading nvidia_nccl_cu12-2.29.2-py3-none-manylinux_2_18_x86_64.whl (289.8 MB)\n#12 21.97    \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 289.8/289.8 MB 78.9 MB/s eta 0:00:00\n#12 21.98 Downloading pytz-2025.2-py2.py3-none-any.whl (509 kB)\n#12 22.02 Downloading tqdm-4.67.1-py3-none-any.whl (78 kB)\n#12 22.04 Downloading types_pytz-2025.2.0.20251108-py3-none-any.whl (10 kB)\n#12 22.08 Downloading gitdb-4.0.12-py3-none-any.whl (62 kB)\n#12 22.16 Downloading imageio-2.37.2-py3-none-any.whl (317 kB)\n#12 22.20 Downloading lazy_loader-0.4-py3-none-any.whl (12 kB)\n#12 22.22 Downloading mdurl-0.1.2-py3-none-any.whl (10.0 kB)\n#12 22.24 Downloading networkx-3.6.1-py3-none-any.whl (2.1 MB)\n#12 22.29    \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 2.1/2.1 MB 39.6 MB/s eta 0:00:00\n#12 22.32 Downloading sklearn_compat-0.1.5-py3-none-any.whl (20 kB)\n#12 22.38 Downloading tifffile-2026.1.14-py3-none-any.whl (232 kB)\n#12 22.46 Downloading pathspec-1.0.3-py3-none-any.whl (55 kB)\n#12 22.50 Downloading smmap-5.0.2-py3-none-any.whl (24 kB)\n#12 24.75 Building wheels for collected packages: lime\n#12 24.75   Building wheel for lime (pyproject.toml): started\n#12 25.32   Building wheel for lime (pyproject.toml): finished with status 'done'\n#12 25.32   Created wheel for lime: filename=lime-0.2.0.1-py3-none-any.whl size=283911 sha256=ea72b4573a792e06e0cd8662b5cf61d7bf96b1e8543f58791626680f8fc7bcfd\n#12 25.32   Stored in directory: /root/.cache/pip/wheels/e7/5d/0e/4b4fff9a47468fed5633211fb3b76d1db43fe806a17fb7486a\n#12 25.33 Successfully built lime\n#12 25.56 Installing collected packages: pytz, cliffs-delta, typing-extensions, types-pytz, tqdm, threadpoolctl, tabulate, smmap, six, shellingham, pyparsing, pygments, pillow, pathspec, packaging, nvidia-nccl-cu12, numpy, networkx, mdurl, kiwisolver, joblib, fonttools, cycler, click, tifffile, scipy, python-dateutil, patsy, markdown-it-py, lizard, lazy-loader, javalang, imageio, gitdb, contourpy, xgboost, scikit-learn, scikit-image, rich, pandas, matplotlib, gitpython, typer, statsmodels, sklearn-compat, seaborn, pydriller, lime, neurojit, imbalanced-learn, imblearn\n#12 78.89 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.\n#12 78.89 Successfully installed click-8.3.1 cliffs-delta-1.0.0 contourpy-1.3.3 cycler-0.12.1 fonttools-4.61.1 gitdb-4.0.12 gitpython-3.1.46 imageio-2.37.2 imbalanced-learn-0.14.1 imblearn-0.0 javalang-0.13.0 joblib-1.5.3 kiwisolver-1.4.9 lazy-loader-0.4 lime-0.2.0.1 lizard-1.20.0 markdown-it-py-4.0.0 matplotlib-3.10.8 mdurl-0.1.2 networkx-3.6.1 neurojit-1.0.2 numpy-2.4.1 nvidia-nccl-cu12-2.29.2 packaging-25.0 pandas-3.0.0 pathspec-1.0.3 patsy-1.0.2 pillow-12.1.0 pydriller-2.9 pygments-2.19.2 pyparsing-3.3.2 python-dateutil-2.9.0.post0 pytz-2025.2 rich-14.2.0 scikit-image-0.26.0 scikit-learn-1.8.0 scipy-1.17.0 seaborn-0.13.2 shellingham-1.5.4 six-1.17.0 sklearn-compat-0.1.5 smmap-5.0.2 statsmodels-0.14.6 tabulate-0.9.0 threadpoolctl-3.6.0 tifffile-2026.1.14 tqdm-4.67.1 typer-0.21.1 types-pytz-2025.2.0.20251108 typing-extensions-4.15.0 xgboost-3.1.3\n#12 79.01 \n#12 79.01 [notice] A new release of pip is available: 25.0.1 -> 25.3\n#12 79.01 [notice] To update, run: pip install --upgrade pip\n#12 DONE 86.6s\n\n#13 [stage-1 5/6] COPY --from=build-stage /app /app\n#13 DONE 4.3s\n\n#14 [stage-1 6/6] RUN chmod +x scripts/*.sh\n#14 DONE 1.0s\n\n#15 exporting to image\n#15 exporting layers\n#15 exporting layers 11.7s done\n#15 writing image sha256:a8c1d5aa1393e3766c4232f6c7b878fb532e3e01c69693ab534912c37c68559a done\n#15 naming to docker.io/library/neurojit-ase 0.0s done\n#15 DONE 11.8s\n\n#16 resolving provenance for metadata file\n#16 DONE 0.0s\n Image neurojit-ase Built \n\n</output_tail>",
+      "exec_time": 223.88620281219482
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Inspect the `table-actionable` command\u2019s options (in particular available output formats) so I can configure the reproduction script to emit a Markdown-style table into `/workspace/repro.txt` for comparison with `expected.md`.\n\n<mini_swe_agent_bash>\ncd NeuroJIT && docker-compose run --rm neurojit-ase python scripts/analysis.py table-actionable --help\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 13.47836947441101,
+        "response": {
+          "id": "chatcmpl-D0Xd7vCqZDKzuBQ0UFZyeuaOW79WM",
+          "created": 1769021645,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Inspect the `table-actionable` command\u2019s options (in particular available output formats) so I can configure the reproduction script to emit a Markdown-style table into `/workspace/repro.txt` for comparison with `expected.md`.\n\n<mini_swe_agent_bash>\ncd NeuroJIT && docker-compose run --rm neurojit-ase python scripts/analysis.py table-actionable --help\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 779,
+            "prompt_tokens": 15182,
+            "total_tokens": 15961,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 681,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 10496
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\ntime=\"2026-01-21T18:54:16Z\" level=warning msg=\"No services to build\"\n Network neurojit_default Creating \n Network neurojit_default Created \ntime=\"2026-01-21T18:54:16Z\" level=warning msg=\"No services to build\"\n Container neurojit-neurojit-ase-run-d9c4be9d33c7 Creating \n Container neurojit-neurojit-ase-run-d9c4be9d33c7 Created \n                                                                                \n Usage: analysis.py table-actionable [OPTIONS] [PATH]                           \n                                                                                \n (Toward More Actionable Guidance) Tabulate the results of the actionable       \n features                                                                       \n                                                                                \n\u256d\u2500 Arguments \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502   path      [PATH]  [default: data/output/actionable.csv]                    \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500 Options \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 --fmt         TEXT  [default: github]                                        \u2502\n\u2502 --help              Show this message and exit.                              \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\n</output>",
+      "exec_time": 16.92652440071106
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Prepare the pre-trained model artifacts required for the actionable-feature analysis by running the provided `scripts/extract_pickles.sh` inside the NeuroJIT Docker container, matching the first step of `reproduce.sh` before the actionable commands.\n\n<mini_swe_agent_bash>\ncd NeuroJIT && docker-compose run --rm neurojit-ase scripts/extract_pickles.sh\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 24.17460060119629,
+        "response": {
+          "id": "chatcmpl-D0Xdbg5arwNpNLJiARPfgIJWoqB0M",
+          "created": 1769021675,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Prepare the pre-trained model artifacts required for the actionable-feature analysis by running the provided `scripts/extract_pickles.sh` inside the NeuroJIT Docker container, matching the first step of `reproduce.sh` before the actionable commands.\n\n<mini_swe_agent_bash>\ncd NeuroJIT && docker-compose run --rm neurojit-ase scripts/extract_pickles.sh\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 1123,
+            "prompt_tokens": 15541,
+            "total_tokens": 16664,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 1026,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 9600
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\ntime=\"2026-01-21T18:54:59Z\" level=warning msg=\"No services to build\"\ntime=\"2026-01-21T18:54:59Z\" level=warning msg=\"No services to build\"\n Container neurojit-neurojit-ase-run-94533d7f1b71 Creating \n Container neurojit-neurojit-ase-run-94533d7f1b71 Created \nExtracting pickles...\nDone.\n</output>",
+      "exec_time": 65.38944101333618
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Generate the actionable-feature data for the Random Forest model, as done in reproduce.sh, so that `data/output/actionable_random_forest.csv` is created for later tabulation into the Table 3 format.\n\n<mini_swe_agent_bash>\ncd NeuroJIT && docker-compose run --rm neurojit-ase python scripts/jit_sdp.py actionable random_forest --display\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 25.323822498321533,
+        "response": {
+          "id": "chatcmpl-D0Xf3A0lGcnFiD46wfJq2tVKyPdMo",
+          "created": 1769021765,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Generate the actionable-feature data for the Random Forest model, as done in reproduce.sh, so that `data/output/actionable_random_forest.csv` is created for later tabulation into the Table 3 format.\n\n<mini_swe_agent_bash>\ncd NeuroJIT && docker-compose run --rm neurojit-ase python scripts/jit_sdp.py actionable random_forest --display\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 1119,
+            "prompt_tokens": 15753,
+            "total_tokens": 16872,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 1020,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 15104
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\ntime=\"2026-01-21T18:56:28Z\" level=warning msg=\"No services to build\"\ntime=\"2026-01-21T18:56:28Z\" level=warning msg=\"No services to build\"\n Container neurojit-neurojit-ase-run-f1c138cd5bf4 Creating \n Container neurojit-neurojit-ase-run-f1c138cd5bf4 Created \nProjects... \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 100% 0:08:29\nResults saved at data/output/actionable_random_forest.csv\n</output>",
+      "exec_time": 519.9967522621155
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Generate the actionable-feature data for the XGBoost model to create `data/output/actionable_xgboost.csv`, completing the inputs needed for tabulating the Table 3 results.\n\n<mini_swe_agent_bash>\ncd NeuroJIT && docker-compose run --rm neurojit-ase python scripts/jit_sdp.py actionable xgboost --display\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.3112287521362305,
+        "response": {
+          "id": "chatcmpl-D0XnqP6CU63GMYnrNsGyOR2EAKf8m",
+          "created": 1769022310,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Generate the actionable-feature data for the XGBoost model to create `data/output/actionable_xgboost.csv`, completing the inputs needed for tabulating the Table 3 results.\n\n<mini_swe_agent_bash>\ncd NeuroJIT && docker-compose run --rm neurojit-ase python scripts/jit_sdp.py actionable xgboost --display\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 132,
+            "prompt_tokens": 15991,
+            "total_tokens": 16123,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 39,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 15488
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\ntime=\"2026-01-21T19:05:11Z\" level=warning msg=\"No services to build\"\ntime=\"2026-01-21T19:05:11Z\" level=warning msg=\"No services to build\"\n Container neurojit-neurojit-ase-run-f9572a4b9cdf Creating \n Container neurojit-neurojit-ase-run-f9572a4b9cdf Created \nProjects... \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 100% 0:03:13\nResults saved at data/output/actionable_xgboost.csv\n</output>",
+      "exec_time": 198.7433943748474
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Create the required `repro_neurojit_table_3.sh` script so that it (1) reconstructs `expected.md` with the placeholder table, (2) downloads and unpacks the NeuroJIT artifact, (3) builds and runs the Docker-based pipeline to generate the actionable-feature results for Random Forest and XGBoost, saving the tabulated outputs into `/workspace/repro.txt`, and (4) invokes `artisan format` and `artisan submit` for evaluation. I\u2019ll embed the full workflow into the script using the provided template, then make it executable and submit it in one chained shell command.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_neurojit_table_3.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: Average Ratios of Actionable Features within Top 5 Contribution Rankings of LIME Explanations**\n\n| Project | Random Forest (%) | | XGBoost (%) |  | \n| --- | --- | --- | --- | --- |\n| | baseline | combined (\u03b4) | baseline | combined |  |\n| ActiveMQ | ??.? | ??.? (l) | ??.? | ??.? (l) |\n| Camel | ??.? | ??.? | ??.? | ??.? |\n| Flink | ??.? | ??.? (s) | ??.? | ??.? (l) |\n| Groovy | ??.? | ??.? (l) | ??.? | ??.? (s) |\n| Cassandra | ??.? | ??.? (l) | ??.? | ??.? (l) |\n| HBase | ??.? | ??.? (s) | ??.? | ??.? (l) |\n| Hive | ??.? | ??.? (n) | ??.? | ??.? (l) |\n| Ignite | ??.? | ??.? (l) | ??.? | ??.? (m) |\n| Average (%) | ??.? | ??.? | ??.? | ??.? |\n\nEOTABLE\n# Section 2: Artifact download\ncd /workspace\nartisan get https://zenodo.org/records/13744025\nunzip -qo NeuroJIT.zip -d NeuroJIT\n# Section 3: Reproduction commands (populate from reviewed steps)\ncd /workspace/NeuroJIT\ndocker-compose build\ndocker-compose run --rm neurojit-ase scripts/extract_pickles.sh\ndocker-compose run --rm neurojit-ase python scripts/jit_sdp.py actionable random_forest --display\ndocker-compose run --rm neurojit-ase python scripts/jit_sdp.py actionable xgboost --display\ndocker-compose run --rm neurojit-ase python scripts/analysis.py table-actionable data/output/actionable_random_forest.csv --fmt github > /workspace/repro.txt\ndocker-compose run --rm neurojit-ase python scripts/analysis.py table-actionable data/output/actionable_xgboost.csv --fmt github >> /workspace/repro.txt\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_neurojit_table_3.sh && artisan submit /workspace/repro_neurojit_table_3.sh\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 67.57204151153564,
+        "response": {
+          "id": "chatcmpl-D0Xr6fQW0rjjG8b7m8EQoNc4ghx4h",
+          "created": 1769022512,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Create the required `repro_neurojit_table_3.sh` script so that it (1) reconstructs `expected.md` with the placeholder table, (2) downloads and unpacks the NeuroJIT artifact, (3) builds and runs the Docker-based pipeline to generate the actionable-feature results for Random Forest and XGBoost, saving the tabulated outputs into `/workspace/repro.txt`, and (4) invokes `artisan format` and `artisan submit` for evaluation. I\u2019ll embed the full workflow into the script using the provided template, then make it executable and submit it in one chained shell command.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_neurojit_table_3.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: Average Ratios of Actionable Features within Top 5 Contribution Rankings of LIME Explanations**\n\n| Project | Random Forest (%) | | XGBoost (%) |  | \n| --- | --- | --- | --- | --- |\n| | baseline | combined (\u03b4) | baseline | combined |  |\n| ActiveMQ | ??.? | ??.? (l) | ??.? | ??.? (l) |\n| Camel | ??.? | ??.? | ??.? | ??.? |\n| Flink | ??.? | ??.? (s) | ??.? | ??.? (l) |\n| Groovy | ??.? | ??.? (l) | ??.? | ??.? (s) |\n| Cassandra | ??.? | ??.? (l) | ??.? | ??.? (l) |\n| HBase | ??.? | ??.? (s) | ??.? | ??.? (l) |\n| Hive | ??.? | ??.? (n) | ??.? | ??.? (l) |\n| Ignite | ??.? | ??.? (l) | ??.? | ??.? (m) |\n| Average (%) | ??.? | ??.? | ??.? | ??.? |\n\nEOTABLE\n# Section 2: Artifact download\ncd /workspace\nartisan get https://zenodo.org/records/13744025\nunzip -qo NeuroJIT.zip -d NeuroJIT\n# Section 3: Reproduction commands (populate from reviewed steps)\ncd /workspace/NeuroJIT\ndocker-compose build\ndocker-compose run --rm neurojit-ase scripts/extract_pickles.sh\ndocker-compose run --rm neurojit-ase python scripts/jit_sdp.py actionable random_forest --display\ndocker-compose run --rm neurojit-ase python scripts/jit_sdp.py actionable xgboost --display\ndocker-compose run --rm neurojit-ase python scripts/analysis.py table-actionable data/output/actionable_random_forest.csv --fmt github > /workspace/repro.txt\ndocker-compose run --rm neurojit-ase python scripts/analysis.py table-actionable data/output/actionable_xgboost.csv --fmt github >> /workspace/repro.txt\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_neurojit_table_3.sh && artisan submit /workspace/repro_neurojit_table_3.sh\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 3567,
+            "prompt_tokens": 16223,
+            "total_tokens": 19790,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 2813,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 15744
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nWrote speedometer tool logs to /workspace/artisan-speedometer.json\nSubmitting to judge service at http://129.69.217.153:8000/submit...\n</output>",
+      "exec_time": 12.598770380020142
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The reproduction script has been authored and submitted; per the workflow instructions, I now conclude the task by emitting the required completion marker.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.277573823928833,
+        "response": {
+          "id": "chatcmpl-D0XsPFAPsYN6TR0T3atTY6ziS9gg3",
+          "created": 1769022593,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The reproduction script has been authored and submitted; per the workflow instructions, I now conclude the task by emitting the required completion marker.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 129,
+            "prompt_tokens": 17028,
+            "total_tokens": 17157,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 65,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 16128
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": ""
+    }
+  ],
+  "trajectory_format": "mini-swe-agent-1"
+}

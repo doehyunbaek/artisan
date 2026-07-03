@@ -1,0 +1,1065 @@
+{
+  "info": {
+    "exit_status": "Submitted",
+    "submission": "",
+    "model_stats": {
+      "instance_cost": 0.203388,
+      "api_calls": 19,
+      "llm_time": 245.98954844474792
+    },
+    "mini_version": "1.14.4",
+    "config": {
+      "agent": {
+        "system_template": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected.",
+        "instance_template": "Please reproduce the results reported in Table {{ table_index }} of the target paper.\n\n<expected_table>\n{{ expected_table }}\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from {{ artifact_url }}.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table {{ table_index }}:\n   - `grep -in docker README.md`\n   - `grep -in \"Table {{ table_index }}\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_{{ artifact_name }}_table_{{ table_index }}.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n{{ expected_table }}\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\necho '</artisan_submit>'\nEOF\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward.",
+        "timeout_template": "The last command <command>{{action['action']}}</command> timed out and has been killed.\nThe output of the command was:\n<output>\n{{output}}\n</output>\nPlease try another command and make sure to avoid those requiring interactive input.\n",
+        "format_error_template": "Please always provide EXACTLY ONE action in <mini_swe_agent_bash>, found {{actions|length}} actions.\nIf you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\nwithout any other command.\nElse, please format your response exactly as follows:\n\n<response_example>\nHere are some thoughts about why you want to perform the action.\n\n<mini_swe_agent_bash>\n<action>\n</mini_swe_agent_bash>\n</response_example>\n",
+        "action_observation_template": "<returncode>{{output.returncode}}</returncode>\n{% if output.output | length < 100000 -%}\n<output>\n{{ output.output -}}\n</output>\n{%- else -%}\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning>\n{%- set elided_chars = output.output | length - 100000 -%}\n<output_head>\n{{ output.output[:5000] }}\n</output_head>\n<elided_chars>\n{{ elided_chars }} characters elided\n</elided_chars>\n<output_tail>\n{{ output.output[-5000:] }}\n</output_tail>\n{%- endif -%}\n",
+        "step_limit": 30.0,
+        "cost_limit": 1.0
+      },
+      "model": {
+        "model_name": "gpt-5.1-2025-11-13",
+        "model_kwargs": {
+          "drop_params": true,
+          "reasoning_effort": "medium"
+        },
+        "litellm_model_registry": null,
+        "set_cache_control": null
+      },
+      "environment": {
+        "image": "doehyunbaek1/artisan:c268b22",
+        "container_name": "agent-crossover-t3-8304",
+        "cwd": "/workspace",
+        "env": {
+          "PAGER": "cat",
+          "MANPAGER": "cat",
+          "LESS": "-R",
+          "PIP_PROGRESS_BAR": "off",
+          "TQDM_DISABLE": "1",
+          "MSWEA_SILENT_STARTUP": "1"
+        },
+        "forward_env": [],
+        "timeout": 28800,
+        "executable": "docker",
+        "run_args": [
+          "--rm",
+          "--privileged",
+          "-e",
+          "OPENAI_API_KEY",
+          "-e",
+          "MSWEA_SILENT_STARTUP",
+          "-v",
+          "/home/doehyunbaek/artisan/logs/minisweagent-gpt5.1-301b/crossover/table_3/071138-696367:/workspace:rw",
+          "-e",
+          "ARTISAN_MITM_URL=http://129.69.217.153:8082",
+          "--group-add",
+          "999"
+        ],
+        "container_timeout": "8h",
+        "pull_timeout": 3000
+      },
+      "agent_type": "evaluation.agents.minisweagent.DefaultAgentWithLogs",
+      "model_type": "minisweagent.models.litellm_model.LitellmModel",
+      "environment_type": "minisweagent.environments.docker.DockerEnvironment"
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected."
+    },
+    {
+      "role": "user",
+      "content": "Please reproduce the results reported in Table 3 of the target paper.\n\n<expected_table>\n**Table 3: Branch Coverage. For each fuzzer, we report the median branch coverage in application classes for each subject across 20 fuzzing campaigns after five minutes (5M) and three hours (3H). The largest median or medians (in the case of a tie) for each time and subject is highlighted in blue. Branch coverage values that differ significantly from Zeugma-Link\u2019s are colored red.**\n\n| Fuzzer       |    Ant 5M | Ant 3H |    BCEL 5M |    BCEL 3H |  Closure 5M |  Closure 3H | Maven 5M |   Maven 3H | Nashorn 5M | Nashorn 3H |   Rhino 5M |   Rhino 3H | Tomcat 5M | Tomcat 3H |\n| ------------ | --------: | -----: | ---------: | ---------: | ----------: | ----------: | -------: | ---------: | ---------: | ---------: | ---------: | ---------: | --------: | --------: |\n| BeDiv-Simple |     755.0 |  899.0 |     1435.5 |     1846.5 |      9328.0 |     11863.5 |    590.5 |      738.0 |     3008.5 |     3319.5 |     2952.0 |     3235.5 |     274.5 |     341.0 |\n| BeDiv-Struct |     786.5 |  896.5 |     1412.5 |     1876.5 |      9336.5 |     11904.5 |    578.5 |      641.5 |     2993.5 |     3092.0 |     2915.5 |     3237.0 |     161.0 |     242.5 |\n| RLCheck      |     769.0 |  889.0 |          \u2014 |          \u2014 |      8262.5 |      9480.5 |    579.0 |      663.0 |     1298.0 |     1298.0 |     2627.0 |     2730.0 |     299.0 |     338.0 |\n| Zest         |     820.0 |  927.0 |     1516.5 |     1909.5 |      9782.5 |     12352.0 |    778.5 |     1098.5 |     2654.5 |     2717.0 |     3108.5 |     3408.0 |     295.0 |     340.0 |\n| Zeugma-X     |     835.5 |  911.0 |     1480.5 |     1927.0 |     10274.5 |     12251.0 |    873.0 |     1138.0 |     4259.0 |     7411.0 |     3169.0 |     3551.5 |     297.5 |     345.0 |\n| Zeugma-1PT   |     828.0 |  909.5 |     1489.0 |     1917.0 |     10237.5 |     12153.5 |    855.5 |     1138.0 |     4166.0 |     7369.5 |     3169.0 |     3572.5 |     294.0 |     344.0 |\n| Zeugma-2PT   |     819.5 |  910.0 |     1472.0 |     1915.0 |     10284.0 |     12038.0 |    797.0 |     1134.0 |     3962.5 |     7310.0 |     3143.0 |     3549.0 |     291.0 |     341.5 |\n| Zeugma-Link  | **845.5** |  911.5 | **1541.5** | **1959.0** | **10395.5** | **12709.0** |    906.0 | **1138.0** | **5568.5** | **7654.0** | **3233.5** | **3703.0** | **295.5** | **345.0** |\n\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from https://figshare.com/articles/code/_b_Artifact_for_Crossover_in_Parametric_Fuzzing_b_/23688879.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table 3:\n   - `grep -in docker README.md`\n   - `grep -in \"Table 3\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_crossover_table_3.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_crossover_table_3.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: Branch Coverage. For each fuzzer, we report the median branch coverage in application classes for each subject across 20 fuzzing campaigns after five minutes (5M) and three hours (3H). The largest median or medians (in the case of a tie) for each time and subject is highlighted in blue. Branch coverage values that differ significantly from Zeugma-Link\u2019s are colored red.**\n\n| Fuzzer       |    Ant 5M | Ant 3H |    BCEL 5M |    BCEL 3H |  Closure 5M |  Closure 3H | Maven 5M |   Maven 3H | Nashorn 5M | Nashorn 3H |   Rhino 5M |   Rhino 3H | Tomcat 5M | Tomcat 3H |\n| ------------ | --------: | -----: | ---------: | ---------: | ----------: | ----------: | -------: | ---------: | ---------: | ---------: | ---------: | ---------: | --------: | --------: |\n| BeDiv-Simple |     755.0 |  899.0 |     1435.5 |     1846.5 |      9328.0 |     11863.5 |    590.5 |      738.0 |     3008.5 |     3319.5 |     2952.0 |     3235.5 |     274.5 |     341.0 |\n| BeDiv-Struct |     786.5 |  896.5 |     1412.5 |     1876.5 |      9336.5 |     11904.5 |    578.5 |      641.5 |     2993.5 |     3092.0 |     2915.5 |     3237.0 |     161.0 |     242.5 |\n| RLCheck      |     769.0 |  889.0 |          \u2014 |          \u2014 |      8262.5 |      9480.5 |    579.0 |      663.0 |     1298.0 |     1298.0 |     2627.0 |     2730.0 |     299.0 |     338.0 |\n| Zest         |     820.0 |  927.0 |     1516.5 |     1909.5 |      9782.5 |     12352.0 |    778.5 |     1098.5 |     2654.5 |     2717.0 |     3108.5 |     3408.0 |     295.0 |     340.0 |\n| Zeugma-X     |     835.5 |  911.0 |     1480.5 |     1927.0 |     10274.5 |     12251.0 |    873.0 |     1138.0 |     4259.0 |     7411.0 |     3169.0 |     3551.5 |     297.5 |     345.0 |\n| Zeugma-1PT   |     828.0 |  909.5 |     1489.0 |     1917.0 |     10237.5 |     12153.5 |    855.5 |     1138.0 |     4166.0 |     7369.5 |     3169.0 |     3572.5 |     294.0 |     344.0 |\n| Zeugma-2PT   |     819.5 |  910.0 |     1472.0 |     1915.0 |     10284.0 |     12038.0 |    797.0 |     1134.0 |     3962.5 |     7310.0 |     3143.0 |     3549.0 |     291.0 |     341.5 |\n| Zeugma-Link  | **845.5** |  911.5 | **1541.5** | **1959.0** | **10395.5** | **12709.0** |    906.0 | **1138.0** | **5568.5** | **7654.0** | **3233.5** | **3703.0** | **295.5** | **345.0** |\n\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\necho '</artisan_submit>'\nEOF\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward."
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Begin with step 1 of the workflow by downloading the artifact landing page from Figshare so I can inspect it locally and determine the actual file download URL before fetching the archive itself.\n\n<mini_swe_agent_bash>\ncurl -L \"https://figshare.com/articles/code/_b_Artifact_for_Crossover_in_Parametric_Fuzzing_b_/23688879\" -o /workspace/figshare_artifact_page.html\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 6.255608558654785,
+        "response": {
+          "id": "chatcmpl-D0j8wiAhNTbNhTsCBcJQThvy7yUEH",
+          "created": 1769065902,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Begin with step 1 of the workflow by downloading the artifact landing page from Figshare so I can inspect it locally and determine the actual file download URL before fetching the archive itself.\n\n<mini_swe_agent_bash>\ncurl -L \"https://figshare.com/articles/code/_b_Artifact_for_Crossover_in_Parametric_Fuzzing_b_/23688879\" -o /workspace/figshare_artifact_page.html\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 302,
+            "prompt_tokens": 2897,
+            "total_tokens": 3199,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 195,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n                                 Dload  Upload   Total   Spent    Left  Speed\n\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n</output>",
+      "exec_time": 0.6541240215301514
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Inspect the downloaded Figshare HTML to locate the direct artifact file URL (likely a ZIP or tarball) before downloading the actual artifact archive.\n\n<mini_swe_agent_bash>\ngrep -iE \"download|href|zip|tar|artifact\" -n /workspace/figshare_artifact_page.html | head -n 80\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.6703121662139893,
+        "response": {
+          "id": "chatcmpl-D0j92Rk8HxmaGAv22Z7luBAnIPVCc",
+          "created": 1769065908,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Inspect the downloaded Figshare HTML to locate the direct artifact file URL (likely a ZIP or tarball) before downloading the actual artifact archive.\n\n<mini_swe_agent_bash>\ngrep -iE \"download|href|zip|tar|artifact\" -n /workspace/figshare_artifact_page.html | head -n 80\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 173,
+            "prompt_tokens": 3186,
+            "total_tokens": 3359,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 83,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n</output>",
+      "exec_time": 0.06415557861328125
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Use the Figshare public API to query article 23688879 for its files and obtain the direct artifact download URL.\n\n<mini_swe_agent_bash>\ncurl -L \"https://api.figshare.com/v2/articles/23688879\" -o /workspace/figshare_article_23688879.json\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.3303208351135254,
+        "response": {
+          "id": "chatcmpl-D0j96Vuc0cz046ZNJhRZFGr1b6OTw",
+          "created": 1769065912,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Use the Figshare public API to query article 23688879 for its files and obtain the direct artifact download URL.\n\n<mini_swe_agent_bash>\ncurl -L \"https://api.figshare.com/v2/articles/23688879\" -o /workspace/figshare_article_23688879.json\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 180,
+            "prompt_tokens": 3292,
+            "total_tokens": 3472,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 95,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 2816
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n                                 Dload  Upload   Total   Spent    Left  Speed\n\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n100  6706  100  6706    0     0  28541      0 --:--:-- --:--:-- --:--:-- 28658\n</output>",
+      "exec_time": 0.3134467601776123
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Extract the file download URL(s) for the artifact from the Figshare article JSON so I can download the actual archive.\n\n<mini_swe_agent_bash>\npython - << 'PY'\nimport json, textwrap, os\npath = \"/workspace/figshare_article_23688879.json\"\nwith open(path) as f:\n    data = json.load(f)\nfiles = data.get(\"files\", [])\nprint(\"FOUND_FILES\", len(files))\nfor fobj in files:\n    print(\"NAME:\", fobj.get(\"name\"))\n    print(\"DOWNLOAD_URL:\", fobj.get(\"download_url\"))\n    print(\"---\")\nPY\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 2.282658815383911,
+        "response": {
+          "id": "chatcmpl-D0j9A4bilxbeMVCErhHZPupmKZ1yF",
+          "created": 1769065916,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Extract the file download URL(s) for the artifact from the Figshare article JSON so I can download the actual archive.\n\n<mini_swe_agent_bash>\npython - << 'PY'\nimport json, textwrap, os\npath = \"/workspace/figshare_article_23688879.json\"\nwith open(path) as f:\n    data = json.load(f)\nfiles = data.get(\"files\", [])\nprint(\"FOUND_FILES\", len(files))\nfor fobj in files:\n    print(\"NAME:\", fobj.get(\"name\"))\n    print(\"DOWNLOAD_URL:\", fobj.get(\"download_url\"))\n    print(\"---\")\nPY\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 158,
+            "prompt_tokens": 3517,
+            "total_tokens": 3675,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 11,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 3072
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nFOUND_FILES 11\nNAME: coverage.csv\nDOWNLOAD_URL: https://ndownloader.figshare.com/files/41569581\n---\nNAME: defects.json\nDOWNLOAD_URL: https://ndownloader.figshare.com/files/41569563\n---\nNAME: failures.json\nDOWNLOAD_URL: https://ndownloader.figshare.com/files/41569566\n---\nNAME: detections.csv\nDOWNLOAD_URL: https://ndownloader.figshare.com/files/41569572\n---\nNAME: heritability.csv\nDOWNLOAD_URL: https://ndownloader.figshare.com/files/41569575\n---\nNAME: saved.csv\nDOWNLOAD_URL: https://ndownloader.figshare.com/files/41569578\n---\nNAME: campaigns.tgz\nDOWNLOAD_URL: https://ndownloader.figshare.com/files/41569587\n---\nNAME: zeugma-main.zip\nDOWNLOAD_URL: https://ndownloader.figshare.com/files/43892865\n---\nNAME: Dockerfile\nDOWNLOAD_URL: https://ndownloader.figshare.com/files/43892859\n---\nNAME: zeugma-artifact-image.tgz\nDOWNLOAD_URL: https://ndownloader.figshare.com/files/43894494\n---\nNAME: README.md\nDOWNLOAD_URL: https://ndownloader.figshare.com/files/43895979\n---\n</output>",
+      "exec_time": 0.10871338844299316
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Download the artifact\u2019s README so I can study the reproduction instructions, especially for Table 3 and any Docker usage.\n\n<mini_swe_agent_bash>\ncurl -L \"https://ndownloader.figshare.com/files/43895979\" -o /workspace/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 2.6453161239624023,
+        "response": {
+          "id": "chatcmpl-D0j9C1kf4RESK3ksBpt9a3et1j3Ua",
+          "created": 1769065918,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Download the artifact\u2019s README so I can study the reproduction instructions, especially for Table 3 and any Docker usage.\n\n<mini_swe_agent_bash>\ncurl -L \"https://ndownloader.figshare.com/files/43895979\" -o /workspace/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 129,
+            "prompt_tokens": 3951,
+            "total_tokens": 4080,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 51,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 3200
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n                                 Dload  Upload   Total   Spent    Left  Speed\n\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n\n100 17507  100 17507    0     0  31094      0 --:--:-- --:--:-- --:--:-- 31094\n</output>",
+      "exec_time": 0.6378045082092285
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Search the README for Docker-related instructions as required by the workflow so I can later adapt them for running the artifact.\n\n<mini_swe_agent_bash>\ngrep -in \"docker\" /workspace/README.md || true\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.124584913253784,
+        "response": {
+          "id": "chatcmpl-D0j9FHtXdIJQH7Spaw7nf6E2vbTbv",
+          "created": 1769065921,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Search the README for Docker-related instructions as required by the workflow so I can later adapt them for running the artifact.\n\n<mini_swe_agent_bash>\ngrep -in \"docker\" /workspace/README.md || true\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 140,
+            "prompt_tokens": 4210,
+            "total_tokens": 4350,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 74,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 3456
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n182:1. Install Docker Engine version 23.0.0+.\n183:   Directions for installing Docker Engine are available on\n184:   the [Docker website](https://docs.docker.com/engine/install/).\n185:2. Download the archived Docker image \"zeugma-artifact-image.tgz\" from the artifact:\n187:   This image can be recreated using the \"Dockerfile\" and source code archive \"zeugma-main.zip\" included with the\n189:3. Load the Docker image by running: `docker load -i zeugma-artifact-image.tgz`.\n190:4. Start an interactive Docker container: `docker run -it -p 8080:80 zeugma-artifact bash`\n194:The following directions assume that you have started a docker container according to the directions provided above.\n195:All commands are run from the \"home\" directory of that docker container.\n</output>",
+      "exec_time": 0.06457710266113281
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Locate the specific reproduction instructions for Table 3 in the README to understand which commands and data are needed.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 3\" /workspace/README.md || sed -n '196,260p' /workspace/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 1.9278178215026855,
+        "response": {
+          "id": "chatcmpl-D0j9JRN899faVhLGHGtUn1ioUjEpL",
+          "created": 1769065925,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Locate the specific reproduction instructions for Table 3 in the README to understand which commands and data are needed.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 3\" /workspace/README.md || sed -n '196,260p' /workspace/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 86,
+            "prompt_tokens": 4479,
+            "total_tokens": 4565,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 7,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n88:This dataset was used to create \"Figure 3: Branch Coverage Over Time\" and \"Table 3: Branch Coverage\".\n</output>",
+      "exec_time": 0.050470590591430664
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: View the relevant portion of the README around the mention of Table 3 to find the precise workflow and dataset used for reproducing it.\n\n<mini_swe_agent_bash>\nsed -n '60,140p' /workspace/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 2.4153952598571777,
+        "response": {
+          "id": "chatcmpl-D0j9LMICp5KAvfmQeYFOgwHbUOTLG",
+          "created": 1769065927,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: View the relevant portion of the README around the mention of Table 3 to find the precise workflow and dataset used for reproducing it.\n\n<mini_swe_agent_bash>\nsed -n '60,140p' /workspace/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 83,
+            "prompt_tokens": 4601,
+            "total_tokens": 4684,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 12,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 3840
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n\nThis row indicates that the campaign with the unique identifier \"264\" which was performed on \"Rhino\" saved a total of\n\"530\" inputs \"332\" of which were saved in the first 5 minutes of the campaign.\nWe used this data to determine that, on average, over half of the inputs saved to a corpus at the end of a three-hour\ncampaign were saved in the first five minutes.\n\n### coverage.csv\n\nThe file \"coverage.csv\" contains JaCoCo branch coverage measurements for the fuzzing campaigns.\nEach row indicates the branch coverage recorded for a particular campaign at a certain time.\nNote that the measurement at 0 seconds is normally non-zero because times are computed relative to the first saved\ninput.\nTimes are in the format \"D days HH:MM:SS[.UUUUUUUUU]\", where D is days, HH is hours, MM is minutes, SS is seconds, and\nUUUUUUUUU is nanoseconds.\n\nConsider the following row:\n\n```\ncampaign_id,fuzzer,subject,time,covered_branches\n...\n0,BeDiv-Simple,Ant,0 days 00:05:00,732\n```\n\nThis row indicates that the campaign with the unique identifier \"0\" which was performed on \"Ant\" using the\nfuzzer \"BeDiv-Simple\" covered \"732\" branches by time \"0 days 00:05:00\".\n\nThere are 1,001 measurements for each campaign: 1,000 measurements at equal time intervals starting at 0 seconds and\nending at 3 hours, and 1 measurement at 5 minutes.\nThis dataset was used to create \"Figure 3: Branch Coverage Over Time\" and \"Table 3: Branch Coverage\".\n\n### defects.json\n\nThe file \"defects.json\" contains a JSON list of the unique defects detected in at least one\ncampaign during the evaluation.\nThis list was obtained by manually deduplicating detected failures.\nEach entry in the list indicates the unique identifier of the defect, the subject in which the defect was\ndiscovered, and a link to an issue in the subject's issue tracker for the defect.\nConsider the following entry:\n\n```JSON\n{\n  \"subject\": \"Bcel\",\n  \"identifier\": \"B0\",\n  \"issue\": \"https://issues.apache.org/jira/browse/BCEL-367\"\n}\n```\n\nThis entry describes defect \"B0\" which occurred in the subject \"Bcel\"\nand described in the issue at \"https://issues.apache.org/jira/browse/BCEL-367\".\n\n### failures.json\n\nThe file \"failures.json\" contains a JSON list of unique failures detected in at least one\ncampaign during the evaluation.\nEach entry in the list indicates the subject in which the failure was detected, the Java type of the exception that was\nthrown, the stack trace of the thrown exception, and a list of associated defects that cause the failure to occur.\nAssociated defects were determined by manually analyzing the failures.\nIf the list of associated defects for an entry is empty, then the failure is not indicative of a genuine defect and\nthe entry will contain a note explaining why this determination was made.\n\nConsider the following entry:\n\n```JSON\n{\n  \"subject\": \"Rhino\",\n  \"trace\": [\n    {\n      \"declaringClass\": \"org.mozilla.javascript.TokenStream\",\n      \"fileName\": \"TokenStream.java\",\n      \"lineNumber\": 1991,\n      \"methodName\": \"ungetChar\"\n    },\n    ...\n  ],\n  \"type\": \"java.lang.ArrayIndexOutOfBoundsException\",\n  \"associatedDefects\": [\n    \"R0\"\n  ]\n}\n```\n\n</output>",
+      "exec_time": 0.060495853424072266
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Examine the remaining sections of the README to find explicit reproduction instructions and any reference to how to compute Table 3 (possibly via scripts, Docker, or commands using coverage.csv).\n\n<mini_swe_agent_bash>\nsed -n '140,260p' /workspace/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 10.10965085029602,
+        "response": {
+          "id": "chatcmpl-D0j9NWvWtXszXkZldqp1Xjf7Qfd32",
+          "created": 1769065929,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Examine the remaining sections of the README to find explicit reproduction instructions and any reference to how to compute Table 3 (possibly via scripts, Docker, or commands using coverage.csv).\n\n<mini_swe_agent_bash>\nsed -n '140,260p' /workspace/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 415,
+            "prompt_tokens": 5437,
+            "total_tokens": 5852,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 336,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 4480
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n\nThis entry describes a failure found in \"Rhino\" where the thrown exception is of\ntype `java.lang.ArrayIndexOutOfBoundsException` with the specified stack trace that is a manifestation of the\ndefect \"R0\".\n\n### detections.csv\n\nThe file \"detections.csv\" contains defect discovery times for the fuzzing campaigns.\n\nEach row indicates the time at which a campaign first discovered a defect.\nIf no time is listed for a campaign on a defect, then that campaign did not discover that defect.\nTimes are in the format \"D days HH:MM:SS[.UUUUUUUUU]\", where D is days, HH is hours, MM is minutes, SS is seconds, and\nUUUUUUUUU is nanoseconds.\nFor each defect, there is one row for each campaign performed on the same subject as the defect.\n\nConsider the following row:\n\n```\ncampaign_id,fuzzer,subject,defect,time\n...\n1008,Zest,Closure,C1,0 days 01:00:34.474000\n```\n\nThis row indicates that the campaign with the unique identifier \"1008\" which was performed on \"Closure\" using the\nfuzzer \"Zest\" first discovered defect \"C1\" at time \"0 days 01:00:34.474000\".\nThis dataset was used to create \"Table 4: Defect Detection Rates\".\n\n### campaigns.tgz\n\nThe file \"campaigns.tgz\" is a gzipped TAR archive containing output files for each of the fuzzing campaigns performed\nfor the evaluation.\nEach directory within the archive contains the output for a single campaign.\nThis output consists of four files: \"coverage.csv\", \"failures.json\", \"summary.json\", and \"meringue.tgz\".\n\"coverage.csv\" contains the branch coverage over time for the campaign.\n\"failures.json\" contains a list of deduplicated failures that were induced by at least one input saved during\nthe campaign.\n\"summary.json\" contains information about the configuration used for the fuzzing campaign, e.g., the fuzzing\ntarget.\n\"meringue.tgz\" is a gzipped TAR archive of the [Meringue](https://github.com/neu-se/meringue) output for the campaign.\n\n## Setup\n\n1. Install Docker Engine version 23.0.0+.\n   Directions for installing Docker Engine are available on\n   the [Docker website](https://docs.docker.com/engine/install/).\n2. Download the archived Docker image \"zeugma-artifact-image.tgz\" from the artifact:\n   https://doi.org/10.6084/m9.figshare.23688879.v1.\n   This image can be recreated using the \"Dockerfile\" and source code archive \"zeugma-main.zip\" included with the\n   artifact.\n3. Load the Docker image by running: `docker load -i zeugma-artifact-image.tgz`.\n4. Start an interactive Docker container: `docker run -it -p 8080:80 zeugma-artifact bash`\n\n## Usage\n\nThe following directions assume that you have started a docker container according to the directions provided above.\nAll commands are run from the \"home\" directory of that docker container.\n\n### Running a Fuzzing Campaign\n\nTo start a fuzzing campaign, run:\n\n```\nmvn -pl :zeugma-evaluation-tools \\\n  meringue:fuzz meringue:analyze \\\n  -P<SUBJECT>,<FUZZER> \\\n  -Dmeringue.outputDirectory=<OUTPUT_DIRECTORY> \\\n  -Dmeringue.duration=<DURATION>\n```\n\nWhere:\n\n* \\<SUBJECT\\> is the fuzzing target: ant, bcel, closure, maven, nashorn, rhino, tomcat.\n* \\<FUZZER\\> is the fuzzer to be used: bedivfuzz-simple, bedivfuzz-structure, rlcheck, zest, zeugma-linked,\n  zeugma-none, zeugma-one_point, or zeugma-two_point.\n* \\<OUTPUT_DIRECTORY\\> is the absolute path of the directory to which campaign output files should be written.\n* \\<DURATION\\> is the maximum amount of time to execute the fuzzing campaign for specified in the ISO-8601 duration\n  format (e.g., \"P2DT3H4M\" represents 2 days, 3 hours, and 4 minutes).\n\nThis command will first run a fuzzing campaign for the specified duration.\nOnce this command has completed, the results of the campaign will be analyzed to collect coverage information\nusing the [JaCoCo Java Code Coverage Library](https://www.eclemma.org/jacoco/) and information about exposed failures.\nAfter the analysis phase finishes, the output directory will contain the following files:\n\n```\n\u251c\u2500\u2500 campaign\n\u2502   \u251c\u2500\u2500 corpus\n\u2502   \u2502   \u2514\u2500\u2500 *\n\u2502   \u251c\u2500\u2500 failures\n\u2502   \u2502   \u2514\u2500\u2500 *\n\u2502   \u2514\u2500\u2500 *\n\u251c\u2500\u2500 jacoco\n\u2502   \u2514\u2500\u2500 jacoco.csv\n\u251c\u2500\u2500 coverage.csv\n\u251c\u2500\u2500 failures.json\n\u2514\u2500\u2500 summary.json\n```\n\nThe \"campaign\" directory stores data written by the fuzzer.\nThis data will include a \"corpus\" directory containing coverage-revealing inputs saved during the fuzzing campaign and\na \"failures\" directory containing failure-inducing inputs saved during the fuzzing campaign.\n\nWhen the fuzzing campaign is analyzed, inputs saved to the \"corpus\" and \"failures\" directories are run in order by\ntimestamp to compute JaCoCo branch coverage over time, which is then saved to the file \"coverage.csv\".\nThere are two columns in \"coverage.csv\": \"time\" and \"covered_branches\".\nThe \"time\" column represents elapsed time in milliseconds since the beginning of the campaign, and the\n\"covered_branches\" column represents the number of branches covered in application classes as determined by JaCoCo.\nFor example, if \"coverage.csv\" contained the row \"100, 340\" that would indicate that 340 branches were covered by inputs\nsaved in the first 100 milliseconds of the campaign.\n\nThe file \"jacoco/jacoco.csv\" is a JaCoCo-generated report detailing coverage in application classes after all the\ninputs saved to the \"corpus\" and \"failures\" directories have been run.\n\nThe file \"failures.json\" contains a list of deduplicated failures that were induced by at least one input saved\nto \"corpus\" or \"failures\" directories.\nFailures are naively deduplicated using the top five elements of the failure's stack trace and the type of exception\nthrown (e.g., `java.lang.IndexOutOfBoundsException`).\nEach entry in \"failures.json\" will contain the top five elements (or fewer if the trace contains fewer than five\nelements) of the stack trace for the failure, the type of exception thrown, the elapsed time in milliseconds since the\nbeginning of the campaign when the first input that induced the failure was saved, the message (as returned by\n`java.lang.Throwable#getMessage`) for the first instance of the failure, and a list of saved inputs\nthat induced the failure.\n</output>",
+      "exec_time": 0.07173609733581543
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Download the coverage.csv dataset from the Figshare artifact so I can analyze it to reproduce the branch coverage medians for Table 3.\n\n<mini_swe_agent_bash>\ncurl -L \"https://ndownloader.figshare.com/files/41569581\" -o /workspace/coverage.csv\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 44.45923209190369,
+        "response": {
+          "id": "chatcmpl-D0j9XzuAC3oeNy7TNAqUPgNOihpJL",
+          "created": 1769065939,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Download the coverage.csv dataset from the Figshare artifact so I can analyze it to reproduce the branch coverage medians for Table 3.\n\n<mini_swe_agent_bash>\ncurl -L \"https://ndownloader.figshare.com/files/41569581\" -o /workspace/coverage.csv\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 2029,
+            "prompt_tokens": 7021,
+            "total_tokens": 9050,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 1947,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n                                 Dload  Upload   Total   Spent    Left  Speed\n\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n\n  0 59.8M    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0\n100 59.8M  100 59.8M    0     0  33.9M      0  0:00:01  0:00:01 --:--:--  169M\n</output>",
+      "exec_time": 1.8403396606445312
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Inspect the structure and sample rows of coverage.csv so I can understand its columns (fuzzer names, subject labels, time format) and design the aggregation needed for Table 3.\n\n<mini_swe_agent_bash>\nhead -n 40 /workspace/coverage.csv\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 15.354903936386108,
+        "response": {
+          "id": "chatcmpl-D0jAIxeFmX9tV0TZoBz4rBuOmObQw",
+          "created": 1769065986,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Inspect the structure and sample rows of coverage.csv so I can understand its columns (fuzzer names, subject labels, time format) and design the aggregation needed for Table 3.\n\n<mini_swe_agent_bash>\nhead -n 40 /workspace/coverage.csv\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 897,
+            "prompt_tokens": 7385,
+            "total_tokens": 8282,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 821,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nindex,time,covered_branches,subject,campaign_id,fuzzer\n0,0 days 00:00:00,249.0,Maven,135,RLCheck\n1,0 days 00:00:10.810810810,541.0,Maven,135,RLCheck\n2,0 days 00:00:21.621621621,556.0,Maven,135,RLCheck\n3,0 days 00:00:32.432432432,561.0,Maven,135,RLCheck\n4,0 days 00:00:43.243243243,566.0,Maven,135,RLCheck\n5,0 days 00:00:54.054054054,566.0,Maven,135,RLCheck\n6,0 days 00:01:04.864864864,569.0,Maven,135,RLCheck\n7,0 days 00:01:15.675675675,569.0,Maven,135,RLCheck\n8,0 days 00:01:26.486486486,569.0,Maven,135,RLCheck\n9,0 days 00:01:37.297297297,569.0,Maven,135,RLCheck\n10,0 days 00:01:48.108108108,569.0,Maven,135,RLCheck\n11,0 days 00:01:58.918918918,573.0,Maven,135,RLCheck\n12,0 days 00:02:09.729729729,573.0,Maven,135,RLCheck\n13,0 days 00:02:20.540540540,573.0,Maven,135,RLCheck\n14,0 days 00:02:31.351351351,573.0,Maven,135,RLCheck\n15,0 days 00:02:42.162162162,573.0,Maven,135,RLCheck\n16,0 days 00:02:52.972972972,573.0,Maven,135,RLCheck\n17,0 days 00:03:03.783783783,574.0,Maven,135,RLCheck\n18,0 days 00:03:14.594594594,574.0,Maven,135,RLCheck\n19,0 days 00:03:25.405405405,576.0,Maven,135,RLCheck\n20,0 days 00:03:36.216216216,576.0,Maven,135,RLCheck\n21,0 days 00:03:47.027027027,576.0,Maven,135,RLCheck\n22,0 days 00:03:57.837837837,576.0,Maven,135,RLCheck\n23,0 days 00:04:08.648648648,576.0,Maven,135,RLCheck\n24,0 days 00:04:19.459459459,576.0,Maven,135,RLCheck\n25,0 days 00:04:30.270270270,576.0,Maven,135,RLCheck\n26,0 days 00:04:41.081081081,579.0,Maven,135,RLCheck\n27,0 days 00:04:51.891891891,579.0,Maven,135,RLCheck\n28,0 days 00:05:00,579.0,Maven,135,RLCheck\n29,0 days 00:05:02.702702702,579.0,Maven,135,RLCheck\n30,0 days 00:05:13.513513513,582.0,Maven,135,RLCheck\n31,0 days 00:05:24.324324324,582.0,Maven,135,RLCheck\n32,0 days 00:05:35.135135135,582.0,Maven,135,RLCheck\n33,0 days 00:05:45.945945945,582.0,Maven,135,RLCheck\n34,0 days 00:05:56.756756756,582.0,Maven,135,RLCheck\n35,0 days 00:06:07.567567567,582.0,Maven,135,RLCheck\n36,0 days 00:06:18.378378378,582.0,Maven,135,RLCheck\n37,0 days 00:06:29.189189189,582.0,Maven,135,RLCheck\n38,0 days 00:06:40,582.0,Maven,135,RLCheck\n</output>",
+      "exec_time": 0.07333660125732422
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Identify the distinct fuzzer and subject names and check which exact time values correspond to 5 minutes and 3 hours so I can design the aggregation to match Table 3.\n\n<mini_swe_agent_bash>\npython - << 'PY'\nimport pandas as pd\nfrom collections import Counter\n\ndf = pd.read_csv(\"/workspace/coverage.csv\", usecols=[\"time\",\"covered_branches\",\"subject\",\"campaign_id\",\"fuzzer\"])\n\nprint(\"Unique subjects:\", sorted(df[\"subject\"].unique()))\nprint(\"Unique fuzzers:\", sorted(df[\"fuzzer\"].unique()))\n\n# Inspect time values exactly at 5 minutes and the maximum time to understand 3H representation\nt5 = \"0 days 00:05:00\"\nprint(\"\\nRows at exactly 5 minutes:\", len(df[df[\"time\"] == t5]))\nprint(\"Example 5M rows:\")\nprint(df[df[\"time\"] == t5].head())\n\nprint(\"\\nMax time value overall:\")\nprint(df[\"time\"].max())\n\nprint(\"\\nSample of largest time values:\")\nprint(df.sort_values(\"time\").drop_duplicates(\"campaign_id\", keep=\"last\").sort_values(\"time\").tail(10)[[\"time\",\"subject\",\"campaign_id\",\"fuzzer\"]])\nPY\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 10.462723016738892,
+        "response": {
+          "id": "chatcmpl-D0jAXvENIoT6Drydgkjwcr57cI1TI",
+          "created": 1769066001,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Identify the distinct fuzzer and subject names and check which exact time values correspond to 5 minutes and 3 hours so I can design the aggregation to match Table 3.\n\n<mini_swe_agent_bash>\npython - << 'PY'\nimport pandas as pd\nfrom collections import Counter\n\ndf = pd.read_csv(\"/workspace/coverage.csv\", usecols=[\"time\",\"covered_branches\",\"subject\",\"campaign_id\",\"fuzzer\"])\n\nprint(\"Unique subjects:\", sorted(df[\"subject\"].unique()))\nprint(\"Unique fuzzers:\", sorted(df[\"fuzzer\"].unique()))\n\n# Inspect time values exactly at 5 minutes and the maximum time to understand 3H representation\nt5 = \"0 days 00:05:00\"\nprint(\"\\nRows at exactly 5 minutes:\", len(df[df[\"time\"] == t5]))\nprint(\"Example 5M rows:\")\nprint(df[df[\"time\"] == t5].head())\n\nprint(\"\\nMax time value overall:\")\nprint(df[\"time\"].max())\n\nprint(\"\\nSample of largest time values:\")\nprint(df.sort_values(\"time\").drop_duplicates(\"campaign_id\", keep=\"last\").sort_values(\"time\").tail(10)[[\"time\",\"subject\",\"campaign_id\",\"fuzzer\"]])\nPY\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 644,
+            "prompt_tokens": 8493,
+            "total_tokens": 9137,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 373,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 5376
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>1</returncode>\n<output>\nTraceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\nModuleNotFoundError: No module named 'pandas'\n</output>",
+      "exec_time": 0.0927276611328125
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Identify the exact time string used for the 3-hour measurements (likely \u201c0 days 03:00:00\u201d) directly from the CSV using grep so I can later filter and aggregate coverage at 5 minutes and 3 hours.\n\n<mini_swe_agent_bash>\ngrep \"0 days 03:00:00\" -m 10 /workspace/coverage.csv || (echo \"NO_3H_MATCH_FOUND\" && head -n 5 /workspace/coverage.csv)\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 17.47679877281189,
+        "response": {
+          "id": "chatcmpl-D0jAi1pmFftsgJKMcOA8eMvjeHiOm",
+          "created": 1769066012,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Identify the exact time string used for the 3-hour measurements (likely \u201c0 days 03:00:00\u201d) directly from the CSV using grep so I can later filter and aggregate coverage at 5 minutes and 3 hours.\n\n<mini_swe_agent_bash>\ngrep \"0 days 03:00:00\" -m 10 /workspace/coverage.csv || (echo \"NO_3H_MATCH_FOUND\" && head -n 5 /workspace/coverage.csv)\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 818,
+            "prompt_tokens": 8813,
+            "total_tokens": 9631,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 699,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 6912
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n1000,0 days 03:00:00,663.0,Maven,135,RLCheck\n1000,0 days 03:00:00,343.0,Tomcat,160,Zest\n1000,0 days 03:00:00,3473.0,Rhino,871,Zeugma-2PT\n1000,0 days 03:00:00,7500.0,Nashorn,806,Zeugma-X\n1000,0 days 03:00:00,3216.0,Rhino,1085,BeDiv-Struct\n1000,0 days 03:00:00,1905.0,Bcel,949,Zeugma-2PT\n1000,0 days 03:00:00,12177.0,Closure,185,Zeugma-X\n1000,0 days 03:00:00,2730.0,Rhino,96,RLCheck\n1000,0 days 03:00:00,3563.0,Rhino,155,Zeugma-1PT\n1000,0 days 03:00:00,907.0,Ant,392,Zeugma-2PT\n</output>",
+      "exec_time": 0.07122015953063965
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Use Python\u2019s standard library (csv, collections, statistics) to inspect unique subjects and fuzzers and to verify that there is exactly one row per (campaign_id, subject, fuzzer) at 5 minutes and 3 hours; this will inform the aggregation logic to embed later in the repro script.\n\n<mini_swe_agent_bash>\npython - << 'PY'\nimport csv\nfrom collections import defaultdict\n\npath = \"/workspace/coverage.csv\"\nsubjects = set()\nfuzzers = set()\nt5 = \"0 days 00:05:00\"\nt3 = \"0 days 03:00:00\"\n\nrows_5 = 0\nrows_3 = 0\nby_t5 = defaultdict(int)\nby_t3 = defaultdict(int)\n\nwith open(path, newline=\"\") as f:\n    r = csv.DictReader(f)\n    for row in r:\n        s = row[\"subject\"]\n        fz = row[\"fuzzer\"]\n        subjects.add(s)\n        fuzzers.add(fz)\n        t = row[\"time\"]\n        key = (fz, s)\n        if t == t5:\n            rows_5 += 1\n            by_t5[key] += 1\n        if t == t3:\n            rows_3 += 1\n            by_t3[key] += 1\n\nprint(\"Unique subjects:\", sorted(subjects))\nprint(\"Unique fuzzers:\", sorted(fuzzers))\nprint(\"Total rows at 5M:\", rows_5)\nprint(\"Total rows at 3H:\", rows_3)\n\nprint(\"\\nCounts at 5M per (fuzzer,subject) (first 20):\")\nfor k, v in list(by_t5.items())[:20]:\n    print(k, v)\n\nprint(\"\\nCounts at 3H per (fuzzer,subject) (first 20):\")\nfor k, v in list(by_t3.items())[:20]\n:\n    print(k, v)\nPY\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 13.202168703079224,
+        "response": {
+          "id": "chatcmpl-D0jAz2ebIj2rfRuAUbJtIvULKl9mB",
+          "created": 1769066029,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Use Python\u2019s standard library (csv, collections, statistics) to inspect unique subjects and fuzzers and to verify that there is exactly one row per (campaign_id, subject, fuzzer) at 5 minutes and 3 hours; this will inform the aggregation logic to embed later in the repro script.\n\n<mini_swe_agent_bash>\npython - << 'PY'\nimport csv\nfrom collections import defaultdict\n\npath = \"/workspace/coverage.csv\"\nsubjects = set()\nfuzzers = set()\nt5 = \"0 days 00:05:00\"\nt3 = \"0 days 03:00:00\"\n\nrows_5 = 0\nrows_3 = 0\nby_t5 = defaultdict(int)\nby_t3 = defaultdict(int)\n\nwith open(path, newline=\"\") as f:\n    r = csv.DictReader(f)\n    for row in r:\n        s = row[\"subject\"]\n        fz = row[\"fuzzer\"]\n        subjects.add(s)\n        fuzzers.add(fz)\n        t = row[\"time\"]\n        key = (fz, s)\n        if t == t5:\n            rows_5 += 1\n            by_t5[key] += 1\n        if t == t3:\n            rows_3 += 1\n            by_t3[key] += 1\n\nprint(\"Unique subjects:\", sorted(subjects))\nprint(\"Unique fuzzers:\", sorted(fuzzers))\nprint(\"Total rows at 5M:\", rows_5)\nprint(\"Total rows at 3H:\", rows_3)\n\nprint(\"\\nCounts at 5M per (fuzzer,subject) (first 20):\")\nfor k, v in list(by_t5.items())[:20]:\n    print(k, v)\n\nprint(\"\\nCounts at 3H per (fuzzer,subject) (first 20):\")\nfor k, v in list(by_t3.items())[:20]\n:\n    print(k, v)\nPY\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 798,
+            "prompt_tokens": 9213,
+            "total_tokens": 10011,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 374,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 8448
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>1</returncode>\n<output>\n  File \"<stdin>\", line 41\n    for k, v in list(by_t3.items())[:20]\n                                        ^\nSyntaxError: expected ':'\n</output>",
+      "exec_time": 0.08515787124633789
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Re-run the Python inspection with the syntax fixed to confirm the available fuzzers/subjects and the presence of 5-minute and 3-hour rows per (fuzzer, subject).\n\n<mini_swe_agent_bash>\npython - << 'PY'\nimport csv\nfrom collections import defaultdict\n\npath = \"/workspace/coverage.csv\"\nsubjects = set()\nfuzzers = set()\nt5 = \"0 days 00:05:00\"\nt3 = \"0 days 03:00:00\"\n\nrows_5 = 0\nrows_3 = 0\nby_t5 = defaultdict(int)\nby_t3 = defaultdict(int)\n\nwith open(path, newline=\"\") as f:\n    r = csv.DictReader(f)\n    for row in r:\n        s = row[\"subject\"]\n        fz = row[\"fuzzer\"]\n        subjects.add(s)\n        fuzzers.add(fz)\n        t = row[\"time\"]\n        key = (fz, s)\n        if t == t5:\n            rows_5 += 1\n            by_t5[key] += 1\n        if t == t3:\n            rows_3 += 1\n            by_t3[key] += 1\n\nprint(\"Unique subjects:\", sorted(subjects))\nprint(\"Unique fuzzers:\", sorted(fuzzers))\nprint(\"Total rows at 5M:\", rows_5)\nprint(\"Total rows at 3H:\", rows_3)\n\nprint(\"\\nCounts at 5M per (fuzzer,subject) (first 40):\")\nfor k, v in list(by_t5.items())[:40]:\n    print(k, v)\n\nprint(\"\\nCounts at 3H per (fuzzer,subject) (first 40):\")\nfor k, v in list(by_t3.items())[:40]:\n    print(k, v)\nPY\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 17.297116994857788,
+        "response": {
+          "id": "chatcmpl-D0jBCKqk0I0WjAtdjNq7ftcChaPxL",
+          "created": 1769066042,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Re-run the Python inspection with the syntax fixed to confirm the available fuzzers/subjects and the presence of 5-minute and 3-hour rows per (fuzzer, subject).\n\n<mini_swe_agent_bash>\npython - << 'PY'\nimport csv\nfrom collections import defaultdict\n\npath = \"/workspace/coverage.csv\"\nsubjects = set()\nfuzzers = set()\nt5 = \"0 days 00:05:00\"\nt3 = \"0 days 03:00:00\"\n\nrows_5 = 0\nrows_3 = 0\nby_t5 = defaultdict(int)\nby_t3 = defaultdict(int)\n\nwith open(path, newline=\"\") as f:\n    r = csv.DictReader(f)\n    for row in r:\n        s = row[\"subject\"]\n        fz = row[\"fuzzer\"]\n        subjects.add(s)\n        fuzzers.add(fz)\n        t = row[\"time\"]\n        key = (fz, s)\n        if t == t5:\n            rows_5 += 1\n            by_t5[key] += 1\n        if t == t3:\n            rows_3 += 1\n            by_t3[key] += 1\n\nprint(\"Unique subjects:\", sorted(subjects))\nprint(\"Unique fuzzers:\", sorted(fuzzers))\nprint(\"Total rows at 5M:\", rows_5)\nprint(\"Total rows at 3H:\", rows_3)\n\nprint(\"\\nCounts at 5M per (fuzzer,subject) (first 40):\")\nfor k, v in list(by_t5.items())[:40]:\n    print(k, v)\n\nprint(\"\\nCounts at 3H per (fuzzer,subject) (first 40):\")\nfor k, v in list(by_t3.items())[:40]:\n    print(k, v)\nPY\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 787,
+            "prompt_tokens": 9685,
+            "total_tokens": 10472,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 389,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 9088
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nUnique subjects: ['Ant', 'Bcel', 'Closure', 'Maven', 'Nashorn', 'Rhino', 'Tomcat']\nUnique fuzzers: ['BeDiv-Simple', 'BeDiv-Struct', 'RLCheck', 'Zest', 'Zeugma-1PT', 'Zeugma-2PT', 'Zeugma-Link', 'Zeugma-X']\nTotal rows at 5M: 1100\nTotal rows at 3H: 1100\n\nCounts at 5M per (fuzzer,subject) (first 40):\n('RLCheck', 'Maven') 20\n('Zest', 'Tomcat') 20\n('Zeugma-2PT', 'Rhino') 20\n('Zeugma-X', 'Nashorn') 20\n('BeDiv-Struct', 'Rhino') 20\n('Zeugma-2PT', 'Bcel') 20\n('Zeugma-X', 'Closure') 20\n('RLCheck', 'Rhino') 20\n('Zeugma-1PT', 'Rhino') 20\n('Zeugma-2PT', 'Ant') 20\n('Zeugma-Link', 'Tomcat') 20\n('BeDiv-Struct', 'Nashorn') 20\n('RLCheck', 'Nashorn') 20\n('Zeugma-X', 'Maven') 20\n('BeDiv-Struct', 'Ant') 20\n('Zeugma-Link', 'Ant') 20\n('Zest', 'Rhino') 20\n('Zeugma-X', 'Ant') 20\n('Zeugma-Link', 'Nashorn') 20\n('BeDiv-Simple', 'Maven') 20\n('Zeugma-1PT', 'Ant') 20\n('Zeugma-Link', 'Maven') 20\n('RLCheck', 'Tomcat') 20\n('BeDiv-Simple', 'Bcel') 20\n('BeDiv-Struct', 'Closure') 20\n('Zeugma-1PT', 'Nashorn') 20\n('BeDiv-Simple', 'Rhino') 20\n('Zeugma-2PT', 'Nashorn') 20\n('BeDiv-Simple', 'Ant') 20\n('Zeugma-X', 'Tomcat') 20\n('Zeugma-1PT', 'Tomcat') 20\n('Zeugma-2PT', 'Closure') 20\n('Zeugma-Link', 'Closure') 20\n('BeDiv-Struct', 'Maven') 20\n('Zeugma-1PT', 'Closure') 20\n('Zeugma-X', 'Rhino') 20\n('Zest', 'Nashorn') 20\n('Zeugma-1PT', 'Bcel') 20\n('BeDiv-Simple', 'Tomcat') 20\n('BeDiv-Struct', 'Tomcat') 20\n\nCounts at 3H per (fuzzer,subject) (first 40):\n('RLCheck', 'Maven') 20\n('Zest', 'Tomcat') 20\n('Zeugma-2PT', 'Rhino') 20\n('Zeugma-X', 'Nashorn') 20\n('BeDiv-Struct', 'Rhino') 20\n('Zeugma-2PT', 'Bcel') 20\n('Zeugma-X', 'Closure') 20\n('RLCheck', 'Rhino') 20\n('Zeugma-1PT', 'Rhino') 20\n('Zeugma-2PT', 'Ant') 20\n('Zeugma-Link', 'Tomcat') 20\n('BeDiv-Struct', 'Nashorn') 20\n('RLCheck', 'Nashorn') 20\n('Zeugma-X', 'Maven') 20\n('BeDiv-Struct', 'Ant') 20\n('Zeugma-Link', 'Ant') 20\n('Zest', 'Rhino') 20\n('Zeugma-X', 'Ant') 20\n('Zeugma-Link', 'Nashorn') 20\n('BeDiv-Simple', 'Maven') 20\n('Zeugma-1PT', 'Ant') 20\n('Zeugma-Link', 'Maven') 20\n('RLCheck', 'Tomcat') 20\n('BeDiv-Simple', 'Bcel') 20\n('BeDiv-Struct', 'Closure') 20\n('Zeugma-1PT', 'Nashorn') 20\n('BeDiv-Simple', 'Rhino') 20\n('Zeugma-2PT', 'Nashorn') 20\n('BeDiv-Simple', 'Ant') 20\n('Zeugma-X', 'Tomcat') 20\n('Zeugma-1PT', 'Tomcat') 20\n('Zeugma-2PT', 'Closure') 20\n('Zeugma-Link', 'Closure') 20\n('BeDiv-Struct', 'Maven') 20\n('Zeugma-1PT', 'Closure') 20\n('Zeugma-X', 'Rhino') 20\n('Zest', 'Nashorn') 20\n('Zeugma-1PT', 'Bcel') 20\n('BeDiv-Simple', 'Tomcat') 20\n('BeDiv-Struct', 'Tomcat') 20\n</output>",
+      "exec_time": 4.117828607559204
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Compute the per-(fuzzer, subject) medians at 5 minutes and 3 hours directly from coverage.csv using Python\u2019s standard library to confirm the numbers and later embed this logic into the repro script.\n\n<mini_swe_agent_bash>\npython - << 'PY'\nimport csv\nfrom collections import defaultdict\nfrom statistics import median\n\npath = \"/workspace/coverage.csv\"\nt5 = \"0 days 00:05:00\"\nt3 = \"0 days 03:00:00\"\n\n# data[(fuzzer, subject, time_label)] -> list of coverages\ndata = defaultdict(list)\n\nwith open(path, newline=\"\") as f:\n    r = csv.DictReader(f)\n    for row in r:\n        t = row[\"time\"]\n        if t not in (t5, t3):\n            continue\n        cov = float(row[\"covered_branches\"])\n        fz = row[\"fuzzer\"]\n        subj = row[\"subject\"]\n        key = (fz, subj, \"5M\" if t == t5 else \"3H\")\n        data[key].append(cov)\n\nfuzzers = [\n    \"BeDiv-Simple\",\n    \"BeDiv-Struct\",\n    \"RLCheck\",\n    \"Zest\",\n    \"Zeugma-X\",\n    \"Zeugma-1PT\",\n    \"Zeugma-2PT\",\n    \"Zeugma-Link\",\n]\nsubjects = [\"Ant\", \"Bcel\", \"Closure\", \"Maven\", \"Nashorn\", \"Rhino\", \"Tomcat\"]\n\nprint(\"Fuzzer,Subject,Time,MedianCoveredBranches,Count\")\nfor fz in fuzzers:\n    for subj in subjects:\n        for label in (\"5M\", \"3H\"):\n            vals = data.get((fz, subj, label))\n            if not vals:\n                continue\n            print(f\"{fz},{subj},{label},{median(vals)},{len(vals)}\")\nPY\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 20.039823055267334,
+        "response": {
+          "id": "chatcmpl-D0jBYAxYhHbrHA0vJlbqzrtFYxjwZ",
+          "created": 1769066064,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Compute the per-(fuzzer, subject) medians at 5 minutes and 3 hours directly from coverage.csv using Python\u2019s standard library to confirm the numbers and later embed this logic into the repro script.\n\n<mini_swe_agent_bash>\npython - << 'PY'\nimport csv\nfrom collections import defaultdict\nfrom statistics import median\n\npath = \"/workspace/coverage.csv\"\nt5 = \"0 days 00:05:00\"\nt3 = \"0 days 03:00:00\"\n\n# data[(fuzzer, subject, time_label)] -> list of coverages\ndata = defaultdict(list)\n\nwith open(path, newline=\"\") as f:\n    r = csv.DictReader(f)\n    for row in r:\n        t = row[\"time\"]\n        if t not in (t5, t3):\n            continue\n        cov = float(row[\"covered_branches\"])\n        fz = row[\"fuzzer\"]\n        subj = row[\"subject\"]\n        key = (fz, subj, \"5M\" if t == t5 else \"3H\")\n        data[key].append(cov)\n\nfuzzers = [\n    \"BeDiv-Simple\",\n    \"BeDiv-Struct\",\n    \"RLCheck\",\n    \"Zest\",\n    \"Zeugma-X\",\n    \"Zeugma-1PT\",\n    \"Zeugma-2PT\",\n    \"Zeugma-Link\",\n]\nsubjects = [\"Ant\", \"Bcel\", \"Closure\", \"Maven\", \"Nashorn\", \"Rhino\", \"Tomcat\"]\n\nprint(\"Fuzzer,Subject,Time,MedianCoveredBranches,Count\")\nfor fz in fuzzers:\n    for subj in subjects:\n        for label in (\"5M\", \"3H\"):\n            vals = data.get((fz, subj, label))\n            if not vals:\n                continue\n            print(f\"{fz},{subj},{label},{median(vals)},{len(vals)}\")\nPY\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 1307,
+            "prompt_tokens": 11285,
+            "total_tokens": 12592,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 887,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 9600
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nFuzzer,Subject,Time,MedianCoveredBranches,Count\nBeDiv-Simple,Ant,5M,755.0,20\nBeDiv-Simple,Ant,3H,899.0,20\nBeDiv-Simple,Bcel,5M,1435.5,20\nBeDiv-Simple,Bcel,3H,1846.5,20\nBeDiv-Simple,Closure,5M,9328.0,20\nBeDiv-Simple,Closure,3H,11863.5,20\nBeDiv-Simple,Maven,5M,590.5,20\nBeDiv-Simple,Maven,3H,738.0,20\nBeDiv-Simple,Nashorn,5M,3008.5,20\nBeDiv-Simple,Nashorn,3H,3319.5,20\nBeDiv-Simple,Rhino,5M,2952.0,20\nBeDiv-Simple,Rhino,3H,3235.5,20\nBeDiv-Simple,Tomcat,5M,274.5,20\nBeDiv-Simple,Tomcat,3H,341.0,20\nBeDiv-Struct,Ant,5M,786.5,20\nBeDiv-Struct,Ant,3H,896.5,20\nBeDiv-Struct,Bcel,5M,1412.5,20\nBeDiv-Struct,Bcel,3H,1876.5,20\nBeDiv-Struct,Closure,5M,9336.5,20\nBeDiv-Struct,Closure,3H,11904.5,20\nBeDiv-Struct,Maven,5M,578.5,20\nBeDiv-Struct,Maven,3H,641.5,20\nBeDiv-Struct,Nashorn,5M,2993.5,20\nBeDiv-Struct,Nashorn,3H,3092.0,20\nBeDiv-Struct,Rhino,5M,2915.5,20\nBeDiv-Struct,Rhino,3H,3237.0,20\nBeDiv-Struct,Tomcat,5M,161.0,20\nBeDiv-Struct,Tomcat,3H,242.5,20\nRLCheck,Ant,5M,769.0,20\nRLCheck,Ant,3H,889.0,20\nRLCheck,Closure,5M,8262.5,20\nRLCheck,Closure,3H,9480.5,20\nRLCheck,Maven,5M,579.0,20\nRLCheck,Maven,3H,663.0,20\nRLCheck,Nashorn,5M,1298.0,20\nRLCheck,Nashorn,3H,1298.0,20\nRLCheck,Rhino,5M,2627.0,20\nRLCheck,Rhino,3H,2730.0,20\nRLCheck,Tomcat,5M,299.0,20\nRLCheck,Tomcat,3H,338.0,20\nZest,Ant,5M,820.0,20\nZest,Ant,3H,927.0,20\nZest,Bcel,5M,1516.5,20\nZest,Bcel,3H,1909.5,20\nZest,Closure,5M,9782.5,20\nZest,Closure,3H,12352.0,20\nZest,Maven,5M,778.5,20\nZest,Maven,3H,1098.5,20\nZest,Nashorn,5M,2654.5,20\nZest,Nashorn,3H,2717.0,20\nZest,Rhino,5M,3108.5,20\nZest,Rhino,3H,3408.0,20\nZest,Tomcat,5M,295.0,20\nZest,Tomcat,3H,340.0,20\nZeugma-X,Ant,5M,835.5,20\nZeugma-X,Ant,3H,911.0,20\nZeugma-X,Bcel,5M,1480.5,20\nZeugma-X,Bcel,3H,1927.0,20\nZeugma-X,Closure,5M,10274.5,20\nZeugma-X,Closure,3H,12251.0,20\nZeugma-X,Maven,5M,873.0,20\nZeugma-X,Maven,3H,1138.0,20\nZeugma-X,Nashorn,5M,4259.0,20\nZeugma-X,Nashorn,3H,7411.0,20\nZeugma-X,Rhino,5M,3169.0,20\nZeugma-X,Rhino,3H,3551.5,20\nZeugma-X,Tomcat,5M,297.5,20\nZeugma-X,Tomcat,3H,345.0,20\nZeugma-1PT,Ant,5M,828.0,20\nZeugma-1PT,Ant,3H,909.5,20\nZeugma-1PT,Bcel,5M,1489.0,20\nZeugma-1PT,Bcel,3H,1917.0,20\nZeugma-1PT,Closure,5M,10237.5,20\nZeugma-1PT,Closure,3H,12153.5,20\nZeugma-1PT,Maven,5M,855.5,20\nZeugma-1PT,Maven,3H,1138.0,20\nZeugma-1PT,Nashorn,5M,4166.0,20\nZeugma-1PT,Nashorn,3H,7369.5,20\nZeugma-1PT,Rhino,5M,3169.0,20\nZeugma-1PT,Rhino,3H,3572.5,20\nZeugma-1PT,Tomcat,5M,294.0,20\nZeugma-1PT,Tomcat,3H,344.0,20\nZeugma-2PT,Ant,5M,819.5,20\nZeugma-2PT,Ant,3H,910.0,20\nZeugma-2PT,Bcel,5M,1472.0,20\nZeugma-2PT,Bcel,3H,1915.0,20\nZeugma-2PT,Closure,5M,10284.0,20\nZeugma-2PT,Closure,3H,12038.0,20\nZeugma-2PT,Maven,5M,797.0,20\nZeugma-2PT,Maven,3H,1134.0,20\nZeugma-2PT,Nashorn,5M,3962.5,20\nZeugma-2PT,Nashorn,3H,7310.0,20\nZeugma-2PT,Rhino,5M,3143.0,20\nZeugma-2PT,Rhino,3H,3549.0,20\nZeugma-2PT,Tomcat,5M,291.0,20\nZeugma-2PT,Tomcat,3H,341.5,20\nZeugma-Link,Ant,5M,845.5,20\nZeugma-Link,Ant,3H,911.5,20\nZeugma-Link,Bcel,5M,1541.5,20\nZeugma-Link,Bcel,3H,1959.0,20\nZeugma-Link,Closure,5M,10395.5,20\nZeugma-Link,Closure,3H,12709.0,20\nZeugma-Link,Maven,5M,906.0,20\nZeugma-Link,Maven,3H,1138.0,20\nZeugma-Link,Nashorn,5M,5568.5,20\nZeugma-Link,Nashorn,3H,7654.0,20\nZeugma-Link,Rhino,5M,3233.5,20\nZeugma-Link,Rhino,3H,3703.0,20\nZeugma-Link,Tomcat,5M,295.5,20\nZeugma-Link,Tomcat,3H,345.0,20\n</output>",
+      "exec_time": 3.759492874145508
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Create the `repro_crossover_table_3.sh` script that (1) writes the expected Table 3 into `/workspace/expected.md`, (2) downloads the artifact\u2019s `README.md` and `coverage.csv`, (3) computes the 5-minute and 3-hour median branch coverage per (fuzzer, subject) using Python\u2019s standard library (no pandas), formats a Markdown table matching Table 3 into `/workspace/repro.txt` (including bolding of per-column maxima and em-dash entries for missing RLCheck\u2013BCEL values), and (4) wraps the reproduced table between `<artisan_submit>` markers for submission.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_crossover_table_3.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: Branch Coverage. For each fuzzer, we report the median branch coverage in application classes for each subject across 20 fuzzing campaigns after five minutes (5M) and three hours (3H). The largest median or medians (in the case of a tie) for each time and subject is highlighted in blue. Branch coverage values that differ significantly from Zeugma-Link\u2019s are colored red.**\n\n| Fuzzer       |    Ant 5M | Ant 3H |    BCEL 5M |    BCEL 3H |  Closure 5M |  Closure 3H | Maven 5M |   Maven 3H | Nashorn 5M | Nashorn 3H |   Rhino 5M |   Rhino 3H | Tomcat 5M | Tomcat 3H |\n| ------------ | --------: | -----: | ---------: | ---------: | ----------: | ----------: | -------: | ---------: | ---------: | ---------: | ---------: | ---------: | --------: | --------: |\n| BeDiv-Simple |     755.0 |  899.0 |     1435.5 |     1846.5 |      9328.0 |     11863.5 |    590.5 |      738.0 |     3008.5 |     3319.5 |     2952.0 |     3235.5 |     274.5 |     341.0 |\n| BeDiv-Struct |     786.5 |  896.5 |     1412.5 |     1876.5 |      9336.5 |     11904.5 |    578.5 |      641.5 |     2993.5 |     3092.0 |     2915.5 |     3237.0 |     161.0 |     242.5 |\n| RLCheck      |     769.0 |  889.0 |          \u2014 |          \u2014 |      8262.5 |      9480.5 |    579.0 |      663.0 |     1298.0 |     1298.0 |     2627.0 |     2730.0 |     299.0 |     338.0 |\n| Zest         |     820.0 |  927.0 |     1516.5 |     1909.5 |      9782.5 |     12352.0 |    778.5 |     1098.5 |     2654.5 |     2717.0 |     3108.5 |     3408.0 |     295.0 |     340.0 |\n| Zeugma-X     |     835.5 |  911.0 |     1480.5 |     1927.0 |     10274.5 |     12251.0 |    873.0 |     1138.0 |     4259.0 |     7411.0 |     3169.0 |     3551.5 |     297.5 |     345.0 |\n| Zeugma-1PT   |     828.0 |  909.5 |     1489.0 |     1917.0 |     10237.5 |     12153.5 |    855.5 |     1138.0 |     4166.0 |     7369.5 |     3169.0 |     3572.5 |     294.0 |     344.0 |\n| Zeugma-2PT   |     819.5 |  910.0 |     1472.0 |     1915.0 |     10284.0 |     12038.0 |    797.0 |     1134.0 |     3962.5 |     7310.0 |     3143.0 |     3549.0 |     291.0 |     341.5 |\n| Zeugma-Link  | **845.5** |  911.5 | **1541.5** | **1959.0** | **10395.5** | **12709.0** |    906.0 | **1138.0** | **5568.5** | **7654.0** | **3233.5** | **3703.0** | **295.5** | **345.0** |\n\nEOTABLE\n\n# Section 2: Artifact download\nmkdir -p /workspace\ncd /workspace\n# Download artifact README and coverage dataset (used for Table 3)\ncurl -L \"https://ndownloader.figshare.com/files/43895979\" -o README.md\ncurl -L \"https://ndownloader.figshare.com/files/41569581\" -o coverage.csv\n\n# Section 3: Reproduction commands (populate from reviewed steps)\n# Compute per-(fuzzer, subject) median branch coverage at 5 minutes and 3 hours\npython - << 'PY' > /workspace/repro.txt\nimport csv\nfrom collections import defaultdict\nfrom statistics import median\n\npath = \"/workspace/coverage.csv\"\nt5 = \"0 days 00:05:00\"\nt3 = \"0 days 03:00:00\"\n\n# Collect coverage values per (fuzzer, subject, time-label)\ndata = defaultdict(list)\nwith open(path, newline=\"\") as f:\n    reader = csv.DictReader(f)\n    for row in reader:\n        t = row[\"time\"]\n        if t not in (t5, t3):\n            continue\n        cov = float(row[\"covered_branches\"])\n        fz = row[\"fuzzer\"]\n        subj = row[\"subject\"]\n        label = \"5M\" if t == t5 else \"3H\"\n        data[(fz, subj, label)].append(cov)\n\n# Compute medians\nmedians = {k: median(v) for k, v in data.items() if v}\n\n# Order and labels as in the paper\nfuzzers = [\n    \"BeDiv-Simple\",\n    \"BeDiv-Struct\",\n    \"RLCheck\",\n    \"Zest\",\n    \"Zeugma-X\",\n    \"Zeugma-1PT\",\n    \"Zeugma-2PT\",\n    \"Zeugma-Link\",\n]\nsubjects = [\"Ant\", \"Bcel\", \"Closure\", \"Maven\", \"Nashorn\", \"Rhino\", \"Tomcat\"]\nheader_subject_labels = {\n    \"Ant\": \"Ant\",\n    \"Bcel\": \"BCEL\",\n    \"Closure\": \"Closure\",\n    \"Maven\": \"Maven\",\n    \"Nashorn\": \"Nashorn\",\n    \"Rhino\": \"Rhino\",\n    \"Tomcat\": \"Tomcat\",\n}\n\n# Determine per-(subject,time) maxima for boldfacing\nmax_by_subject_time = {}\nfor subj in subjects:\n    for label in (\"5M\", \"3H\"):\n        vals = []\n        for fz in fuzzers:\n            key = (fz, subj, label)\n            if key in medians:\n                vals.append(medians[key])\n        max_by_subject_time[(subj, label)] = max(vals) if vals else None\n\n# Build header\ncols = []\nfor subj in subjects:\n    cols.append(f\"{header_subject_labels[subj]} 5M\")\n    cols.append(f\"{header_subject_labels[subj]} 3H\")\n\nheader = \"| Fuzzer       | \" + \" | \".join(cols) + \" |\"\nalign = \"| ------------ | \" + \" | \".join([\"--------:\"] * len(cols)) + \" |\"\n\nprint(\"**Table 3: Branch Coverage. For each fuzzer, we report the median branch coverage in application classes for each subject across 20 fuzzing campaigns after five minutes (5M) and three hours (3H). The largest median or medians (in the case of a tie) for each time and subject is highlighted in blue. Branch coverage values that differ significantly from Zeugma-Link\u2019s are colored red.**\")\nprint()\nprint(header)\nprint(align)\n\ndef fmt_cell(fz, subj, label):\n    key = (fz, subj, label)\n    val = medians.get(key)\n    if val is None:\n        # RLCheck on Bcel: no campaigns, render as em dash\n        return \"         \u2014\"\n    s = f\"{val:.1f}\"\n    m = max_by_subject_time.get((subj, label))\n    if m is not None and abs(val - m) < 1e-9:\n        s = f\"**{s}**\"\n    return f\"{s:>9}\"\n\nfor fz in fuzzers:\n    cells = []\n    for subj in subjects:\n        for label in (\"5M\", \"3H\"):\n            cells.append(fmt_cell(fz, subj, label))\n    print(f\"| {fz:<12} | \" + \" | \".join(cells) + \" |\")\nPY\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\ncat /workspace/repro.txt\necho '</artisan_submit>'\nEOF\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 62.42246437072754,
+        "response": {
+          "id": "chatcmpl-D0jBw7ufTg15bcEqCp807ISBo4lZs",
+          "created": 1769066088,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Create the `repro_crossover_table_3.sh` script that (1) writes the expected Table 3 into `/workspace/expected.md`, (2) downloads the artifact\u2019s `README.md` and `coverage.csv`, (3) computes the 5-minute and 3-hour median branch coverage per (fuzzer, subject) using Python\u2019s standard library (no pandas), formats a Markdown table matching Table 3 into `/workspace/repro.txt` (including bolding of per-column maxima and em-dash entries for missing RLCheck\u2013BCEL values), and (4) wraps the reproduced table between `<artisan_submit>` markers for submission.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_crossover_table_3.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: Branch Coverage. For each fuzzer, we report the median branch coverage in application classes for each subject across 20 fuzzing campaigns after five minutes (5M) and three hours (3H). The largest median or medians (in the case of a tie) for each time and subject is highlighted in blue. Branch coverage values that differ significantly from Zeugma-Link\u2019s are colored red.**\n\n| Fuzzer       |    Ant 5M | Ant 3H |    BCEL 5M |    BCEL 3H |  Closure 5M |  Closure 3H | Maven 5M |   Maven 3H | Nashorn 5M | Nashorn 3H |   Rhino 5M |   Rhino 3H | Tomcat 5M | Tomcat 3H |\n| ------------ | --------: | -----: | ---------: | ---------: | ----------: | ----------: | -------: | ---------: | ---------: | ---------: | ---------: | ---------: | --------: | --------: |\n| BeDiv-Simple |     755.0 |  899.0 |     1435.5 |     1846.5 |      9328.0 |     11863.5 |    590.5 |      738.0 |     3008.5 |     3319.5 |     2952.0 |     3235.5 |     274.5 |     341.0 |\n| BeDiv-Struct |     786.5 |  896.5 |     1412.5 |     1876.5 |      9336.5 |     11904.5 |    578.5 |      641.5 |     2993.5 |     3092.0 |     2915.5 |     3237.0 |     161.0 |     242.5 |\n| RLCheck      |     769.0 |  889.0 |          \u2014 |          \u2014 |      8262.5 |      9480.5 |    579.0 |      663.0 |     1298.0 |     1298.0 |     2627.0 |     2730.0 |     299.0 |     338.0 |\n| Zest         |     820.0 |  927.0 |     1516.5 |     1909.5 |      9782.5 |     12352.0 |    778.5 |     1098.5 |     2654.5 |     2717.0 |     3108.5 |     3408.0 |     295.0 |     340.0 |\n| Zeugma-X     |     835.5 |  911.0 |     1480.5 |     1927.0 |     10274.5 |     12251.0 |    873.0 |     1138.0 |     4259.0 |     7411.0 |     3169.0 |     3551.5 |     297.5 |     345.0 |\n| Zeugma-1PT   |     828.0 |  909.5 |     1489.0 |     1917.0 |     10237.5 |     12153.5 |    855.5 |     1138.0 |     4166.0 |     7369.5 |     3169.0 |     3572.5 |     294.0 |     344.0 |\n| Zeugma-2PT   |     819.5 |  910.0 |     1472.0 |     1915.0 |     10284.0 |     12038.0 |    797.0 |     1134.0 |     3962.5 |     7310.0 |     3143.0 |     3549.0 |     291.0 |     341.5 |\n| Zeugma-Link  | **845.5** |  911.5 | **1541.5** | **1959.0** | **10395.5** | **12709.0** |    906.0 | **1138.0** | **5568.5** | **7654.0** | **3233.5** | **3703.0** | **295.5** | **345.0** |\n\nEOTABLE\n\n# Section 2: Artifact download\nmkdir -p /workspace\ncd /workspace\n# Download artifact README and coverage dataset (used for Table 3)\ncurl -L \"https://ndownloader.figshare.com/files/43895979\" -o README.md\ncurl -L \"https://ndownloader.figshare.com/files/41569581\" -o coverage.csv\n\n# Section 3: Reproduction commands (populate from reviewed steps)\n# Compute per-(fuzzer, subject) median branch coverage at 5 minutes and 3 hours\npython - << 'PY' > /workspace/repro.txt\nimport csv\nfrom collections import defaultdict\nfrom statistics import median\n\npath = \"/workspace/coverage.csv\"\nt5 = \"0 days 00:05:00\"\nt3 = \"0 days 03:00:00\"\n\n# Collect coverage values per (fuzzer, subject, time-label)\ndata = defaultdict(list)\nwith open(path, newline=\"\") as f:\n    reader = csv.DictReader(f)\n    for row in reader:\n        t = row[\"time\"]\n        if t not in (t5, t3):\n            continue\n        cov = float(row[\"covered_branches\"])\n        fz = row[\"fuzzer\"]\n        subj = row[\"subject\"]\n        label = \"5M\" if t == t5 else \"3H\"\n        data[(fz, subj, label)].append(cov)\n\n# Compute medians\nmedians = {k: median(v) for k, v in data.items() if v}\n\n# Order and labels as in the paper\nfuzzers = [\n    \"BeDiv-Simple\",\n    \"BeDiv-Struct\",\n    \"RLCheck\",\n    \"Zest\",\n    \"Zeugma-X\",\n    \"Zeugma-1PT\",\n    \"Zeugma-2PT\",\n    \"Zeugma-Link\",\n]\nsubjects = [\"Ant\", \"Bcel\", \"Closure\", \"Maven\", \"Nashorn\", \"Rhino\", \"Tomcat\"]\nheader_subject_labels = {\n    \"Ant\": \"Ant\",\n    \"Bcel\": \"BCEL\",\n    \"Closure\": \"Closure\",\n    \"Maven\": \"Maven\",\n    \"Nashorn\": \"Nashorn\",\n    \"Rhino\": \"Rhino\",\n    \"Tomcat\": \"Tomcat\",\n}\n\n# Determine per-(subject,time) maxima for boldfacing\nmax_by_subject_time = {}\nfor subj in subjects:\n    for label in (\"5M\", \"3H\"):\n        vals = []\n        for fz in fuzzers:\n            key = (fz, subj, label)\n            if key in medians:\n                vals.append(medians[key])\n        max_by_subject_time[(subj, label)] = max(vals) if vals else None\n\n# Build header\ncols = []\nfor subj in subjects:\n    cols.append(f\"{header_subject_labels[subj]} 5M\")\n    cols.append(f\"{header_subject_labels[subj]} 3H\")\n\nheader = \"| Fuzzer       | \" + \" | \".join(cols) + \" |\"\nalign = \"| ------------ | \" + \" | \".join([\"--------:\"] * len(cols)) + \" |\"\n\nprint(\"**Table 3: Branch Coverage. For each fuzzer, we report the median branch coverage in application classes for each subject across 20 fuzzing campaigns after five minutes (5M) and three hours (3H). The largest median or medians (in the case of a tie) for each time and subject is highlighted in blue. Branch coverage values that differ significantly from Zeugma-Link\u2019s are colored red.**\")\nprint()\nprint(header)\nprint(align)\n\ndef fmt_cell(fz, subj, label):\n    key = (fz, subj, label)\n    val = medians.get(key)\n    if val is None:\n        # RLCheck on Bcel: no campaigns, render as em dash\n        return \"         \u2014\"\n    s = f\"{val:.1f}\"\n    m = max_by_subject_time.get((subj, label))\n    if m is not None and abs(val - m) < 1e-9:\n        s = f\"**{s}**\"\n    return f\"{s:>9}\"\n\nfor fz in fuzzers:\n    cells = []\n    for subj in subjects:\n        for label in (\"5M\", \"3H\"):\n            cells.append(fmt_cell(fz, subj, label))\n    print(f\"| {fz:<12} | \" + \" | \".join(cells) + \" |\")\nPY\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\ncat /workspace/repro.txt\necho '</artisan_submit>'\nEOF\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 4271,
+            "prompt_tokens": 13613,
+            "total_tokens": 17884,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 2083,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 11264
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n</output>",
+      "exec_time": 0.0698997974395752
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Execute the newly created reproduction script so it downloads the necessary artifact files, computes the medians for Table 3 from coverage.csv, writes the reproduced table to /workspace/repro.txt, and prints it wrapped in <artisan_submit> tags.\n\n<mini_swe_agent_bash>\nbash /workspace/repro_crossover_table_3.sh\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 4.595797538757324,
+        "response": {
+          "id": "chatcmpl-D0jCwvIuhMvWzwm1C0WafsvIOmtio",
+          "created": 1769066150,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Execute the newly created reproduction script so it downloads the necessary artifact files, computes the medians for Table 3 from coverage.csv, writes the reproduced table to /workspace/repro.txt, and prints it wrapped in <artisan_submit> tags.\n\n<mini_swe_agent_bash>\nbash /workspace/repro_crossover_table_3.sh\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 194,
+            "prompt_tokens": 15817,
+            "total_tokens": 16011,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 105,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 13568
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n                                 Dload  Upload   Total   Spent    Left  Speed\n\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n\n100 17507  100 17507    0     0  64813      0 --:--:-- --:--:-- --:--:-- 64813\n  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n                                 Dload  Upload   Total   Spent    Left  Speed\n\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n\n  0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0\n100 59.8M  100 59.8M    0     0  35.4M      0  0:00:01  0:00:01 --:--:--  118M\n<artisan_submit>\n**Table 3: Branch Coverage. For each fuzzer, we report the median branch coverage in application classes for each subject across 20 fuzzing campaigns after five minutes (5M) and three hours (3H). The largest median or medians (in the case of a tie) for each time and subject is highlighted in blue. Branch coverage values that differ significantly from Zeugma-Link\u2019s are colored red.**\n\n| Fuzzer       | Ant 5M | Ant 3H | BCEL 5M | BCEL 3H | Closure 5M | Closure 3H | Maven 5M | Maven 3H | Nashorn 5M | Nashorn 3H | Rhino 5M | Rhino 3H | Tomcat 5M | Tomcat 3H |\n| ------------ | --------: | --------: | --------: | --------: | --------: | --------: | --------: | --------: | --------: | --------: | --------: | --------: | --------: | --------: |\n| BeDiv-Simple |     755.0 |     899.0 |    1435.5 |    1846.5 |    9328.0 |   11863.5 |     590.5 |     738.0 |    3008.5 |    3319.5 |    2952.0 |    3235.5 |     274.5 |     341.0 |\n| BeDiv-Struct |     786.5 |     896.5 |    1412.5 |    1876.5 |    9336.5 |   11904.5 |     578.5 |     641.5 |    2993.5 |    3092.0 |    2915.5 |    3237.0 |     161.0 |     242.5 |\n| RLCheck      |     769.0 |     889.0 |          \u2014 |          \u2014 |    8262.5 |    9480.5 |     579.0 |     663.0 |    1298.0 |    1298.0 |    2627.0 |    2730.0 | **299.0** |     338.0 |\n| Zest         |     820.0 | **927.0** |    1516.5 |    1909.5 |    9782.5 |   12352.0 |     778.5 |    1098.5 |    2654.5 |    2717.0 |    3108.5 |    3408.0 |     295.0 |     340.0 |\n| Zeugma-X     |     835.5 |     911.0 |    1480.5 |    1927.0 |   10274.5 |   12251.0 |     873.0 | **1138.0** |    4259.0 |    7411.0 |    3169.0 |    3551.5 |     297.5 | **345.0** |\n| Zeugma-1PT   |     828.0 |     909.5 |    1489.0 |    1917.0 |   10237.5 |   12153.5 |     855.5 | **1138.0** |    4166.0 |    7369.5 |    3169.0 |    3572.5 |     294.0 |     344.0 |\n| Zeugma-2PT   |     819.5 |     910.0 |    1472.0 |    1915.0 |   10284.0 |   12038.0 |     797.0 |    1134.0 |    3962.5 |    7310.0 |    3143.0 |    3549.0 |     291.0 |     341.5 |\n| Zeugma-Link  | **845.5** |     911.5 | **1541.5** | **1959.0** | **10395.5** | **12709.0** | **906.0** | **1138.0** | **5568.5** | **7654.0** | **3233.5** | **3703.0** |     295.5 | **345.0** |\n</artisan_submit>\n</output>",
+      "exec_time": 5.679932355880737
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The reproduction script has been created and executed, and the reproduced Table 3 has been emitted within the required `<artisan_submit>` tags. I should now signal completion as required.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 4.916854619979858,
+        "response": {
+          "id": "chatcmpl-D0jD6ifxpIDD4sBD1Umhi5poaVsl4",
+          "created": 1769066160,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The reproduction script has been created and executed, and the reproduced Table 3 has been emitted within the required `<artisan_submit>` tags. I should now signal completion as required.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 244,
+            "prompt_tokens": 17353,
+            "total_tokens": 17597,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 171,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 15744
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": ""
+    }
+  ],
+  "trajectory_format": "mini-swe-agent-1"
+}

@@ -1,0 +1,961 @@
+{
+  "info": {
+    "exit_status": "Submitted",
+    "submission": "",
+    "model_stats": {
+      "instance_cost": 0.18357600000000002,
+      "api_calls": 17,
+      "llm_time": 172.40387058258057
+    },
+    "mini_version": "1.14.4",
+    "config": {
+      "agent": {
+        "system_template": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected.",
+        "instance_template": "Please reproduce the results reported in Table {{ table_index }} of the target paper.\n\n<expected_table>\n{{ expected_table }}\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from {{ artifact_url }}.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table {{ table_index }}:\n   - `grep -in docker README.md`\n   - `grep -in \"Table {{ table_index }}\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_{{ artifact_name }}_table_{{ table_index }}.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n{{ expected_table }}\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\necho '</artisan_submit>'\nEOF\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward.",
+        "timeout_template": "The last command <command>{{action['action']}}</command> timed out and has been killed.\nThe output of the command was:\n<output>\n{{output}}\n</output>\nPlease try another command and make sure to avoid those requiring interactive input.\n",
+        "format_error_template": "Please always provide EXACTLY ONE action in <mini_swe_agent_bash>, found {{actions|length}} actions.\nIf you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\nwithout any other command.\nElse, please format your response exactly as follows:\n\n<response_example>\nHere are some thoughts about why you want to perform the action.\n\n<mini_swe_agent_bash>\n<action>\n</mini_swe_agent_bash>\n</response_example>\n",
+        "action_observation_template": "<returncode>{{output.returncode}}</returncode>\n{% if output.output | length < 100000 -%}\n<output>\n{{ output.output -}}\n</output>\n{%- else -%}\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning>\n{%- set elided_chars = output.output | length - 100000 -%}\n<output_head>\n{{ output.output[:5000] }}\n</output_head>\n<elided_chars>\n{{ elided_chars }} characters elided\n</elided_chars>\n<output_tail>\n{{ output.output[-5000:] }}\n</output_tail>\n{%- endif -%}\n",
+        "step_limit": 30.0,
+        "cost_limit": 1.0
+      },
+      "model": {
+        "model_name": "gpt-5.1-2025-11-13",
+        "model_kwargs": {
+          "drop_params": true,
+          "reasoning_effort": "medium"
+        },
+        "litellm_model_registry": null,
+        "set_cache_control": null
+      },
+      "environment": {
+        "image": "doehyunbaek1/artisan:c268b22",
+        "container_name": "agent-pythonic-t3-986c",
+        "cwd": "/workspace",
+        "env": {
+          "PAGER": "cat",
+          "MANPAGER": "cat",
+          "LESS": "-R",
+          "PIP_PROGRESS_BAR": "off",
+          "TQDM_DISABLE": "1",
+          "MSWEA_SILENT_STARTUP": "1"
+        },
+        "forward_env": [],
+        "timeout": 28800,
+        "executable": "docker",
+        "run_args": [
+          "--rm",
+          "--privileged",
+          "-e",
+          "OPENAI_API_KEY",
+          "-e",
+          "MSWEA_SILENT_STARTUP",
+          "-v",
+          "/home/doehyunbaek/artisan/logs/minisweagent-gpt5.1-301b/pythonic/table_3/072103-471989:/workspace:rw",
+          "-e",
+          "ARTISAN_MITM_URL=http://129.69.217.153:8082",
+          "--group-add",
+          "999"
+        ],
+        "container_timeout": "8h",
+        "pull_timeout": 3000
+      },
+      "agent_type": "evaluation.agents.minisweagent.DefaultAgentWithLogs",
+      "model_type": "minisweagent.models.litellm_model.LitellmModel",
+      "environment_type": "minisweagent.environments.docker.DockerEnvironment"
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected."
+    },
+    {
+      "role": "user",
+      "content": "Please reproduce the results reported in Table 3 of the target paper.\n\n<expected_table>\n**Table 3: RQ1: Mixed-effect logistic regression relating the use of lambdas with the correctness of the change task**\n\n|                  |        |\n| ---------------- | ------ |\n| **AIC**          | 438.3  |\n| **BIC**          | 468.5  |\n| **logLik**       | -211.2 |\n| **deviance**     | 422.3  |\n| **df.residuals** | 314    |\n\n**Scaled residuals:** Min -1.98, 1Q -0.95, Median 0.49, 3Q 0.85, Max 1.44\n\n**Random effects (Groups)** \u2014 User (Intercept): Variance 0.2370, Std.Dev. 0.4878; Number of obs: 322, groups: User, 160\n\n**Fixed effects**\n\n| Term | OR | Estimate | Std.Error | z value | Pr(>\\|z\\|) |\n|---|---:|---:|---:|---:|---:|\n| (Intercept) | 3.72 | 1.31 | 1.13 | 1.17 | 0.24 |\n| MainFactorProc | 0.11 | -2.19 | 0.67 | -3.29 | <0.01 |\n| Compl. | 0.75 | -0.29 | 0.19 | -1.55 | 0.24 |\n| Usage Freq. | 1.32 | 0.28 | 0.23 | 1.20 | 0.24 |\n| Approvals | 1.00 | -0.00 | 0.00 | -1.41 | 0.24 |\n| StudentTrue | 0.35 | -1.04 | 0.88 | -1.18 | 0.24 |\n| MainFactorProc:Compl. | 2.67 | 0.98 | 0.28 | 3.56 | <0.01 |\n\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from https://zenodo.org/records/10554377.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table 3:\n   - `grep -in docker README.md`\n   - `grep -in \"Table 3\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_pythonic_table_3.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_pythonic_table_3.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: RQ1: Mixed-effect logistic regression relating the use of lambdas with the correctness of the change task**\n\n|                  |        |\n| ---------------- | ------ |\n| **AIC**          | 438.3  |\n| **BIC**          | 468.5  |\n| **logLik**       | -211.2 |\n| **deviance**     | 422.3  |\n| **df.residuals** | 314    |\n\n**Scaled residuals:** Min -1.98, 1Q -0.95, Median 0.49, 3Q 0.85, Max 1.44\n\n**Random effects (Groups)** \u2014 User (Intercept): Variance 0.2370, Std.Dev. 0.4878; Number of obs: 322, groups: User, 160\n\n**Fixed effects**\n\n| Term | OR | Estimate | Std.Error | z value | Pr(>\\|z\\|) |\n|---|---:|---:|---:|---:|---:|\n| (Intercept) | 3.72 | 1.31 | 1.13 | 1.17 | 0.24 |\n| MainFactorProc | 0.11 | -2.19 | 0.67 | -3.29 | <0.01 |\n| Compl. | 0.75 | -0.29 | 0.19 | -1.55 | 0.24 |\n| Usage Freq. | 1.32 | 0.28 | 0.23 | 1.20 | 0.24 |\n| Approvals | 1.00 | -0.00 | 0.00 | -1.41 | 0.24 |\n| StudentTrue | 0.35 | -1.04 | 0.88 | -1.18 | 0.24 |\n| MainFactorProc:Compl. | 2.67 | 0.98 | 0.28 | 3.56 | <0.01 |\n\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\necho '</artisan_submit>'\nEOF\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward."
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I need to start with workflow step 1 by obtaining the artifact from the given Zenodo record. Since I don't yet know the exact artifact file name or download URL, I'll first download the record\u2019s HTML page into /workspace so I can inspect it in a subsequent step and then retrieve the actual artifact file.\n\n<mini_swe_agent_bash>\nwget -O /workspace/zenodo_10554377.html https://zenodo.org/records/10554377\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 11.375197410583496,
+        "response": {
+          "id": "chatcmpl-D0jI46aTxQVeUk3XFG9IiMpggD1Xs",
+          "created": 1769066468,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I need to start with workflow step 1 by obtaining the artifact from the given Zenodo record. Since I don't yet know the exact artifact file name or download URL, I'll first download the record\u2019s HTML page into /workspace so I can inspect it in a subsequent step and then retrieve the actual artifact file.\n\n<mini_swe_agent_bash>\nwget -O /workspace/zenodo_10554377.html https://zenodo.org/records/10554377\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 656,
+            "prompt_tokens": 1739,
+            "total_tokens": 2395,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 540,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>127</returncode>\n<output>\nbash: line 1: wget: command not found\n</output>",
+      "exec_time": 0.067291259765625
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The previous attempt failed because `wget` is unavailable. I\u2019ll use `curl` with `-L` to follow redirects and save the Zenodo record HTML page locally as the first step in obtaining the artifact.\n\n<mini_swe_agent_bash>\ncurl -L https://zenodo.org/records/10554377 -o /workspace/zenodo_10554377.html\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.289750814437866,
+        "response": {
+          "id": "chatcmpl-D0jIFhOOWUS44oqSKmpdytKCrshZY",
+          "created": 1769066479,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The previous attempt failed because `wget` is unavailable. I\u2019ll use `curl` with `-L` to follow redirects and save the Zenodo record HTML page locally as the first step in obtaining the artifact.\n\n<mini_swe_agent_bash>\ncurl -L https://zenodo.org/records/10554377 -o /workspace/zenodo_10554377.html\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 153,
+            "prompt_tokens": 1883,
+            "total_tokens": 2036,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 54,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 1664
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n                                 Dload  Upload   Total   Spent    Left  Speed\n\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n100  247k  100  247k    0     0  2993k      0 --:--:-- --:--:-- --:--:-- 3014k\n</output>",
+      "exec_time": 0.175675630569458
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Now that the Zenodo record HTML is downloaded, I need to locate the actual artifact file URL within it. I\u2019ll search the HTML for links to ZIP files, which typically contain the replication package, and inspect the first matches to determine the correct download URL for the artifact.\n\n<mini_swe_agent_bash>\ngrep -iE 'href=\"[^\"]+\\.zip' /workspace/zenodo_10554377.html | head\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 6.241348028182983,
+        "response": {
+          "id": "chatcmpl-D0jIJa0ZyDOB8gBy8Mnnm9cum86ul",
+          "created": 1769066483,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Now that the Zenodo record HTML is downloaded, I need to locate the actual artifact file URL within it. I\u2019ll search the HTML for links to ZIP files, which typically contain the replication package, and inspect the first matches to determine the correct download URL for the artifact.\n\n<mini_swe_agent_bash>\ngrep -iE 'href=\"[^\"]+\\.zip' /workspace/zenodo_10554377.html | head\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 294,
+            "prompt_tokens": 2124,
+            "total_tokens": 2418,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 184,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n    <link rel=\"alternate\" type=\"application/zip\" href=\"https://zenodo.org/records/10554377/files/ICSE2024-funcConstructs-Artifacts.zip\">\n    <link rel=\"item\" type=\"application/zip\" href=\"https://zenodo.org/records/10554377/files/ICSE2024-funcConstructs-Artifacts.zip\">\n              <a href=\"/records/10554377/files/ICSE2024-funcConstructs-Artifacts.zip?download=1\">ICSE2024-funcConstructs-Artifacts.zip</a>\n                <a role=\"button\" class=\"ui compact mini button preview-link\" href=\"/records/10554377/preview/ICSE2024-funcConstructs-Artifacts.zip?include_deleted=0\" target=\"preview-iframe\" data-file-key=\"ICSE2024-funcConstructs-Artifacts.zip\">\n              <a role=\"button\" class=\"ui compact mini button\" href=\"/records/10554377/files/ICSE2024-funcConstructs-Artifacts.zip?download=1\">\n</output>",
+      "exec_time": 0.08837413787841797
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The HTML reveals the artifact ZIP file URL. Next, I should download this ZIP archive into /workspace so I can extract and inspect its contents in subsequent steps.\n\n<mini_swe_agent_bash>\ncurl -L \"https://zenodo.org/records/10554377/files/ICSE2024-funcConstructs-Artifacts.zip?download=1\" -o /workspace/ICSE2024-funcConstructs-Artifacts.zip\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 2.5010719299316406,
+        "response": {
+          "id": "chatcmpl-D0jIPfjX8WfLvYajGdCBNx5EIxO4y",
+          "created": 1769066489,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The HTML reveals the artifact ZIP file URL. Next, I should download this ZIP archive into /workspace so I can extract and inspect its contents in subsequent steps.\n\n<mini_swe_agent_bash>\ncurl -L \"https://zenodo.org/records/10554377/files/ICSE2024-funcConstructs-Artifacts.zip?download=1\" -o /workspace/ICSE2024-funcConstructs-Artifacts.zip\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 152,
+            "prompt_tokens": 2476,
+            "total_tokens": 2628,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 41,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 1792
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n                                 Dload  Upload   Total   Spent    Left  Speed\n\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\n100 6780k  100 6780k    0     0  48.1M      0 --:--:-- --:--:-- --:--:-- 48.3M\n</output>",
+      "exec_time": 0.24041128158569336
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: With the artifact ZIP downloaded, I need to extract its contents into /workspace so I can locate the README and instructions for reproducing Table 3.\n\n<mini_swe_agent_bash>\nunzip -d /workspace/ICSE2024-funcConstructs-Artifacts /workspace/ICSE2024-funcConstructs-Artifacts.zip\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 2.0863163471221924,
+        "response": {
+          "id": "chatcmpl-D0jISYgnsOCWDo16zLwYG1GWBkkch",
+          "created": 1769066492,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: With the artifact ZIP downloaded, I need to extract its contents into /workspace so I can locate the README and instructions for reproducing Table 3.\n\n<mini_swe_agent_bash>\nunzip -d /workspace/ICSE2024-funcConstructs-Artifacts /workspace/ICSE2024-funcConstructs-Artifacts.zip\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 117,
+            "prompt_tokens": 2731,
+            "total_tokens": 2848,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 26,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 2048
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning><output_head>\nArchive:  /workspace/ICSE2024-funcConstructs-Artifacts.zip\n   creating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/\n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/LICENSE.md  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/run-analysis.sh  \n   creating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/\n   creating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/inter-rater-RQ3-files/\n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/inter-rater-RQ3-files/procedural.csv  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/inter-rater-RQ3-files/lambda.csv  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/inter-rater-RQ3-files/mrf.csv  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/inter-rater-RQ3-files/comprehension.csv  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/RQ2ManualValidation.csv  \n   creating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/RQ1-RQ2-files-for-statistical-analysis/\n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/RQ1-RQ2-files-for-statistical-analysis/RQ1.csv  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/RQ1-RQ2-files-for-statistical-analysis/RQ1Paired-RQ2.csv  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/RQ1-RQ2-files-for-statistical-analysis/ConstructUsage.csv  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/RQ3ManualValidation.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/README.md  \n   creating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/results/\n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/run-analysis.bat  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/run-jupyter-container.sh  \n   creating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/\n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-4.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experiment_G-2.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-8.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-9.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-5.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experiment_G_1.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-3.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-10.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-6.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-7.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/run-jupyter-container.bat  \n   creating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/\n   creating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/\n   creating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/\n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/Q5.py  \n extracting: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/Q1R.txt  \n extracting: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/Q5Err.txt  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/Q1.py  \n  inflating: /workspace/ICSE2\n</output_head>\n<elided_chars>\n575191 characters elided\n</elided_chars>\n<output_tail>\nConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/comp-a-P(2).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/lambda-c-P(3).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/filter-b-P.py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/reduce-c-F.py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/filter-a-P.py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/lambda-f-P(1).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/lambda-g-P(4).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/comp-j-F(6).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/map-b-F.py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/lambda-i-F(3).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/lambda-h-F(2).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/comp-d-P(5).py  \n extracting: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/lambda-a-F(1).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/comp-b-F(4).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/map-c-F.py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/comp-e-P(3).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/reduce-b-F.py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/comp-c-F(2).py  \n extracting: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/lambda-j-F(2).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/map-b-P.py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/reduce-c-P.py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/filter-a-F.py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/lambda-e-P(3).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/comp-g-P(2).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/comp-a-F(2).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/lambda-c-F(3).py  \n extracting: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/lambda-b-F(2).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/lambda-d-P(2).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/comp-f-P(3).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/comp-h-F(4).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/reduce-b-P.py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/map-c-P.py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/Experiment-Material/Code-Examples-Table1/comp-i-F(3).py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/FuncConstructs-Statistics.r  \n\n</output_tail>",
+      "exec_time": 0.3928699493408203
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The artifact is extracted. Next, I should read the README to understand the overall reproduction process and later locate the specific instructions for reproducing Table 3.\n\n<mini_swe_agent_bash>\nhead -n 80 /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.97444486618042,
+        "response": {
+          "id": "chatcmpl-D0jIWBDar6TsyqFZinW4rtzZE1TML",
+          "created": 1769066496,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The artifact is extracted. Next, I should read the README to understand the overall reproduction process and later locate the specific instructions for reproducing Table 3.\n\n<mini_swe_agent_bash>\nhead -n 80 /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 131,
+            "prompt_tokens": 6037,
+            "total_tokens": 6168,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 38,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 2688
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n\n# Replication Package for \"_A Study on the Pythonic Functional Constructs' Understandability_\" to appear at ICSE 2024\n\n- **Authors**: Cyrine Zid, Fiorella Zampetti, Giuliano Antoniol, Massimiliano Di penta\n- **Article Preprint:** [https://mdipenta.github.io/files/ICSE24_funcExperiment.pdf](https://mdipenta.github.io/files/ICSE24_funcExperiment.pdf)\n- **Artifacts:** [https://doi.org/10.5281/zenodo.8191782](https://doi.org/10.5281/zenodo.8191782)\n- **License**: [GPL V3.0](LICENSE.md)\n\n\nThis package contains folders and files with code and data used in the study described in the paper. In the following, we first provide all fields required for the submission, and then report a detailed description of all repository folders.\n\n## Artifact Description\n### Purpose\nThe artifact is about a controlled experiment aimed at investigating the extent to which Pythonic functional constructs have an impact on source code understandability. The artifact archive contains:\n\n1. The material to allow replicating the study (see Section [Experimental-Material](#material))\n2. Raw quantitative results, working datasets, and scripts to replicate the statistical analyses reported in the paper. Specifically, the executable part of the replication package reproduces figures and tables of the quantitative analysis (RQ1 and RQ2) of the paper starting from the working datasets.\n3. Spreadsheets used for the qualitative analysis (RQ3). \n\nWe apply for the following badges:\n\n-  **Available and reusable**: because we provide all the material that can be used to replicate the experiment, but also to perform the statistical analyses and the qualitative analyses (spreadsheets, in this case)\n\n\n### Provenance\n\n- **Paper preprint link:** [https://mdipenta.github.io/files/ICSE24_funcExperiment.pdf](https://mdipenta.github.io/files/ICSE24_funcExperiment.pdf)\n- **Artifacts:** [https://doi.org/10.5281/zenodo.8191782](https://doi.org/10.5281/zenodo.8191782)\n\n### Data\nResults have been obtained by conducting the controlled experiment involving [Prolific](https://www.prolific.com) workers as participants. Data collection and processing followed a protocol approved by the University ethical board. Note that all data enclosed in the artifact is completely anonymized and does not contain sensible information.\n\nFurther details about the provided dataset can be found in the Section [Results' directory and files](#results)\n\n\n### Setup and Usage (for executable artifacts): \nSee the Section [Scripts to reproduce the results, and instructions for running them](#scripts)\n\n\n\n\n## [Experiment-Material/](Experiment-Material/)\n<a id=\"material\"></a>\nContains the material used for the experiment, and, specifically, the following subdirectories:\n\n### [Google-Forms/](Experiment-Material/Google-Forms/)\nContains (as PDF documents) the questionnaires submitted to the ten experimental groups.\n\n### [Task-Sources/](Experiment-Material/Task-Sources/)\nContains, for each experimental group (G-1...G-10), the sources used to produce the Google Forms, and, specifically:\n- The cover letter (Letter.docx).\n- A directory for each experimental task (Lambda 1, Lambda 2, Comp 1, Comp 2, MRF 1, MRF 2, Lambda Comparison, Comp Comparison, MRF Comparison). Each directory contains: (i) the exercise text (in both Word and .txt format), the source code snippet, and its .png image to be used in the form. **Note:** the \"Comparison\" tasks do not have any exercise as the purpose is always the same, i.e., to compare the (perceived) understandability of the snippets and return the results of the comparison. \n\n### [Code-Examples-Table1/](Experiment-Material/Code-Examples-Table1/)\nContains the source code snippets used as objects of the study (the same you can find under \"Task-Sources/\"), named as reported in Table 1.\n\n\n\n\n\n\n\n\n## Results' directory and files\n<a id=\"results\"></a>\n\n### [raw-responses/](raw-responses/)\nContains, as spreadsheets, the raw responses provided by the study participants through Google forms.\n\n### [raw-results-RQ1/](raw-results-RQ1/)\nContains the raw results for RQ1. Specifically, the directory contains a subdirectory for each group (G1-G10). Each subdirectory contains:\n- For each user (named using their Prolific  IDs, a directory containing, for each question (Q1-Q6) the produced python code (Qn.py) its output (QnR.txt) and its StdErr output (QnErr.txt).\n- \"expected-outputs/\": A directory containing the expected outputs for each task (Qn.txt).\n\n#### [working-results/RQ1-RQ2-files-for-statistical-analysis/](working-results/RQ1-RQ2-files-for-statistical-analysis/)\nContains three .csv files used as input for conducting the statistical analysis and drawing the graphs for addressing the first two research questions of the study. Specifically:\n\n- [ConstructUsage.csv](working-results/RQ1-RQ2-files-for-statistical-analysis/ConstructUsage.csv) contains the declared frequency usage of the three functional constructs object of the study. This file is used to draw Figure 4. The file contains an entry for each participant, reporting the (text-coded) frequency of construct usage for Comprehension, Lambda, and MRF.\n\n- [RQ1.csv](working-results/RQ1-RQ2-files-for-statistical-analysis/RQ1.csv) contains the collected data used for the mixed-effect logistic regression relating the use of functional constructs with the correctness of the change task, as well as the logistic regression relating the use of map/reduce/filter functions with the correctness of the change task. \n</output>",
+      "exec_time": 0.07779717445373535
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I now need to follow the workflow\u2019s Step 3 and search the README for any Docker-related instructions, which will later guide how to execute the analysis environment.\n\n<mini_swe_agent_bash>\ngrep -in \"docker\" /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.576253175735474,
+        "response": {
+          "id": "chatcmpl-D0jIZo7DHiLAJfGif5BiLDXmqnxCf",
+          "created": 1769066499,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I now need to follow the workflow\u2019s Step 3 and search the README for any Docker-related instructions, which will later guide how to execute the analysis environment.\n\n<mini_swe_agent_bash>\ngrep -in \"docker\" /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 290,
+            "prompt_tokens": 7389,
+            "total_tokens": 7679,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 195,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 2432
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n163:This script can be used to run the R script `FuncConstructs-Statistics.r` using a Docker container (see Option 1 below) in Unix operating systems.\n166:This script can be used to run the R script `FuncConstructs-Statistics.r` using a Docker container (see Option 1 below) in Windows operating systems (power shell recommended).\n169:This script can be used to run a local Jupyter server (with R kernel and all required packages) from a Docker container (see Option 3 below) in Unix operating system.\n172:This script can be used to run a local Jupyter server (with R kernel and all required packages) from a Docker container (see Option 3 below) in Windows operating systems (power shell recommended).\n178:1. **Running the R script using Dockerized R installation**: this is the simplest option, and it simply requires a running Docker engine. In **Unix (MacOS, Linux)**, to produce the results, one has to run the shell script \"run-analysis.sh\" (e.g., by typing `sh run-analysis.sh` or simply `./run-analysis.sh` after making it executable).  In **Windows**, one has to run the script \"run-analysis.bat\" instead (by typing `.\\run-analysis.bat`). This script (either .sh or .bat) will:\n179:    - Pull a docker image named `mdipenta/rexp` which contains an R installation with all required packages.\n183:          1. In **Unix**: `docker run -v${PWD}:/data --rm -ti --name shell mdipenta/rexp:latest bash` in **Windows**: `docker run -v %cd%:/data --rm -ti --name shell mdipenta/rexp:latest bash`    \n188:2. **Running the R script from own R installation**: this option works if one has an R installation already (or wants to use an R installation) without relying on the Docker image. The steps to be followed are:\n192:3. **Using the Jupyter Notebook using a Dockerized Jupyter lab with R kernel**: this option allows for opening the Jupyter Notebook with all results without having to install Jupyter with the R kernel, nor all the required R packages. The steps required are:\n194:    - Open a browser on [localhost:8888](http://localhost:8888) (or if it does not work, [127.0.0.1:8888)](http://127.0.0.1:8888) and, when being asked for a password, type `docker`. \n</output>",
+      "exec_time": 0.07926058769226074
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I have identified Docker-related instructions; now I must continue Step 3 by locating any README references to \u201cTable 3\u201d to understand how that specific table is reproduced.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 3\" /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 4.171290159225464,
+        "response": {
+          "id": "chatcmpl-D0jIeMTAb9v1amVH7X95e8w8eFreG",
+          "created": 1769066504,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I have identified Docker-related instructions; now I must continue Step 3 by locating any README references to \u201cTable 3\u201d to understand how that specific table is reproduced.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 3\" /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 158,
+            "prompt_tokens": 8050,
+            "total_tokens": 8208,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 59,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 6016
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>1</returncode>\n<output>\n</output>",
+      "exec_time": 0.07178044319152832
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: There is no direct \u201cTable 3\u201d mention in the README, so I should read the section that explains how to run the analyses (especially the Docker-based `run-analysis.sh` using `FuncConstructs-Statistics.r`) to infer how all tables, including Table 3, are produced.\n\n<mini_swe_agent_bash>\nsed -n '160,230p' /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.8153076171875,
+        "response": {
+          "id": "chatcmpl-D0jIjdWF8CoqPJEIAk8qWi1a6F72e",
+          "created": 1769066509,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: There is no direct \u201cTable 3\u201d mention in the README, so I should read the section that explains how to run the analyses (especially the Docker-based `run-analysis.sh` using `FuncConstructs-Statistics.r`) to infer how all tables, including Table 3, are produced.\n\n<mini_swe_agent_bash>\nsed -n '160,230p' /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 206,
+            "prompt_tokens": 8165,
+            "total_tokens": 8371,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 80,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 7296
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nThis file contains the code to re-execute all the analysis conducted in the paper as a Jupyter Notebook (using the R Kernel).\n\n### [run-analysis.sh](run-analysis.sh)\nThis script can be used to run the R script `FuncConstructs-Statistics.r` using a Docker container (see Option 1 below) in Unix operating systems.\n\n### [run-analysis.bat](run-analysis.bat)\nThis script can be used to run the R script `FuncConstructs-Statistics.r` using a Docker container (see Option 1 below) in Windows operating systems (power shell recommended).\n\n### [run-jupyter-container.sh](run-jupyter-container.sh)\nThis script can be used to run a local Jupyter server (with R kernel and all required packages) from a Docker container (see Option 3 below) in Unix operating system.\n\n### [run-jupyter-container.bat](run-jupyter-container.bat)\nThis script can be used to run a local Jupyter server (with R kernel and all required packages) from a Docker container (see Option 3 below) in Windows operating systems (power shell recommended).\n\n\n### How to Run the scripts\nThere are four options to run the scripts. In all cases, one has first to open a shell terminal window (e.g., bash or sh in Unixes) in the replication package directory. For Windows, we suggest to use a Power Shell.\n\n1. **Running the R script using Dockerized R installation**: this is the simplest option, and it simply requires a running Docker engine. In **Unix (MacOS, Linux)**, to produce the results, one has to run the shell script \"run-analysis.sh\" (e.g., by typing `sh run-analysis.sh` or simply `./run-analysis.sh` after making it executable).  In **Windows**, one has to run the script \"run-analysis.bat\" instead (by typing `.\\run-analysis.bat`). This script (either .sh or .bat) will:\n    - Pull a docker image named `mdipenta/rexp` which contains an R installation with all required packages.\n    - Run R from the container created from the image and produce the paper's results under a directory named `results/`.\n    \n    - **Note:** An alternative would be to run everything from inside the container, after running it in interactive mode. To this aim, please execute the following commands:\n          1. In **Unix**: `docker run -v${PWD}:/data --rm -ti --name shell mdipenta/rexp:latest bash` in **Windows**: `docker run -v %cd%:/data --rm -ti --name shell mdipenta/rexp:latest bash`    \n          2. `cd data`\n          3. `R --no-save < FuncConstructs-Statistics.r`\n    After exiting the container, the \"results\" directory will be again populated with the study results.\n        \n2. **Running the R script from own R installation**: this option works if one has an R installation already (or wants to use an R installation) without relying on the Docker image. The steps to be followed are:\n   - Uncomment the `install.packages(..)` instruction in the first lines of the script. This will allow for the installation of the required packages.\n   - Just run, from the current directory, the script `FuncConstructs-Statistics.r`, using the command `Rscript FuncConstructs-Statistics.r` (making sure the directory containing Rscript is in your PATH, this should work fine in Unixes, it might require to modify the PATH environment variable in Windows). Should you experience problems with the first part of the script (installations), try to execute the `install.packages(..)` statement from your R GUI, and then run the script again.\n   \n3. **Using the Jupyter Notebook using a Dockerized Jupyter lab with R kernel**: this option allows for opening the Jupyter Notebook with all results without having to install Jupyter with the R kernel, nor all the required R packages. The steps required are:\n    - Run the `./run-jupyter-container.sh` (**Unix**) or `.\\run-jupyter-container.bat` (**Windows**). It will download the `mdipenta/myjupyter` image and run Jupyter lab from it.\n    - Open a browser on [localhost:8888](http://localhost:8888) (or if it does not work, [127.0.0.1:8888)](http://127.0.0.1:8888) and, when being asked for a password, type `docker`. \n    - From the Jupyter lab page, open the \"FuncConstruct-Statistics.ipynb\" notebook, and (if you wish) re-run it, or simply browse its results. Note: differently from options 1 and 2, results are not saved, but just displayed in the notebook.\n    \n4. **Using the Jupyter Notebook from your installation**: this is similar to Option 3, but it can work if you have already Jupyter lab installed, with the R kernel enabled (for details see: [https://github.com/IRkernel/IRkernel](https://github.com/IRkernel/IRkernel)). The steps to follow are:\n    - Run jupyter lab (e.g., jupyter lab from the command line) and open it on a webpage.\n    - Open the `FuncConstruct-Statistics.ipynb` notebook.\n    - If you want to re-execute it, uncomment the `install.packages()` line.\n    - Re-run it (if you wish).\n    \n\n### The output\nIf using Option 1 or 2, the `results` directory will contain the following files:\n\n- **Figures 4 and 5** as in the paper.\n- **Tables 2-9** as in the paper in various formats (csv, tex, and for Tables 3-5 also .txt). Some notes: The diagnostics (top part, up to \"Fixed effects\") for Tables 3-5 are shown in the .txt files only. However, these files do not report the \"OR\" columns that correspond to exp(Estimate). This is because the .txt file contains the statistics dump which does not include the ORs. The .csv and .tex tables report the Fixed effects as shown in the paper, including the ORs. \n- **rq1-rq2-correlation** (.tex and .csv) contains the correlation analysis between RQ1 and RQ2 results as discussed in the \"Threats to construct validity\" (Section 6).\n- **rq3-inter-rater** (.tex and .csv) contains the results of the inter-rater agreements analysis discussed in Section 3.6.\n</output>",
+      "exec_time": 0.10230660438537598
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I now understand from the README that Option 1 uses Docker via `run-analysis.sh` to regenerate all tables, including Table 3. Before adapting those instructions, I should inspect `run-analysis.sh` to see exactly which Docker command it uses so I can later mirror it with the required `docker run -d ... && docker exec ...` pattern.\n\n<mini_swe_agent_bash>\nsed -n '1,200p' /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/run-analysis.sh\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 9.151559829711914,
+        "response": {
+          "id": "chatcmpl-D0jImvXMfig0JZNJwd1Ak9MNwxVAF",
+          "created": 1769066512,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I now understand from the README that Option 1 uses Docker via `run-analysis.sh` to regenerate all tables, including Table 3. Before adapting those instructions, I should inspect `run-analysis.sh` to see exactly which Docker command it uses so I can later mirror it with the required `docker run -d ... && docker exec ...` pattern.\n\n<mini_swe_agent_bash>\nsed -n '1,200p' /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/run-analysis.sh\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 452,
+            "prompt_tokens": 9707,
+            "total_tokens": 10159,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 315,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 8064
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n#! /bin/sh\ncat FuncConstructs-Statistics.r | docker run --workdir /data -v${PWD}:/data --rm -i mdipenta/rexp R --no-save\n\n</output>",
+      "exec_time": 0.09300065040588379
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: To follow the README\u2019s Option 1 using Docker and conform to the workflow (docker pull \u2192 docker run -d \u2192 docker exec), I need to first download the required Docker image `mdipenta/rexp`, which contains R and all needed packages. This will enable running `FuncConstructs-Statistics.r` inside a container to regenerate all tables, including Table 3.\n\n<mini_swe_agent_bash>\ndocker pull mdipenta/rexp:latest\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 8.042728424072266,
+        "response": {
+          "id": "chatcmpl-D0jIw2earxh7bq4JuOWCNfV9IoZSM",
+          "created": 1769066522,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: To follow the README\u2019s Option 1 using Docker and conform to the workflow (docker pull \u2192 docker run -d \u2192 docker exec), I need to first download the required Docker image `mdipenta/rexp`, which contains R and all needed packages. This will enable running `FuncConstructs-Statistics.r` inside a container to regenerate all tables, including Table 3.\n\n<mini_swe_agent_bash>\ndocker pull mdipenta/rexp:latest\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 431,
+            "prompt_tokens": 9901,
+            "total_tokens": 10332,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 316,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 9600
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nlatest: Pulling from mdipenta/rexp\nce770424bb52: Pulling fs layer\n93e82a75aac0: Pulling fs layer\n3b4fabfc2028: Pulling fs layer\nb5d741cf0358: Pulling fs layer\nf1fd527ca7d8: Pulling fs layer\nc257a24d30ff: Pulling fs layer\n0dea090e8a9c: Pulling fs layer\n6535430f934d: Pulling fs layer\nc257a24d30ff: Waiting\nb5d741cf0358: Waiting\nf1fd527ca7d8: Waiting\n0dea090e8a9c: Waiting\n6535430f934d: Waiting\n93e82a75aac0: Verifying Checksum\n93e82a75aac0: Download complete\nb5d741cf0358: Verifying Checksum\nb5d741cf0358: Download complete\nf1fd527ca7d8: Verifying Checksum\nf1fd527ca7d8: Download complete\n3b4fabfc2028: Verifying Checksum\n3b4fabfc2028: Download complete\nce770424bb52: Verifying Checksum\nce770424bb52: Download complete\n6535430f934d: Verifying Checksum\n6535430f934d: Download complete\nce770424bb52: Pull complete\n93e82a75aac0: Pull complete\n3b4fabfc2028: Pull complete\nb5d741cf0358: Pull complete\nf1fd527ca7d8: Pull complete\n0dea090e8a9c: Verifying Checksum\n0dea090e8a9c: Download complete\nc257a24d30ff: Verifying Checksum\nc257a24d30ff: Download complete\nc257a24d30ff: Pull complete\n0dea090e8a9c: Pull complete\n6535430f934d: Pull complete\nDigest: sha256:30714b4705ec49cc25cdd3e33a5f46098f4265be93f1dddd6473d42defdd5dc4\nStatus: Downloaded newer image for mdipenta/rexp:latest\ndocker.io/mdipenta/rexp:latest\n</output>",
+      "exec_time": 26.775847911834717
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The Docker image is available; next I should start a long-lived container following the guidelines (detached, with `bash -c 'sleep infinity'`) and mount the artifact directory at `/data`, so I can later exec into it and run the R script to regenerate the tables.\n\n<mini_swe_agent_bash>\ndocker run -d --init --name funcconstructs_rexp -v /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts:/data mdipenta/rexp:latest bash -c 'sleep infinity'\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 15.820053100585938,
+        "response": {
+          "id": "chatcmpl-D0jJVPZKb1dLjY7eZbw7BZTZR7Lgt",
+          "created": 1769066557,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The Docker image is available; next I should start a long-lived container following the guidelines (detached, with `bash -c 'sleep infinity'`) and mount the artifact directory at `/data`, so I can later exec into it and run the R script to regenerate the tables.\n\n<mini_swe_agent_bash>\ndocker run -d --init --name funcconstructs_rexp -v /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts:/data mdipenta/rexp:latest bash -c 'sleep infinity'\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 761,
+            "prompt_tokens": 10541,
+            "total_tokens": 11302,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 620,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n1c74272af32b546317c3024dad825732f89058315cd298adab233e6672622ceb\n</output>",
+      "exec_time": 0.7432861328125
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: With the container running and the artifact mounted at `/data`, I now need to execute the R analysis script inside the container so it regenerates all tables (including Table 3) into the `results/` directory as described in the README.\n\n<mini_swe_agent_bash>\ndocker exec funcconstructs_rexp /bin/bash --noprofile --norc -c \"cd /data && R --no-save < FuncConstructs-Statistics.r\"\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 15.078325033187866,
+        "response": {
+          "id": "chatcmpl-D0jJl6eo6UA2ATGgehSsRcVZL4itR",
+          "created": 1769066573,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: With the container running and the artifact mounted at `/data`, I now need to execute the R analysis script inside the container so it regenerates all tables (including Table 3) into the `results/` directory as described in the README.\n\n<mini_swe_agent_bash>\ndocker exec funcconstructs_rexp /bin/bash --noprofile --norc -c \"cd /data && R --no-save < FuncConstructs-Statistics.r\"\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 860,
+            "prompt_tokens": 10728,
+            "total_tokens": 11588,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 746,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 9856
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n\nR version 4.3.2 (2023-10-31) -- \"Eye Holes\"\nCopyright (C) 2023 The R Foundation for Statistical Computing\nPlatform: x86_64-pc-linux-gnu (64-bit)\n\nR is free software and comes with ABSOLUTELY NO WARRANTY.\nYou are welcome to redistribute it under certain conditions.\nType 'license()' or 'licence()' for distribution details.\n\n  Natural language support but running in an English locale\n\nR is a collaborative project with many contributors.\nType 'contributors()' for more information and\n'citation()' on how to cite R or R packages in publications.\n\nType 'demo()' for some demos, 'help()' for on-line help, or\n'help.start()' for an HTML browser interface to help.\nType 'q()' to quit R.\n\n> # Uncomment the following line to run this script from own R installation\n> #install.packages(c(\"likert\", \"parameters\", \"reshape\", \"lme4\",\"xtable\",\"exact2x2\",\"MASS\",\"irr\"))\n> \n> library(likert)\nLoading required package: ggplot2\nLoading required package: xtable\n> library(parameters)\n\nAttaching package: \u2018parameters\u2019\n\nThe following object is masked from \u2018package:xtable\u2019:\n\n    display\n\n> library(reshape)\n> library(lme4)\nLoading required package: Matrix\n\nAttaching package: \u2018Matrix\u2019\n\nThe following object is masked from \u2018package:reshape\u2019:\n\n    expand\n\n> library(xtable)\n> library(exact2x2)\nLoading required package: exactci\nLoading required package: ssanv\nLoading required package: testthat\n> library(MASS)\n> library(irr)\nLoading required package: lpSolve\n> \n> \n> inputDir=\"working-results//RQ1-RQ2-files-for-statistical-analysis\"\n> outputDir=\"results\"\n> irrDir=\"working-results//inter-rater-RQ3-files\"\n> \n> # Creates the output directory\n> dir.create(outputDir)\nWarning message:\nIn dir.create(outputDir) : 'results' already exists\n> \n> # Writes a data frame into a CSV file\n> toCSV<-function(data,fileName){\n+     outFile=paste(outputDir,fileName,sep=\"//\")\n+     write.csv(data,file=outFile,quote=FALSE,row.names=FALSE)\n+ }\n> \n> # Writes a data object into a textual file\n> toTxt<-function(data,fileName){\n+     outFile=paste(outputDir,fileName,sep=\"//\")\n+     capture.output(\n+         print(data),\n+         file=outFile)\n+ }\n> \n> # Writes a data frame into a LaTex file, creating a table with a label and caption\n> toLaTex<-function(data,fileName,label,caption){\n+     outFileLatex=paste(outputDir,fileName,sep=\"//\")\n+     capture.output(\n+         print(xtable(data,digits=3,label=label,caption=caption)),\n+         file=outFileLatex)\n+ }\n> \n> ##############################\n> # DEMOGRAPHICS\n> ##############################\n> \n> ### Likert Plot of constructs' usage (Figure 4)\n> \n> t2<-read.csv(paste(inputDir,\"ConstructUsage.csv\",sep=\"//\"))\n> t2<-subset(t2,t2$Comprehension!=\"Never\" | t2$Lambda!=\"Never\" | t2$MRF!=\"Never\")\n> mylevels <- c('Never', 'Less than 25%', 'Between 25% and 75%', 'More than 75%')\n> s2 <- as.data.frame(lapply(t2,function(x) {factor(x,levels=mylevels)}))\n> \n> \n> l=likert(s2)\n> par(mar = c(0, 0, 0, 0)) \n> pdf(file=paste(outputDir,\"Figure-4-ConstructUsage.pdf\",sep=\"//\"),width=10,height=3)\n> p<-plot(l,text.size=4,group.order=c(\"Lambda\",\"Comprehension\",\"MRF\"))\n> p+theme(axis.title.x=element_text(size = 16),\n+         axis.text.x=element_text(size = 14),\n+         axis.text.y=element_text(size = 14),\n+         text=element_text(size = 14),\n+         legend.title=element_text(size = 14),\n+         legend.text=element_text(size = 14))\n> dev.off()\npdf \n  2 \n> \n> ##########################################\n> # RQ1 - Descriptive statistics (Table 2)\n> ##########################################\n> t<-read.csv(paste(inputDir,\"RQ1.csv\",sep=\"//\"))\n> sections<-c(\"lambda\",\"comp\",\"mrf\")\n> res<-list(Construct=c(),Ftrue=c(),Ffalse=c(),Fperc=c(),Ptrue=c(),Pfalse=c(),Pperc=c())\n> for(section in sections)\n+ {\n+   tsub<-subset(t,t$Section==section)\n+   tt<-table(tsub$Outcome,tsub$MainFactor)\n+   res$Construct=c(res$Construct,section)\n+   \n+   res$Ftrue=c(res$Ftrue,tt[2,1])\n+   res$Ffalse=c(res$Ffalse,tt[1,1])\n+   res$Fperc=c(res$Fperc,100*tt[2,1]/(tt[1,1]+tt[2,1]))\n+   \n+   res$Ptrue=c(res$Ptrue,tt[2,2])\n+   res$Pfalse=c(res$Pfalse,tt[1,2])\n+   res$Pperc=c(res$Pperc,100*tt[2,2]/(tt[1,2]+tt[2,2]))\n+ }\n> res=data.frame(res)\n> res\n  Construct Ftrue Ffalse    Fperc Ptrue Pfalse    Pperc\n1    lambda   112     98 53.33333   115     95 54.76190\n2      comp    99    111 47.14286   114     96 54.28571\n3       mrf    80    130 38.09524    85    125 40.47619\n> \n> outFile=paste(outputDir,\"Table-2-descriptive.csv\",sep=\"//\")\n> toCSV(res,\"Table-2-descriptive.csv\")\n> toLaTex(res,\"Table-2-descriptive.tex\",\"tab:descr\",\"Number and percentage of correct/wrong tasks for functional constructs and their procedural alternatives\")\n> \n> \n> \n> \n> ############################################################\n> # RQ1 - Generalized linear models for different constructs\n> ############################################################\n> \n> \n> # Add 1 offset to Complexity as in the files it starts from 0\n> t$Complexity=t$Complexity+1\n> \n> print(\"LAMBDA:\")\n[1] \"LAMBDA:\"\n> tLambda<-subset(t,t$Section==\"lambda\" & t$UsageFrequency>1)\n> tLambda=droplevels(tLambda)\n> attach(tLambda)\n> \n> model<-glmer(Outcome~MainFactor*Complexity+UsageFrequency+Approvals+Student+(1|User),family=\"binomial\",data=tLambda,control=glmerControl(optimizer=\"nloptwrap\",calc.derivs=FALSE,optCtrl=list(maxfun=2e6)))\n> smod=summary(model)\n> smod$coefficients[,4]=p.adjust(smod$coefficients[,4],method=\"BH\")\n> mc=smod$coefficients\n> OR=exp(mc[,1])\n> coeffTable<-cbind(OR,mc)\n> #pvalues=coeffTable[,5]\n> #padjusted=p.adjust(pvalues,method=\"BH\")\n> #coeffTable[,5]=padjusted\n> toTxt(smod,\"Table-3-RQ1-lambda.txt\")\n> toCSV(coeffTable,\"Table-3-RQ1-lambda-coeff.txt\")\n> toLaTex(coeffTable,\"Table-3-RQ1-lambda-coeff.tex\",\"tab:rq1lambda\",\"RQ$_1$: Mixed-effect logistic regression relating the use of lambdas with the correctness of the change task\")\n> \n> \n> print(\"COMPREHENSION:\")\n[1] \"COMPREHENSION:\"\n> tComp=subset(t,t$Section==\"comp\" & t$UsageFrequency>1)\n> tComp=droplevels(tComp)\n> attach(tComp)\nThe following objects are masked from tLambda:\n\n    Approvals, Complexity, Construct, Group, MainFactor, Outcome,\n    Question, Section, Student, Time, UsageFrequency, User\n\n> model<-glmer(Outcome~MainFactor*Complexity+UsageFrequency+Approvals+Student+(1|User),data=tComp,family=\"binomial\",control=glmerControl(optimizer=\"nloptwrap\",calc.derivs=FALSE,optCtrl=list(maxfun=2e6)))\n> smod=summary(model)\n> smod$coefficients[,4]=p.adjust(smod$coefficients[,4],method=\"BH\")\n> mc=smod$coefficients\n> OR=exp(mc[,1])\n> coeffTable<-cbind(OR,mc)\n> #pvalues=coeffTable[,5]\n> #padjusted=p.adjust(pvalues,method=\"BH\")\n> #coeffTable[,5]=padjusted\n> toTxt(smod,\"Table-4-RQ1-comp.txt\")\n> toCSV(coeffTable,\"Table-4-RQ1-comp-coeff.txt\")\n> toLaTex(coeffTable,\"Table-4-RQ1-comp-coeff.tex\",\"tab:rq1comp\",\"RQ$_1$: Mixed-effect logistic regression relating the use of comprehensions with the correctness of the change task\")\n> \n> \n> \n> print(\"MRF:\")\n[1] \"MRF:\"\n> tMrf=subset(t,t$Section==\"mrf\" & t$UsageFrequency>1)\n> tMrf=droplevels(tMrf)\n> attach(tMrf)\nThe following objects are masked from tComp:\n\n    Approvals, Complexity, Construct, Group, MainFactor, Outcome,\n    Question, Section, Student, Time, UsageFrequency, User\n\nThe following objects are masked from tLambda:\n\n    Approvals, Complexity, Construct, Group, MainFactor, Outcome,\n    Question, Section, Student, Time, UsageFrequency, User\n\n> model<-glmer(Outcome~MainFactor+UsageFrequency+Approvals+Student+(1|User),data=tMrf,family=\"binomial\",control=glmerControl(optimizer=\"nloptwrap\",calc.derivs=FALSE,optCtrl=list(maxfun=2e6)))\n> smod=summary(model)\n> mc=smod$coefficients\n> smod$coefficients[,4]=p.adjust(smod$coefficients[,4],method=\"BH\")\n> OR=exp(mc[,1])\n> coeffTable<-cbind(OR,mc)\n> #pvalues=coeffTable[,5]\n> #padjusted=p.adjust(pvalues,method=\"BH\")\n> #coeffTable[,5]=padjusted\n> toTxt(smod,\"Table-5-RQ1-mrf.txt\")\n> toCSV(coeffTable,\"Table-5-RQ1-mrf-coeff.txt\")\n> toLaTex(coeffTable,\"Table-5-RQ1-mrf-coeff.tex\",\"tab:rq1mrf\",\"RQ$_1$: Mixed-effect logistic regression relating the use of MRF with the correctness of the change task\")\n> \n> \n> print(\"MAP:\")\n[1] \"MAP:\"\n> tMrf=subset(t,t$Section==\"mrf\" & t$Construct==\"map\" & t$UsageFrequency>1)\n> tMrf=droplevels(tMrf)\n> attach(tMrf)\nThe following objects are masked from tMrf (pos = 3):\n\n    Approvals, Complexity, Construct, Group, MainFactor, Outcome,\n    Question, Section, Student, Time, UsageFrequency, User\n\nThe following objects are masked from tComp:\n\n    Approvals, Complexity, Construct, Group, MainFactor, Outcome,\n    Question, Section, Student, Time, UsageFrequency, User\n\nThe following objects are masked from tLambda:\n\n    Approvals, Complexity, Construct, Group, MainFactor, Outcome,\n    Question, Section, Student, Time, UsageFrequency, User\n\n> model<-glm(Outcome~MainFactor+UsageFrequency+Approvals+Student,data=tMrf,family=\"binomial\")\n> smod=summary(model)\n> mc=smod$coefficients\n> pvalues=mc[,4]\n> padjusted=p.adjust(pvalues,method=\"BH\")\n> mc[,4]=padjusted\n> toCSV(mc,\"Table-6-RQ1-map.csv\")\n> caption=paste(\"RQ$_1$: Logistic regression relating the use of map with the correctness of the change task (AIC=\",round(model$aic),\")\",sep=\"\")\n> toLaTex(mc,\"Table-6-RQ1-map.tex\",\"tab:rq1map\",caption)\n> \n> \n> print(\"REDUCE:\")\n[1] \"REDUCE:\"\n> tMrf=subset(t,t$Section==\"mrf\" & t$Construct==\"reduce\" & t$UsageFrequency>1)\n> tMrf=droplevels(tMrf)\n> attach(tMrf)\nThe following objects are masked from tMrf (pos = 3):\n\n    Approvals, Complexity, Construct, Group, MainFactor, Outcome,\n    Question, Section, Student, Time, UsageFrequency, User\n\nThe following objects are masked from tMrf (pos = 4):\n\n    Approvals, Complexity, Construct, Group, MainFactor, Outcome,\n    Question, Section, Student, Time, UsageFrequency, User\n\nThe following objects are masked from tComp:\n\n    Approvals, Complexity, Construct, Group, MainFactor, Outcome,\n    Question, Section, Student, Time, UsageFrequency, User\n\nThe following objects are masked from tLambda:\n\n    Approvals, Complexity, Construct, Group, MainFactor, Outcome,\n    Question, Section, Student, Time, UsageFrequency, User\n\n> model<-glm(Outcome~MainFactor+UsageFrequency+Approvals+Student,family=\"binomial\")\n> smod=summary(model)\n> mc=smod$coefficients\n> pvalues=mc[,4]\n> padjusted=p.adjust(pvalues,method=\"BH\")\n> mc[,4]=padjusted\n> toCSV(mc,\"Table-7-RQ1-reduce.csv\")\n> caption=paste(\"RQ$_1$: Logistic regression relating the use of reduce with the correctness of the change task (AIC=\",round(model$aic),\")\",sep=\"\")\n> toLaTex(mc,\"Table-7-RQ1-reduce.tex\",\"tab:rq1reduce\",caption)\n> \n> \n> \n> print(\"FILTER:\")\n[1] \"FILTER:\"\n> tMrf=subset(t,t$Section==\"mrf\" & t$Construct==\"filter\" & t$UsageFrequency>1)\n> tMrf=droplevels(tMrf)\n> attach(tMrf)\nThe following objects are masked from tMrf (pos = 3):\n\n    Approvals, Complexity, Construct, Group, MainFactor, Outcome,\n    Question, Section, Student, Time, UsageFrequency, User\n\nThe following objects are masked from tMrf (pos = 4):\n\n    Approvals, Complexity, Construct, Group, MainFactor, Outcome,\n    Question, Section, Student, Time, UsageFrequency, User\n\nThe following objects are masked from tMrf (pos = 5):\n\n    Approvals, Complexity, Construct, Group, MainFactor, Outcome,\n    Question, Section, Student, Time, UsageFrequency, User\n\nThe following objects are masked from tComp:\n\n    Approvals, Complexity, Construct, Group, MainFactor, Outcome,\n    Question, Section, Student, Time, UsageFrequency, User\n\nThe following objects are masked from tLambda:\n\n    Approvals, Complexity, Construct, Group, MainFactor, Outcome,\n    Question, Section, Student, Time, UsageFrequency, User\n\n> model<-glm(Outcome~MainFactor+UsageFrequency+Approvals+Student,family=\"binomial\")\n> smod=summary(model)\n> mc=smod$coefficients\n> pvalues=mc[,4]\n> padjusted=p.adjust(pvalues,method=\"BH\")\n> mc[,4]=padjusted\n> toCSV(mc,\"Table-8-RQ1-filter.csv\")\n> caption=paste(\"RQ$_1$: Logistic regression relating the use of filter with the correctness of the change task (AIC=\",round(model$aic),\")\",sep=\"\")\n> toLaTex(mc,\"Table-8-RQ1-filter.tex\",\"tab:rq1filter\",caption)\n> \n> \n> \n> ##############################\n> # RQ2\n> ##############################\n> \n> # Reads the dataset\n> cmp<-read.csv(paste(inputDir,\"RQ1Paired-RQ2.csv\",sep=\"//\"))\n> \n> # Prepares the dataset\n> clambda=subset(cmp,cmp$LambdaUsageFrequency>1 & cmp$LambdaComparisonAssessment!=\"extreme_chatgpt\" & cmp$LambdaComparisonAssessment!=\"no\",select=c(LambdaComp))\n> clambda[,1]=as.factor(clambda[,1])\n> ccomp=subset(cmp,cmp$CompUsageFrequency>1 & cmp$CompComparisonAssessment!=\"extreme_chatgpt\" & cmp$CompComparisonAssessment!=\"no\",select=c(CompComp))\n> \n> ccomp[,1]=as.factor(ccomp[,1])\n> cmrf=subset(cmp,cmp$MrfUsageFrequency>1 & cmp$MrfComparisonAssessment!=\"extreme_chatgpt\" & cmp$MrfComparisonAssessment!=\"no\",select=c(MrfComp))\n> cmrf[,1]=as.factor(cmrf[,1])\n> cmap=subset(cmp,cmp$MrfUsageFrequency>1 & cmp$MrfCompType==\"map\" & cmp$MrfComparisonAssessment!=\"extreme_chatgpt\" & cmp$MrfComparisonAssessment!=\"no\",select=c(MrfComp))\n> cmap[,1]=as.factor(cmap[,1])\n> creduce=subset(cmp,cmp$MrfUsageFrequency>1 & cmp$MrfCompType==\"reduce\" & cmp$MrfComparisonAssessment!=\"extreme_chatgpt\" & cmp$MrfComparisonAssessment!=\"no\",select=c(MrfComp))\n> creduce[,1]=as.factor(creduce[,1])\n> cfilter=subset(cmp,cmp$MrfUsageFrequency>1 & cmp$MrfCompType==\"filter\" & cmp$MrfComparisonAssessment!=\"extreme_chatgpt\" & cmp$MrfComparisonAssessment!=\"no\",select=c(MrfComp))\n> cfilter[,1]=as.factor(cfilter[,1])\n> \n> lenmax=max(c(nrow(clambda),nrow(ccomp),nrow(cmrf)))\n> col_lambda=c(clambda[,1],rep(NA,lenmax-nrow(clambda)))\n> col_comp=c(ccomp[,1],rep(NA,lenmax-nrow(ccomp)))\n> col_mrf=c(cmrf[,1],rep(NA,lenmax-nrow(cmrf)))\n> col_map=c(cmap[,1],rep(NA,lenmax-nrow(cmap)))\n> col_reduce=c(creduce[,1],rep(NA,lenmax-nrow(creduce)))\n> col_filter=c(cfilter[,1],rep(NA,lenmax-nrow(cfilter)))\n> \n> newdf=data.frame(Lambda=as.factor(col_lambda),Comprehension=as.factor(col_comp),\n+                  MRF=as.factor(col_mrf),Map=as.factor(col_map),\n+                  Reduce=as.factor(col_reduce),Filter=as.factor(col_filter))\n> \n> \n> # Creates the Likert plot\n> l=likert(newdf)\n> \n> pdf(file=paste(outputDir,\"Figure-5-RQ2-Likert.pdf\",sep=\"//\"),width=10,height=3)\n> p<-plot(l,text.size=4,group.order=c(\"Lambda\",\"Comprehension\",\"MRF\",\"Map\",\"Reduce\",\"Filter\"))\n> p+theme(axis.title.x=element_text(size = 14),\n+         axis.text.x=element_text(size = 12),\n+         axis.text.y=element_text(size = 12),\n+         text=element_text(size = 12),\n+         legend.title=element_text(size = 12),\n+         legend.text=element_text(size = 12))\n> dev.off()\npdf \n  2 \n> \n> ################################################\n> # RQ2 - Statistics (ordinal logistic regression)\n> ################################################\n> \n> ## Lambda\n> clambda=subset(cmp,cmp$LambdaUsageFrequency>1 & cmp$LambdaComparisonAssessment!=\"extreme_chatgpt\" & cmp$LambdaComparisonAssessment!=\"no\")\n> model<-polr(as.factor(LambdaComp)~LambdaUsageFrequency+LambdaCompCplx,data=clambda,Hess=T)\n> summary(model)\nCall:\npolr(formula = as.factor(LambdaComp) ~ LambdaUsageFrequency + \n    LambdaCompCplx, data = clambda, Hess = T)\n\nCoefficients:\n                       Value Std. Error t value\nLambdaUsageFrequency  0.8302     0.3136  2.6473\nLambdaCompCplx       -0.1324     0.1811 -0.7308\n\nIntercepts:\n    Value   Std. Error t value\n1|2  1.6143  0.8068     2.0009\n2|3  3.4802  0.8620     4.0375\n3|4  4.5905  0.9227     4.9751\n4|5  6.0351  1.1102     5.4360\n\nResidual Deviance: 292.1506 \nAIC: 304.1506 \n> coeffs <- coef(summary(model))\n> p <- pnorm(abs(coeffs[, \"t value\"]), lower.tail = FALSE) * 2\n> OR<-exp(coeffs[,\"Value\"])\n> tab<-cbind(OR=OR,coeffs, \"p value\" = round(p,3))\n> tab=tab[1:2,]\n> tab[,5]=p.adjust(tab[,5],method=\"BH\")\n> toCSV(tab,\"Table-9-rq2-lambda.csv\")\n> toLaTex(tab,\"Table-9-rq2-lambda.tex\",\"tab:ordinal\",\"RQ$_2$: Ordinal logistic regression results of the relationship between perceived understandability of the functional constructs and (i) participants' usage frequency, and (ii) constructs' complexity (except for MRF)\")\n>        \n> # Comprehension\n> ccomp=subset(cmp,cmp$CompUsageFrequency>1 & cmp$CompComparisonAssessment!=\"extreme_chatgpt\" & cmp$CompComparisonAssessment!=\"no\")\n> cmp$CompCompCplx=cmp$CompCompCplx+1\n> model<-polr(as.factor(CompComp)~CompUsageFrequency+CompCompCplx,data=ccomp,Hess=T)\n> summary(model)\nCall:\npolr(formula = as.factor(CompComp) ~ CompUsageFrequency + CompCompCplx, \n    data = ccomp, Hess = T)\n\nCoefficients:\n                     Value Std. Error t value\nCompUsageFrequency  0.4010     0.2178   1.841\nCompCompCplx       -0.2566     0.1130  -2.270\n\nIntercepts:\n    Value   Std. Error t value\n1|2 -0.5266  0.6611    -0.7965\n2|3  0.8886  0.6621     1.3421\n3|4  1.5550  0.6720     2.3141\n4|5  2.7727  0.7056     3.9295\n\nResidual Deviance: 499.1074 \nAIC: 511.1074 \n> coeffs <- coef(summary(model))\n> p <- pnorm(abs(coeffs[, \"t value\"]), lower.tail = FALSE) * 2\n> OR<-exp(coeffs[,\"Value\"])\n> tab<-cbind(OR=OR,coeffs, \"p value\" = round(p,3))\n> tab=tab[1:2,]\n> tab[,5]=p.adjust(tab[,5],method=\"BH\")\n> toCSV(tab,\"Table-9-rq2-comp.csv\")\n> toLaTex(tab,\"Table-9-rq2-comp.tex\",\"tab:ordinal\",\"RQ$_2$: Ordinal logistic regression results of the relationship between perceived understandability of the functional constructs and (i) participants' usage frequency, and (ii) constructs' complexity (except for MRF)\")\n> \n> # MRF\n> cmrf=subset(cmp,cmp$MrfUsageFrequency>1 & cmp$MrfComparisonAssessment!=\"extreme_chatgpt\" & cmp$MrfComparisonAssessment!=\"no\")\n> model<-polr(as.factor(MrfComp)~MrfUsageFrequency,data=cmrf,Hess=T)\n> summary(model)\nCall:\npolr(formula = as.factor(MrfComp) ~ MrfUsageFrequency, data = cmrf, \n    Hess = T)\n\nCoefficients:\n                  Value Std. Error t value\nMrfUsageFrequency 0.581      0.252   2.305\n\nIntercepts:\n    Value  Std. Error t value\n1|2 0.7200 0.6357     1.1325 \n2|3 2.1826 0.6620     3.2970 \n3|4 2.9651 0.6850     4.3283 \n4|5 4.0694 0.7388     5.5080 \n\nResidual Deviance: 402.0062 \nAIC: 412.0062 \n> coeffs <- coef(summary(model))\n> p <- pnorm(abs(coeffs[, \"t value\"]), lower.tail = FALSE) * 2\n> OR<-exp(coeffs[,\"Value\"])\n> tab<-cbind(OR=OR,coeffs, \"p value\" = round(p,3))\n> tab=tab[1:1,]\n> toCSV(tab,\"Table-9-rq2-mrf.csv\")\n> toLaTex(data.frame(t(tab)),\"Table-9-rq2-mrf.tex\",\"tab:ordinal\",\"RQ$_2$: Ordinal logistic regression results of the relationship between perceived understandability of the functional constructs and (i) participants' usage frequency, and (ii) constructs' complexity (except for MRF)\")\n> \n> ############################################\n> # Correlation between RQ1 and RQ2 results\n> ############################################\n> \n> tpaired<-read.csv(paste(inputDir,\"RQ1Paired-RQ2.csv\",sep=\"//\"))\n> types=c(\"Lambda\",\"Comp\",\"Mrf\")\n> \n> dep=list(Lambda=c(),Comp=c(),Mrf=c())\n> for(i in 1:nrow(tpaired))\n+ {\n+   #typeconstruct=\"Lambda\"\n+   for(typeconstruct in types)\n+   {\n+     proc=paste(typeconstruct,\"P\",sep=\"\")\n+     func=paste(typeconstruct,\"F\",sep=\"\")\n+     if(tpaired[[proc]][i]==tpaired[[func]][i])\n+     {\n+       dep[[typeconstruct]]=c(dep[[typeconstruct]],0)\n+     }\n+     else if(tpaired[[proc]][i]==TRUE & tpaired[[func]][i]==FALSE)\n+     {\n+       dep[[typeconstruct]]=c(dep[[typeconstruct]],-1)\n+     }\n+     else\n+     {\n+       dep[[typeconstruct]]=c(dep[[typeconstruct]],1)\n+     }\n+   }\n+ }\n> dep=data.frame(dep)\n> \n> types=c(\"Lambda\",\"Comp\",\"Mrf\")\n> \n> res=list(Construct=c(),p.value=c(),Tau=c())\n> for(construct in types)\n+ {\n+     comparison=paste(construct,\"Comp\",sep=\"\")\n+     correlation=cor.test(dep[[construct]],tpaired[[comparison]],method=\"kendall\")\n+     res$Construct=c(res$Construct,construct)\n+     res$p.value=c(res$p.value,correlation$p.value)\n+     res$Tau=c(res$Tau,correlation$estimate)\n+ }\n> res=data.frame(res)\n> toCSV(res,\"rq1-rq2-correlation.csv\")\n> toLaTex(res,\"rq1-rq2-correlation.tex\",\"tab:rq1-rq2-correlation\",\"RQ1-RQ2 correlation\")\n> \n> \n> \n> ##############################\n> # RQ3 - INTER-RATER-AGREEMENT\n> ##############################\n> \n> res=list(Construct=c(),KrippAlpha=c())\n> \n> #Lambdas\n> df1<-read.csv(paste(irrDir,\"lambda.csv\",sep=\"//\"),sep=\"\\t\",na.string=\"None\")\n> res$Construct=c(res$Construct,\"Lambda\")\n> res$KrippAlpha=c(res$KrippAlpha, kripp.alpha(t(as.matrix(df1)))$value)\nWarning message:\nIn kripp.alpha(t(as.matrix(df1))) : NAs introduced by coercion\n> \n> #Comprehensions\n> df2<-read.csv(paste(irrDir,\"comprehension.csv\",sep=\"//\"),sep=\"\\t\",na.string=\"None\")\n> res$Construct=c(res$Construct,\"Comprehension\")\n> res$KrippAlpha=c(res$KrippAlpha, kripp.alpha(t(as.matrix(df2)))$value)\n> \n> #MRF\n> df3<-read.csv(paste(irrDir,\"mrf.csv\",sep=\"//\"),sep=\"\\t\",na.string=\"None\")\nWarning message:\nIn kripp.alpha(t(as.matrix(df2))) : NAs introduced by coercion\n> res$Construct=c(res$Construct,\"MRF\")\n> res$KrippAlpha=c(res$KrippAlpha, kripp.alpha(t(as.matrix(df3)))$value)\nWarning message:\nIn kripp.alpha(t(as.matrix(df3))) : NAs introduced by coercion\n> \n> #All constructs together\n> df=rbind(df1,df2,df3)\n> res$Construct=c(res$Construct,\"All Functional\")\n> res$KrippAlpha=c(res$KrippAlpha, kripp.alpha(t(as.matrix(df)))$value)\nWarning message:\nIn kripp.alpha(t(as.matrix(df))) : NAs introduced by coercion\n> \n> #Procedural\n> notusing<-read.csv(paste(irrDir,\"procedural.csv\",sep=\"//\"),sep=\"\\t\",na.string=\"None\")\n> res$Construct=c(res$Construct,\"Procedural\")\n> res$KrippAlpha=c(res$KrippAlpha, kripp.alpha(t(as.matrix(notusing)))$value)\nWarning message:\nIn kripp.alpha(t(as.matrix(notusing))) : NAs introduced by coercion\n> \n> res=data.frame(res)\n> \n> toCSV(res,\"rq3-inter-rater.csv\")\n> toLaTex(res,\"rq3-inter-rater.tex\",\"tab:rq3-inter-rater\",\"RQ3 inter-rater agreements (Krippendorff's Alpha)\")\n> \n> \n> ################################################\n> # Removes spurious Rplots.pdf due to ggplot2 bug\n> ################################################\n> if(file.exists(\"Rplots.pdf\"))\n+     {\n+         file.remove(\"Rplots.pdf\")\n+     }\n[1] TRUE\n> \n</output>",
+      "exec_time": 5.554332733154297
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: I\u2019ve already confirmed that running `FuncConstructs-Statistics.r` inside the `mdipenta/rexp` Docker image reproduces all tables, including Table 3, into the `results/` directory. The next step is to create the required `repro_pythonic_table_3.sh` script so it (1) rewrites `expected.md` with the given table, (2) downloads and unpacks the artifact, (3) runs the R analysis via Docker to regenerate the results, (4) collects the Table 3 outputs into `/workspace/repro.txt`, and (5) wraps both expected and reproduced outputs inside an `<artisan_submit>` block. I\u2019ll create this script with a single `cat <<'EOF'` here-doc and then mark it executable.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_pythonic_table_3.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: RQ1: Mixed-effect logistic regression relating the use of lambdas with the correctness of the change task**\n\n|                  |        |\n| ---------------- | ------ |\n| **AIC**          | 438.3  |\n| **BIC**          | 468.5  |\n| **logLik**       | -211.2 |\n| **deviance**     | 422.3  |\n| **df.residuals** | 314    |\n\n**Scaled residuals:** Min -1.98, 1Q -0.95, Median 0.49, 3Q 0.85, Max 1.44\n\n**Random effects (Groups)** \u2014 User (Intercept): Variance 0.2370, Std.Dev. 0.4878; Number of obs: 322, groups: User, 160\n\n**Fixed effects**\n\n| Term | OR | Estimate | Std.Error | z value | Pr(>\\|z\\|) |\n|---|---:|---:|---:|---:|---:|\n| (Intercept) | 3.72 | 1.31 | 1.13 | 1.17 | 0.24 |\n| MainFactorProc | 0.11 | -2.19 | 0.67 | -3.29 | <0.01 |\n| Compl. | 0.75 | -0.29 | 0.19 | -1.55 | 0.24 |\n| Usage Freq. | 1.32 | 0.28 | 0.23 | 1.20 | 0.24 |\n| Approvals | 1.00 | -0.00 | 0.00 | -1.41 | 0.24 |\n| StudentTrue | 0.35 | -1.04 | 0.88 | -1.18 | 0.24 |\n| MainFactorProc:Compl. | 2.67 | 0.98 | 0.28 | 3.56 | <0.01 |\n\nEOTABLE\n\n# Section 2: Artifact download\ncd /workspace\n\nif [ ! -f ICSE2024-funcConstructs-Artifacts.zip ]; then\n  curl -L \"https://zenodo.org/records/10554377/files/ICSE2024-funcConstructs-Artifacts.zip?download=1\" -o ICSE2024-funcConstructs-Artifacts.zip\nfi\n\nmkdir -p /workspace/ICSE2024-funcConstructs-Artifacts\nunzip -o -d /workspace/ICSE2024-funcConstructs-Artifacts ICSE2024-funcConstructs-Artifacts.zip\n\n# Section 3: Reproduction commands (populate from reviewed steps)\ncd /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts\n\n# Pull the Docker image with R and required packages\ndocker pull mdipenta/rexp:latest\n\n# Ensure a fresh container\nif docker ps -a --format '{{.Names}}' | grep -q '^funcconstructs_rexp$'; then\n  docker rm -f funcconstructs_rexp >/dev/null 2>&1 || true\nfi\n\n# Start a long-lived container\ndocker run -d --init --name funcconstructs_rexp -v \"$(pwd)\":/data mdipenta/rexp:latest bash -c 'sleep infinity'\n\n# Run the R analysis script inside the container to regenerate results (including Table 3)\ndocker exec funcconstructs_rexp /bin/bash --noprofile --norc -c \"cd /data && R --no-save < FuncConstructs-Statistics.r\"\n\n# Stop and remove the container\ndocker stop funcconstructs_rexp >/dev/null 2>&1 || true\ndocker rm funcconstructs_rexp >/dev/null 2>&1 || true\n\n# Collect reproduction output for Table 3 (lambda model) into /workspace/repro.txt\nRESULTS_DIR=\"/workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/results\"\n\n{\n  echo \"Table 3 reproduction - RQ1: Mixed-effect logistic regression relating the use of lambdas with the correctness of the change task\"\n  echo\n  echo \"=== Model summary (Table-3-RQ1-lambda.txt) ===\"\n  echo\n  cat \"${RESULTS_DIR}/Table-3-RQ1-lambda.txt\"\n  echo\n  echo \"=== Fixed effects with OR (Table-3-RQ1-lambda-coeff.txt) ===\"\n  echo\n  cat \"${RESULTS_DIR}/Table-3-RQ1-lambda-coeff.txt\"\n} > /workspace/repro.txt\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\necho '--- Expected Table (expected.md) ---'\ncat /workspace/expected.md\necho\necho '--- Reproduced Table 3 output (repro.txt) ---'\ncat /workspace/repro.txt\necho '</artisan_submit>'\nEOF\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 69.51869297027588,
+        "response": {
+          "id": "chatcmpl-D0jK6XJtUwYI47QHXrJi1mi3RJpM2",
+          "created": 1769066594,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: I\u2019ve already confirmed that running `FuncConstructs-Statistics.r` inside the `mdipenta/rexp` Docker image reproduces all tables, including Table 3, into the `results/` directory. The next step is to create the required `repro_pythonic_table_3.sh` script so it (1) rewrites `expected.md` with the given table, (2) downloads and unpacks the artifact, (3) runs the R analysis via Docker to regenerate the results, (4) collects the Table 3 outputs into `/workspace/repro.txt`, and (5) wraps both expected and reproduced outputs inside an `<artisan_submit>` block. I\u2019ll create this script with a single `cat <<'EOF'` here-doc and then mark it executable.\n\n<mini_swe_agent_bash>\ncat > /workspace/repro_pythonic_table_3.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 3: RQ1: Mixed-effect logistic regression relating the use of lambdas with the correctness of the change task**\n\n|                  |        |\n| ---------------- | ------ |\n| **AIC**          | 438.3  |\n| **BIC**          | 468.5  |\n| **logLik**       | -211.2 |\n| **deviance**     | 422.3  |\n| **df.residuals** | 314    |\n\n**Scaled residuals:** Min -1.98, 1Q -0.95, Median 0.49, 3Q 0.85, Max 1.44\n\n**Random effects (Groups)** \u2014 User (Intercept): Variance 0.2370, Std.Dev. 0.4878; Number of obs: 322, groups: User, 160\n\n**Fixed effects**\n\n| Term | OR | Estimate | Std.Error | z value | Pr(>\\|z\\|) |\n|---|---:|---:|---:|---:|---:|\n| (Intercept) | 3.72 | 1.31 | 1.13 | 1.17 | 0.24 |\n| MainFactorProc | 0.11 | -2.19 | 0.67 | -3.29 | <0.01 |\n| Compl. | 0.75 | -0.29 | 0.19 | -1.55 | 0.24 |\n| Usage Freq. | 1.32 | 0.28 | 0.23 | 1.20 | 0.24 |\n| Approvals | 1.00 | -0.00 | 0.00 | -1.41 | 0.24 |\n| StudentTrue | 0.35 | -1.04 | 0.88 | -1.18 | 0.24 |\n| MainFactorProc:Compl. | 2.67 | 0.98 | 0.28 | 3.56 | <0.01 |\n\nEOTABLE\n\n# Section 2: Artifact download\ncd /workspace\n\nif [ ! -f ICSE2024-funcConstructs-Artifacts.zip ]; then\n  curl -L \"https://zenodo.org/records/10554377/files/ICSE2024-funcConstructs-Artifacts.zip?download=1\" -o ICSE2024-funcConstructs-Artifacts.zip\nfi\n\nmkdir -p /workspace/ICSE2024-funcConstructs-Artifacts\nunzip -o -d /workspace/ICSE2024-funcConstructs-Artifacts ICSE2024-funcConstructs-Artifacts.zip\n\n# Section 3: Reproduction commands (populate from reviewed steps)\ncd /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts\n\n# Pull the Docker image with R and required packages\ndocker pull mdipenta/rexp:latest\n\n# Ensure a fresh container\nif docker ps -a --format '{{.Names}}' | grep -q '^funcconstructs_rexp$'; then\n  docker rm -f funcconstructs_rexp >/dev/null 2>&1 || true\nfi\n\n# Start a long-lived container\ndocker run -d --init --name funcconstructs_rexp -v \"$(pwd)\":/data mdipenta/rexp:latest bash -c 'sleep infinity'\n\n# Run the R analysis script inside the container to regenerate results (including Table 3)\ndocker exec funcconstructs_rexp /bin/bash --noprofile --norc -c \"cd /data && R --no-save < FuncConstructs-Statistics.r\"\n\n# Stop and remove the container\ndocker stop funcconstructs_rexp >/dev/null 2>&1 || true\ndocker rm funcconstructs_rexp >/dev/null 2>&1 || true\n\n# Collect reproduction output for Table 3 (lambda model) into /workspace/repro.txt\nRESULTS_DIR=\"/workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/results\"\n\n{\n  echo \"Table 3 reproduction - RQ1: Mixed-effect logistic regression relating the use of lambdas with the correctness of the change task\"\n  echo\n  echo \"=== Model summary (Table-3-RQ1-lambda.txt) ===\"\n  echo\n  cat \"${RESULTS_DIR}/Table-3-RQ1-lambda.txt\"\n  echo\n  echo \"=== Fixed effects with OR (Table-3-RQ1-lambda-coeff.txt) ===\"\n  echo\n  cat \"${RESULTS_DIR}/Table-3-RQ1-lambda-coeff.txt\"\n} > /workspace/repro.txt\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\necho '--- Expected Table (expected.md) ---'\ncat /workspace/expected.md\necho\necho '--- Reproduced Table 3 output (repro.txt) ---'\ncat /workspace/repro.txt\necho '</artisan_submit>'\nEOF\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 5096,
+            "prompt_tokens": 17575,
+            "total_tokens": 22671,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 3802,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 10624
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n</output>",
+      "exec_time": 0.08789300918579102
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The reproduction script file has been created but is not yet executable. I should now mark `repro_pythonic_table_3.sh` as executable so it can be run later to regenerate Table 3 and emit the expected submission block.\n\n<mini_swe_agent_bash>\nchmod +x /workspace/repro_pythonic_table_3.sh\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.1450765132904053,
+        "response": {
+          "id": "chatcmpl-D0jLEbMt1XayzNrYCk9MsL7850Vn2",
+          "created": 1769066664,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The reproduction script file has been created but is not yet executable. I should now mark `repro_pythonic_table_3.sh` as executable so it can be run later to regenerate Table 3 and emit the expected submission block.\n\n<mini_swe_agent_bash>\nchmod +x /workspace/repro_pythonic_table_3.sh\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 172,
+            "prompt_tokens": 18885,
+            "total_tokens": 19057,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 82,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 17536
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n</output>",
+      "exec_time": 0.09510016441345215
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The reproduction script is ready and executable; I should now run `repro_pythonic_table_3.sh` so it downloads/uses the artifact, executes the Dockerized R analysis to regenerate the results, and writes the reproduced Table 3 outputs into `/workspace/repro.txt` while printing the `<artisan_submit>` block to stdout.\n\n<mini_swe_agent_bash>\n/workspace/repro_pythonic_table_3.sh\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.712797403335571,
+        "response": {
+          "id": "chatcmpl-D0jLH0ngcj5hJlbCCF3R4q5UriSj5",
+          "created": 1769066667,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The reproduction script is ready and executable; I should now run `repro_pythonic_table_3.sh` so it downloads/uses the artifact, executes the Dockerized R analysis to regenerate the results, and writes the reproduced Table 3 outputs into `/workspace/repro.txt` while printing the `<artisan_submit>` block to stdout.\n\n<mini_swe_agent_bash>\n/workspace/repro_pythonic_table_3.sh\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 307,
+            "prompt_tokens": 18991,
+            "total_tokens": 19298,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 200,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 18816
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning><output_head>\nArchive:  ICSE2024-funcConstructs-Artifacts.zip\n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/LICENSE.md  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/run-analysis.sh  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/inter-rater-RQ3-files/procedural.csv  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/inter-rater-RQ3-files/lambda.csv  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/inter-rater-RQ3-files/mrf.csv  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/inter-rater-RQ3-files/comprehension.csv  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/RQ2ManualValidation.csv  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/RQ1-RQ2-files-for-statistical-analysis/RQ1.csv  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/RQ1-RQ2-files-for-statistical-analysis/RQ1Paired-RQ2.csv  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/RQ1-RQ2-files-for-statistical-analysis/ConstructUsage.csv  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/working-results/RQ3ManualValidation.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/README.md  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/run-analysis.bat  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/run-jupyter-container.sh  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-4.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experiment_G-2.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-8.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-9.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-5.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experiment_G_1.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-3.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-10.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-6.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-responses/experimentG-7.xlsx  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/run-jupyter-container.bat  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/Q5.py  \n extracting: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/Q1R.txt  \n extracting: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/Q5Err.txt  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/Q1.py  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/Q4.py  \n extracting: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/Q3Err.txt  \n extracting: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/Q1Err.txt  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/Q6R.txt  \n extracting: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/Q5R.txt  \n extracting: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/Q4Err.txt  \n  inflating: /workspace/ICSE2024-funcConstructs-Artifacts/ICSE2024-funcConstructs-Artifacts/raw-results-RQ1/G6/60901990415b22dac0b91f3c/Q4R.txt  \n extracting: /workspace/ICSE2024-funcConstructs-Artifacts/ICS\n</output_head>\n<elided_chars>\n554694 characters elided\n</elided_chars>\n<output_tail>\n=\"None\")\nWarning message:\nIn kripp.alpha(t(as.matrix(df2))) : NAs introduced by coercion\n> res$Construct=c(res$Construct,\"MRF\")\n> res$KrippAlpha=c(res$KrippAlpha, kripp.alpha(t(as.matrix(df3)))$value)\nWarning message:\nIn kripp.alpha(t(as.matrix(df3))) : NAs introduced by coercion\n> \n> #All constructs together\n> df=rbind(df1,df2,df3)\n> res$Construct=c(res$Construct,\"All Functional\")\n> res$KrippAlpha=c(res$KrippAlpha, kripp.alpha(t(as.matrix(df)))$value)\n> \n> #Procedural\n> notusing<-read.csv(paste(irrDir,\"procedural.csv\",sep=\"//\"),sep=\"\\t\",na.string=\"None\")\nWarning message:\nIn kripp.alpha(t(as.matrix(df))) : NAs introduced by coercion\n> res$Construct=c(res$Construct,\"Procedural\")\n> res$KrippAlpha=c(res$KrippAlpha, kripp.alpha(t(as.matrix(notusing)))$value)\n> \n> res=data.frame(res)\nWarning message:\nIn kripp.alpha(t(as.matrix(notusing))) : NAs introduced by coercion\n> \n> toCSV(res,\"rq3-inter-rater.csv\")\n> toLaTex(res,\"rq3-inter-rater.tex\",\"tab:rq3-inter-rater\",\"RQ3 inter-rater agreements (Krippendorff's Alpha)\")\n> \n> \n> ################################################\n> # Removes spurious Rplots.pdf due to ggplot2 bug\n> ################################################\n> if(file.exists(\"Rplots.pdf\"))\n+     {\n+         file.remove(\"Rplots.pdf\")\n+     }\n[1] TRUE\n> \n<artisan_submit>\n--- Expected Table (expected.md) ---\n**Table 3: RQ1: Mixed-effect logistic regression relating the use of lambdas with the correctness of the change task**\n\n|                  |        |\n| ---------------- | ------ |\n| **AIC**          | 438.3  |\n| **BIC**          | 468.5  |\n| **logLik**       | -211.2 |\n| **deviance**     | 422.3  |\n| **df.residuals** | 314    |\n\n**Scaled residuals:** Min -1.98, 1Q -0.95, Median 0.49, 3Q 0.85, Max 1.44\n\n**Random effects (Groups)** \u2014 User (Intercept): Variance 0.2370, Std.Dev. 0.4878; Number of obs: 322, groups: User, 160\n\n**Fixed effects**\n\n| Term | OR | Estimate | Std.Error | z value | Pr(>\\|z\\|) |\n|---|---:|---:|---:|---:|---:|\n| (Intercept) | 3.72 | 1.31 | 1.13 | 1.17 | 0.24 |\n| MainFactorProc | 0.11 | -2.19 | 0.67 | -3.29 | <0.01 |\n| Compl. | 0.75 | -0.29 | 0.19 | -1.55 | 0.24 |\n| Usage Freq. | 1.32 | 0.28 | 0.23 | 1.20 | 0.24 |\n| Approvals | 1.00 | -0.00 | 0.00 | -1.41 | 0.24 |\n| StudentTrue | 0.35 | -1.04 | 0.88 | -1.18 | 0.24 |\n| MainFactorProc:Compl. | 2.67 | 0.98 | 0.28 | 3.56 | <0.01 |\n\n\n--- Reproduced Table 3 output (repro.txt) ---\nTable 3 reproduction - RQ1: Mixed-effect logistic regression relating the use of lambdas with the correctness of the change task\n\n=== Model summary (Table-3-RQ1-lambda.txt) ===\n\nGeneralized linear mixed model fit by maximum likelihood (Laplace\n  Approximation) [glmerMod]\n Family: binomial  ( logit )\nFormula: Outcome ~ MainFactor * Complexity + UsageFrequency + Approvals +  \n    Student + (1 | User)\n   Data: tLambda\nControl: \nglmerControl(optimizer = \"nloptwrap\", calc.derivs = FALSE, optCtrl = list(maxfun = 2e+06))\n\n     AIC      BIC   logLik deviance df.resid \n   438.3    468.5   -211.2    422.3      314 \n\nScaled residuals: \n    Min      1Q  Median      3Q     Max \n-1.9888 -0.9504  0.4892  0.8466  1.4318 \n\nRandom effects:\n Groups Name        Variance Std.Dev.\n User   (Intercept) 0.2379   0.4878  \nNumber of obs: 322, groups:  User, 160\n\nFixed effects:\n                         Estimate Std. Error z value Pr(>|z|)   \n(Intercept)             1.3146780  1.1257013   1.168  0.24286   \nMainFactorp            -2.1903082  0.6668368  -3.285  0.00357 **\nComplexity             -0.2886188  0.1868131  -1.545  0.24286   \nUsageFrequency          0.2751589  0.2290798   1.201  0.24286   \nApprovals              -0.0004764  0.0003391  -1.405  0.24286   \nStudentTRUE            -1.0401778  0.8786708  -1.184  0.24286   \nMainFactorp:Complexity  0.9835540  0.2765444   3.557  0.00263 **\n---\nSignif. codes:  0 \u2018***\u2019 0.001 \u2018**\u2019 0.01 \u2018*\u2019 0.05 \u2018.\u2019 0.1 \u2018 \u2019 1\n\nCorrelation of Fixed Effects:\n            (Intr) MnFctr Cmplxt UsgFrq Apprvl StTRUE\nMainFactorp -0.305                                   \nComplexity  -0.416  0.663                            \nUsageFrqncy -0.450 -0.007 -0.035                     \nApprovals   -0.125  0.035  0.029  0.056              \nStudentTRUE -0.776  0.021  0.058 -0.025  0.007       \nMnFctrp:Cmp  0.283 -0.937 -0.689  0.004 -0.035 -0.023\n\n=== Fixed effects with OR (Table-3-RQ1-lambda-coeff.txt) ===\n\nOR,Estimate,Std. Error,z value,Pr(>|z|)\n3.72355186684965,1.31467801566726,1.12570128956325,1.16787466431466,0.242857325128043\n0.11188226269688,-2.19030818653326,0.66683684050086,-3.2846238442497,0.00357415126231083\n0.749297759943787,-0.288618831148187,0.186813088724374,-1.5449604367605,0.242857325128043\n1.31673983308269,0.275158858130889,0.229079767772794,1.20114866889422,0.242857325128043\n0.999523683920716,-0.000476429553821817,0.000339137253087081,-1.40482813222375,0.242857325128043\n0.353391836100776,-1.04017782037985,0.878670785582851,-1.18380835854224,0.242857325128043\n2.67394246539746,0.98355396214216,0.276544389917003,3.55658620461382,0.00262993663551465\n</artisan_submit>\n\n</output_tail>",
+      "exec_time": 10.098943710327148
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The reproduction of Table 3 has completed successfully and the expected `<artisan_submit>` block has been generated, so I now finalize the task as required.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 2.9036569595336914,
+        "response": {
+          "id": "chatcmpl-D0jLXbclS81mWBPotKZaVekgg62p0",
+          "created": 1769066683,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The reproduction of Table 3 has completed successfully and the expected `<artisan_submit>` block has been generated, so I now finalize the task as required.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 142,
+            "prompt_tokens": 22646,
+            "total_tokens": 22788,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 74,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 7936
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": ""
+    }
+  ],
+  "trajectory_format": "mini-swe-agent-1"
+}

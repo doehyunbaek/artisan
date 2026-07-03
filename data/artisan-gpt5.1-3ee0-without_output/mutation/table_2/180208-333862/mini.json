@@ -1,0 +1,882 @@
+{
+  "info": {
+    "exit_status": "Submitted",
+    "submission": "",
+    "model_stats": {
+      "instance_cost": 0.23125675000000004,
+      "api_calls": 13,
+      "llm_time": 292.27418518066406
+    },
+    "mini_version": "1.14.4",
+    "config": {
+      "agent": {
+        "system_template": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected.",
+        "instance_template": "Please reproduce the results reported in Table {{ table_index }} of the target paper.\n\n<expected_table>\n{{ expected_table }}\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `artisan get`: Download and extract the artifact from the official URL.\n- `artisan format --expected /workspace/expected.md --repro /workspace/repro.txt`: Render final tables.\n- `artisan submit`: Submit your reproduction script for evaluation.\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from {{ artifact_url }}.\n   - You MUST use`artisan get {{ artifact_url }}`.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table {{ table_index }}:\n   - `grep -in docker README.md`\n   - `grep -in \"Table {{ table_index }}\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_{{ artifact_name }}_table_{{ table_index }}.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n{{ expected_table }}\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\nartisan get {{ artifact_url }}\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh\nartisan submit /workspace/repro_{{ artifact_name }}_table_{{ table_index }}.sh\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward.",
+        "timeout_template": "The last command <command>{{action['action']}}</command> timed out and has been killed.\nThe output of the command was:\n<output>\n{{output}}\n</output>\nPlease try another command and make sure to avoid those requiring interactive input.\n",
+        "format_error_template": "Please always provide EXACTLY ONE action in <mini_swe_agent_bash>, found {{actions|length}} actions.\nIf you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\nwithout any other command.\nElse, please format your response exactly as follows:\n\n<response_example>\nHere are some thoughts about why you want to perform the action.\n\n<mini_swe_agent_bash>\n<action>\n</mini_swe_agent_bash>\n</response_example>\n",
+        "action_observation_template": "<returncode>{{output.returncode}}</returncode>\n{% if output.output | length < 100000 -%}\n<output>\n{{ output.output -}}\n</output>\n{%- else -%}\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning>\n{%- set elided_chars = output.output | length - 100000 -%}\n<output_head>\n{{ output.output[:5000] }}\n</output_head>\n<elided_chars>\n{{ elided_chars }} characters elided\n</elided_chars>\n<output_tail>\n{{ output.output[-5000:] }}\n</output_tail>\n{%- endif -%}\n",
+        "step_limit": 30.0,
+        "cost_limit": 1.0
+      },
+      "model": {
+        "model_name": "gpt-5.1-2025-11-13",
+        "model_kwargs": {
+          "drop_params": true,
+          "reasoning_effort": "medium"
+        },
+        "litellm_model_registry": null,
+        "set_cache_control": null
+      },
+      "environment": {
+        "image": "doehyunbaek1/artisan:c268b22",
+        "container_name": "agent-mutation-t2-2da8",
+        "cwd": "/workspace",
+        "env": {
+          "PAGER": "cat",
+          "MANPAGER": "cat",
+          "LESS": "-R",
+          "PIP_PROGRESS_BAR": "off",
+          "TQDM_DISABLE": "1",
+          "MSWEA_SILENT_STARTUP": "1"
+        },
+        "forward_env": [],
+        "timeout": 28800,
+        "executable": "docker",
+        "run_args": [
+          "--rm",
+          "--privileged",
+          "-e",
+          "OPENAI_API_KEY",
+          "-e",
+          "MSWEA_SILENT_STARTUP",
+          "-v",
+          "/home/doehyunbaek/artisan/logs/artisan-gpt5.1-3ee0-without_output/mutation/table_2/180208-333862:/workspace:rw",
+          "-e",
+          "ARTISAN_JUDGE_URL=http://129.69.217.153:8000/submit",
+          "-e",
+          "ARTISAN_MITM_URL=http://129.69.217.153:8082",
+          "-e",
+          "ARTISAN_CACHE_DIR=/root/.cache/artisan",
+          "-v",
+          "/home/doehyunbaek/.cache:/root/.cache/artisan",
+          "--group-add",
+          "999"
+        ],
+        "container_timeout": "8h",
+        "pull_timeout": 3000
+      },
+      "agent_type": "evaluation.agents.artisan.DefaultAgentWithLogs",
+      "model_type": "minisweagent.models.litellm_model.LitellmModel",
+      "environment_type": "minisweagent.environments.docker.DockerEnvironment"
+    },
+    "format": [],
+    "speedometer": [
+      {
+        "timestamp": "2026-01-21T18:11:26Z",
+        "model": "gpt-5-mini-2025-08-07",
+        "input": [
+          {
+            "role": "system",
+            "content": "\nYou are an expert research engineer specializing in reproducing scientific papers.\nAnalyze the provided Bash script to estimate the completeness of the reproduction process.\n\nCLASSIFICATION RULES:\n- \"copy\": The script just copies the results without actually reproducing. Examples:\n    - The result is hard-coded without any process to generate it.\n    - The result is copied from checked-in files as-is. NOTE: commands like `cp`.\n- \"lastmile\": The script performs lightweight reproduction and skips heavy computations. Examples:\n    - The result is generated using baked-in raw data.\n    - The script performs statistical analysis on precomputed outputs.\n- \"full\": The script performs complete reproduction. Examples:\n    - Raw data is generated from scratch from the input dataset.\n    - NOTE: Even if the script downloads artifact from repositories like Zenodo, FigShare, GitHub Releases, etc., if it performs the full computation to generate the final results, classify as \"full\".\n    - NOTE: Even if the script uses Docker images or prebuilt environments, if it performs the full computation to generate the final results, classify as \"full\".\n\nIMPORTANT POINTS:\n- The script should be classified with a fastest path it can possibly take. If a script contains both \"copy\" and \"lastmile\" reproduction, you should classify it as \"copy\"\n\nFILES TO EXCLUDE:\nIdentify file paths or names referenced in the script (e.g., in `wget`, `curl`, `tar`, `python` args) that are checked-in results or raw data and should be excluded to make reproduction more complete. Look for extensions like .pth, .ckpt, .bin, .tar.gz, .zip, .h5.\n- NOTE: FILES TO EXCLUDE should be output only when speed is classified as \"copy\" or \"lastmile\". If these files are excluded the script should be more likely to be judged as \"full\".\n\nOUTPUT FORMAT:\nReturn ONLY a valid JSON object. No markdown formatting, no code fences.\n{\n    \"speed\": \"copy\" | \"lastmile\" | \"full\",\n    \"reason\": \"A concise justification for the classification.\",\n    \"files_to_exclude\": [\"list\", \"of\", \"filenames\", \"or\", \"paths\"]\n}\n"
+          },
+          {
+            "role": "user",
+            "content": "You will see reference speedometer examples (script -> JSON output). Use them for calibration before evaluating the new script.\n\n<example name=\"hypertesting_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/10451088\n    (\n      printf \"### Table 1: Correlation results\\n\\n| Sample (UnsecureOnlyDataset) | R | p-value |\\n| :--- | :--- | :--- |\\n\"\n      tar -xOf ReplicationPackage/submission-results.tar.xz RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json       | sed -n '/\"csvTable\": [/,/]/p'       | sed -E 's/^([^;]+);([^;]+);([^;]+)$/| \\1 | \\2 | \\3 |/'\n    ) > /workspace/repro.txt\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Streams the ready-made RQ1 CSV rows out of submission-results.tar.xz instead of rerunning HyperTesting.\",\n  \"files_to_exclude\": [\n    \"ReplicationPackage/submission-results.tar.xz\",\n    \"RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json\"\n  ]\n}\n</example>\n\n<example name=\"baro_t2\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/11094092\n    cat > /workspace/repro.txt <<'EOREPRO'\n    Method: N-Sigma\n    Dataset: Online Boutique\n    Precision: 0.54\n    Recall   : 1\n    F1       : 0.70\n\n    Method: BARO (Ours)\n    Dataset: Online Boutique\n    Precision: 0.69\n    Recall   : 1\n    F1       : 0.82\n    EOREPRO\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Hard-codes every BARO metric via heredoc instead of running any detectors.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<example name=\"sja_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/12670597\n    python3 - << 'PY' > /workspace/repro.txt\n    import math\n    gt = 662208\n    fns = {\"sja\":1451, \"dyninst\":60463}\n    fps = {\"sja\":17347, \"dyninst\":3143}\n    def prec(fp, gt): return 100.0/(1.0 + (fp/gt))\n    def rec(fn, gt):  return 100.0/(1.0 + (fn/gt))\n    def f1(p, r): return 0.0 if (p+r)==0 else 2.0*p*r/(p+r)\n    print(f\"| **Precision** | {prec(fps['dyninst'], gt):.1f} | {prec(fps['sja'], gt):.1f} |\")\n    print(f\"| **Recall** | {rec(fns['dyninst'], gt):.1f} | {rec(fns['sja'], gt):.1f} |\")\n    print(f\"| **F?-score** | {f1(prec(fps['dyninst'], gt), rec(fns['dyninst'], gt)):.1f} | {f1(prec(fps['sja'], gt), rec(fns['sja'], gt)):.1f} |\")\n    PY\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Computes percentages from hard-coded FP/FN counts, so no binaries or datasets ever run.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<task>\n[script]\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\n| commons-cli       | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-text      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| joda-money        | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| jline-reader      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-validator | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| cdk-data          | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| spotify-web-api   |  ?,??? (??.??%) |    ??? (??.??%) |          ? (?.??%) |\n| commons-codec     | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| jfreechart        | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n| dyn4j             | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n\nEOTABLE\n\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/10505175\n\n# Section 3: Reproduction commands (populate from reviewed steps)\n# Load the RQ1\u2013RQ4 Docker image for Intel/AMD and run it to produce the RQ2/Table 2 output.\ndocker load -i getsankeyamd.tar\ndocker run --name sankeyamd qinfendeheichi/getsankeyamd:v1 > /workspace/sankeyamd.log 2>&1\n\n# Build the Markdown reproduction table from the log.\ncat > /workspace/repro.txt <<'EOT'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\nEOT\n\n# Each log line has the form:\n# <name> <total> <failed_count> ( failed_pct ) <anomaly_count> ( anomaly_pct ) <source_count> ( source_pct )\n# We ignore the total and keep the three metrics with their percentages, matching the paper's Table 2.\nawk '\n{\n  name = $1\n  if (match($0, /^[^0-9]*[0-9,]+\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))/, m)) {\n    # m[1] = #Failed, m[2] = Anomaly, m[3] = Source-Code Oracle\n    printf(\"| %-16s | %14s | %14s | %17s |\\n\", name, m[1], m[2], m[3]);\n  }\n}\n' /workspace/sankeyamd.log >> /workspace/repro.txt\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n</task>\nReturn only the JSON object described above."
+          }
+        ],
+        "output": {
+          "speed": "full",
+          "reason": "Loads and RQ1\u2013RQ4 Docker image and runs it to produce /workspace/sankeyamd.log, then parses that log to construct Table 2 \u2014 the results are generated by running the container rather than simply copying checked-in final tables.",
+          "files_to_exclude": []
+        },
+        "duration_seconds": 5.976183891296387,
+        "cost_usd": 0.0017412500000000002,
+        "tokens": {
+          "input": 2277,
+          "cached_input": 0,
+          "output": 586,
+          "reasoning_output": 512,
+          "total": 2863
+        },
+        "reason": "submit_validation"
+      },
+      {
+        "timestamp": "2026-01-21T18:13:02Z",
+        "model": "gpt-5-mini-2025-08-07",
+        "input": [
+          {
+            "role": "system",
+            "content": "\nYou are an expert research engineer specializing in reproducing scientific papers.\nAnalyze the provided Bash script to estimate the completeness of the reproduction process.\n\nCLASSIFICATION RULES:\n- \"copy\": The script just copies the results without actually reproducing. Examples:\n    - The result is hard-coded without any process to generate it.\n    - The result is copied from checked-in files as-is. NOTE: commands like `cp`.\n- \"lastmile\": The script performs lightweight reproduction and skips heavy computations. Examples:\n    - The result is generated using baked-in raw data.\n    - The script performs statistical analysis on precomputed outputs.\n- \"full\": The script performs complete reproduction. Examples:\n    - Raw data is generated from scratch from the input dataset.\n    - NOTE: Even if the script downloads artifact from repositories like Zenodo, FigShare, GitHub Releases, etc., if it performs the full computation to generate the final results, classify as \"full\".\n    - NOTE: Even if the script uses Docker images or prebuilt environments, if it performs the full computation to generate the final results, classify as \"full\".\n\nIMPORTANT POINTS:\n- The script should be classified with a fastest path it can possibly take. If a script contains both \"copy\" and \"lastmile\" reproduction, you should classify it as \"copy\"\n\nFILES TO EXCLUDE:\nIdentify file paths or names referenced in the script (e.g., in `wget`, `curl`, `tar`, `python` args) that are checked-in results or raw data and should be excluded to make reproduction more complete. Look for extensions like .pth, .ckpt, .bin, .tar.gz, .zip, .h5.\n- NOTE: FILES TO EXCLUDE should be output only when speed is classified as \"copy\" or \"lastmile\". If these files are excluded the script should be more likely to be judged as \"full\".\n\nOUTPUT FORMAT:\nReturn ONLY a valid JSON object. No markdown formatting, no code fences.\n{\n    \"speed\": \"copy\" | \"lastmile\" | \"full\",\n    \"reason\": \"A concise justification for the classification.\",\n    \"files_to_exclude\": [\"list\", \"of\", \"filenames\", \"or\", \"paths\"]\n}\n"
+          },
+          {
+            "role": "user",
+            "content": "You will see reference speedometer examples (script -> JSON output). Use them for calibration before evaluating the new script.\n\n<example name=\"hypertesting_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/10451088\n    (\n      printf \"### Table 1: Correlation results\\n\\n| Sample (UnsecureOnlyDataset) | R | p-value |\\n| :--- | :--- | :--- |\\n\"\n      tar -xOf ReplicationPackage/submission-results.tar.xz RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json       | sed -n '/\"csvTable\": [/,/]/p'       | sed -E 's/^([^;]+);([^;]+);([^;]+)$/| \\1 | \\2 | \\3 |/'\n    ) > /workspace/repro.txt\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Streams the ready-made RQ1 CSV rows out of submission-results.tar.xz instead of rerunning HyperTesting.\",\n  \"files_to_exclude\": [\n    \"ReplicationPackage/submission-results.tar.xz\",\n    \"RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json\"\n  ]\n}\n</example>\n\n<example name=\"baro_t2\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/11094092\n    cat > /workspace/repro.txt <<'EOREPRO'\n    Method: N-Sigma\n    Dataset: Online Boutique\n    Precision: 0.54\n    Recall   : 1\n    F1       : 0.70\n\n    Method: BARO (Ours)\n    Dataset: Online Boutique\n    Precision: 0.69\n    Recall   : 1\n    F1       : 0.82\n    EOREPRO\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Hard-codes every BARO metric via heredoc instead of running any detectors.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<example name=\"sja_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/12670597\n    python3 - << 'PY' > /workspace/repro.txt\n    import math\n    gt = 662208\n    fns = {\"sja\":1451, \"dyninst\":60463}\n    fps = {\"sja\":17347, \"dyninst\":3143}\n    def prec(fp, gt): return 100.0/(1.0 + (fp/gt))\n    def rec(fn, gt):  return 100.0/(1.0 + (fn/gt))\n    def f1(p, r): return 0.0 if (p+r)==0 else 2.0*p*r/(p+r)\n    print(f\"| **Precision** | {prec(fps['dyninst'], gt):.1f} | {prec(fps['sja'], gt):.1f} |\")\n    print(f\"| **Recall** | {rec(fns['dyninst'], gt):.1f} | {rec(fns['sja'], gt):.1f} |\")\n    print(f\"| **F?-score** | {f1(prec(fps['dyninst'], gt), rec(fns['dyninst'], gt)):.1f} | {f1(prec(fps['sja'], gt), rec(fns['sja'], gt)):.1f} |\")\n    PY\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Computes percentages from hard-coded FP/FN counts, so no binaries or datasets ever run.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<task>\n[script]\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\n| commons-cli       | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-text      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| joda-money        | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| jline-reader      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-validator | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| cdk-data          | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| spotify-web-api   |  ?,??? (??.??%) |    ??? (??.??%) |          ? (?.??%) |\n| commons-codec     | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| jfreechart        | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n| dyn4j             | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n\nEOTABLE\n\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/10505175\n\n# Section 3: Reproduction commands\n# Load the Intel/AMD getsankey image and start a long-running container.\ndocker load -i getsankeyamd.tar\ndocker run -d --init --name sankeyamd --entrypoint bash qinfendeheichi/getsankeyamd:v1 -c 'sleep infinity'\n\n# Run the RQ2 processing script inside the container; this prints the Table 2 data to stdout.\ndocker exec sankeyamd /bin/bash --noprofile --norc -c \"python RQ2Script.py\" > /workspace/rq2_raw.txt 2>&1\n\n# Build the Markdown reproduction table from the fresh RQ2 output.\ncat > /workspace/repro.txt <<'EOT'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\nEOT\n\nawk '\n/^[a-z]/ {\n  name = $1\n  # Expected format:\n  # name total  failed_count ( failed_pct )  anomaly_count ( anomaly_pct )  source_count ( source_pct )\n  if (match($0, /^[^0-9]*[0-9,]+\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))/, m)) {\n    printf(\"| %-16s | %14s | %14s | %17s |\\n\", name, m[1], m[2], m[3]);\n  }\n}\n' /workspace/rq2_raw.txt >> /workspace/repro.txt\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n</task>\nReturn only the JSON object described above."
+          }
+        ],
+        "output": {
+          "speed": "full",
+          "reason": "Loads a Docker image and executes RQ2Script.py inside the container to generate rq2_raw.txt and build the table\u2014i.e., it runs the reproduction computation (environment is prebuilt but results are produced, not simply copied).",
+          "files_to_exclude": []
+        },
+        "duration_seconds": 6.714752197265625,
+        "cost_usd": 0.0014605500000000001,
+        "tokens": {
+          "input": 2271,
+          "cached_input": 1792,
+          "output": 648,
+          "reasoning_output": 576,
+          "total": 2919
+        },
+        "reason": "submit_validation"
+      },
+      {
+        "timestamp": "2026-01-21T18:11:46Z",
+        "model": "gpt-5-mini-2025-08-07",
+        "input": [
+          {
+            "role": "system",
+            "content": "\nYou are an expert research engineer specializing in reproducing scientific papers.\nAnalyze the provided Bash script to estimate the completeness of the reproduction process.\n\nCLASSIFICATION RULES:\n- \"copy\": The script just copies the results without actually reproducing. Examples:\n    - The result is hard-coded without any process to generate it.\n    - The result is copied from checked-in files as-is. NOTE: commands like `cp`.\n- \"lastmile\": The script performs lightweight reproduction and skips heavy computations. Examples:\n    - The result is generated using baked-in raw data.\n    - The script performs statistical analysis on precomputed outputs.\n- \"full\": The script performs complete reproduction. Examples:\n    - Raw data is generated from scratch from the input dataset.\n    - NOTE: Even if the script downloads artifact from repositories like Zenodo, FigShare, GitHub Releases, etc., if it performs the full computation to generate the final results, classify as \"full\".\n    - NOTE: Even if the script uses Docker images or prebuilt environments, if it performs the full computation to generate the final results, classify as \"full\".\n\nIMPORTANT POINTS:\n- The script should be classified with a fastest path it can possibly take. If a script contains both \"copy\" and \"lastmile\" reproduction, you should classify it as \"copy\"\n\nFILES TO EXCLUDE:\nIdentify file paths or names referenced in the script (e.g., in `wget`, `curl`, `tar`, `python` args) that are checked-in results or raw data and should be excluded to make reproduction more complete. Look for extensions like .pth, .ckpt, .bin, .tar.gz, .zip, .h5.\n- NOTE: FILES TO EXCLUDE should be output only when speed is classified as \"copy\" or \"lastmile\". If these files are excluded the script should be more likely to be judged as \"full\".\n\nOUTPUT FORMAT:\nReturn ONLY a valid JSON object. No markdown formatting, no code fences.\n{\n    \"speed\": \"copy\" | \"lastmile\" | \"full\",\n    \"reason\": \"A concise justification for the classification.\",\n    \"files_to_exclude\": [\"list\", \"of\", \"filenames\", \"or\", \"paths\"]\n}\n"
+          },
+          {
+            "role": "user",
+            "content": "You will see reference speedometer examples (script -> JSON output). Use them for calibration before evaluating the new script.\n\n<example name=\"hypertesting_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/10451088\n    (\n      printf \"### Table 1: Correlation results\\n\\n| Sample (UnsecureOnlyDataset) | R | p-value |\\n| :--- | :--- | :--- |\\n\"\n      tar -xOf ReplicationPackage/submission-results.tar.xz RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json       | sed -n '/\"csvTable\": [/,/]/p'       | sed -E 's/^([^;]+);([^;]+);([^;]+)$/| \\1 | \\2 | \\3 |/'\n    ) > /workspace/repro.txt\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Streams the ready-made RQ1 CSV rows out of submission-results.tar.xz instead of rerunning HyperTesting.\",\n  \"files_to_exclude\": [\n    \"ReplicationPackage/submission-results.tar.xz\",\n    \"RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json\"\n  ]\n}\n</example>\n\n<example name=\"baro_t2\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/11094092\n    cat > /workspace/repro.txt <<'EOREPRO'\n    Method: N-Sigma\n    Dataset: Online Boutique\n    Precision: 0.54\n    Recall   : 1\n    F1       : 0.70\n\n    Method: BARO (Ours)\n    Dataset: Online Boutique\n    Precision: 0.69\n    Recall   : 1\n    F1       : 0.82\n    EOREPRO\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Hard-codes every BARO metric via heredoc instead of running any detectors.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<example name=\"sja_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/12670597\n    python3 - << 'PY' > /workspace/repro.txt\n    import math\n    gt = 662208\n    fns = {\"sja\":1451, \"dyninst\":60463}\n    fps = {\"sja\":17347, \"dyninst\":3143}\n    def prec(fp, gt): return 100.0/(1.0 + (fp/gt))\n    def rec(fn, gt):  return 100.0/(1.0 + (fn/gt))\n    def f1(p, r): return 0.0 if (p+r)==0 else 2.0*p*r/(p+r)\n    print(f\"| **Precision** | {prec(fps['dyninst'], gt):.1f} | {prec(fps['sja'], gt):.1f} |\")\n    print(f\"| **Recall** | {rec(fns['dyninst'], gt):.1f} | {rec(fns['sja'], gt):.1f} |\")\n    print(f\"| **F?-score** | {f1(prec(fps['dyninst'], gt), rec(fns['dyninst'], gt)):.1f} | {f1(prec(fps['sja'], gt), rec(fns['sja'], gt)):.1f} |\")\n    PY\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Computes percentages from hard-coded FP/FN counts, so no binaries or datasets ever run.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<task>\n[script]\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\n| commons-cli       | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-text      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| joda-money        | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| jline-reader      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-validator | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| cdk-data          | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| spotify-web-api   |  ?,??? (??.??%) |    ??? (??.??%) |          ? (?.??%) |\n| commons-codec     | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| jfreechart        | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n| dyn4j             | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n\nEOTABLE\n\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/10505175\n\n# Section 3: Reproduction commands (populate from reviewed steps)\n# Load the RQ1\u2013RQ4 Docker image for Intel/AMD and run it to produce the RQ2/Table 2 output.\ndocker load -i getsankeyamd.tar\ndocker run --name sankeyamd qinfendeheichi/getsankeyamd:v1 > /workspace/sankeyamd.log 2>&1\n\n# Build the Markdown reproduction table from the log.\ncat > /workspace/repro.txt <<'EOT'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\nEOT\n\n# Each log line has the form:\n# <name> <total> <failed_count> ( failed_pct ) <anomaly_count> ( anomaly_pct ) <source_count> ( source_pct )\n# We ignore the total and keep the three metrics with their percentages, matching the paper's Table 2.\nawk '\n{\n  name = $1\n  if (match($0, /^[^0-9]*[0-9,]+\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))/, m)) {\n    # m[1] = #Failed, m[2] = Anomaly, m[3] = Source-Code Oracle\n    printf(\"| %-16s | %14s | %14s | %17s |\\n\", name, m[1], m[2], m[3]);\n  }\n}\n' /workspace/sankeyamd.log >> /workspace/repro.txt\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n</task>\nReturn only the JSON object described above."
+          }
+        ],
+        "output": {
+          "speed": "copy",
+          "reason": "The script loads a prebuilt Docker image tar (getsankeyamd.tar) and simply runs it to produce/emit sankeyamd.log, then parses that log to build the table \u2014 it does not run the paper's experiments from raw data or rebuild the pipeline.",
+          "files_to_exclude": [
+            "getsankeyamd.tar",
+            "qinfendeheichi/getsankeyamd:v1",
+            "/workspace/sankeyamd.log"
+          ]
+        },
+        "duration_seconds": 12.78490662574768,
+        "cost_usd": 0.00293605,
+        "tokens": {
+          "input": 2277,
+          "cached_input": 1792,
+          "output": 1385,
+          "reasoning_output": 1280,
+          "total": 3662
+        },
+        "reason": "exit_validation"
+      },
+      {
+        "timestamp": "2026-01-21T18:13:15Z",
+        "model": "gpt-5-mini-2025-08-07",
+        "input": [
+          {
+            "role": "system",
+            "content": "\nYou are an expert research engineer specializing in reproducing scientific papers.\nAnalyze the provided Bash script to estimate the completeness of the reproduction process.\n\nCLASSIFICATION RULES:\n- \"copy\": The script just copies the results without actually reproducing. Examples:\n    - The result is hard-coded without any process to generate it.\n    - The result is copied from checked-in files as-is. NOTE: commands like `cp`.\n- \"lastmile\": The script performs lightweight reproduction and skips heavy computations. Examples:\n    - The result is generated using baked-in raw data.\n    - The script performs statistical analysis on precomputed outputs.\n- \"full\": The script performs complete reproduction. Examples:\n    - Raw data is generated from scratch from the input dataset.\n    - NOTE: Even if the script downloads artifact from repositories like Zenodo, FigShare, GitHub Releases, etc., if it performs the full computation to generate the final results, classify as \"full\".\n    - NOTE: Even if the script uses Docker images or prebuilt environments, if it performs the full computation to generate the final results, classify as \"full\".\n\nIMPORTANT POINTS:\n- The script should be classified with a fastest path it can possibly take. If a script contains both \"copy\" and \"lastmile\" reproduction, you should classify it as \"copy\"\n\nFILES TO EXCLUDE:\nIdentify file paths or names referenced in the script (e.g., in `wget`, `curl`, `tar`, `python` args) that are checked-in results or raw data and should be excluded to make reproduction more complete. Look for extensions like .pth, .ckpt, .bin, .tar.gz, .zip, .h5.\n- NOTE: FILES TO EXCLUDE should be output only when speed is classified as \"copy\" or \"lastmile\". If these files are excluded the script should be more likely to be judged as \"full\".\n\nOUTPUT FORMAT:\nReturn ONLY a valid JSON object. No markdown formatting, no code fences.\n{\n    \"speed\": \"copy\" | \"lastmile\" | \"full\",\n    \"reason\": \"A concise justification for the classification.\",\n    \"files_to_exclude\": [\"list\", \"of\", \"filenames\", \"or\", \"paths\"]\n}\n"
+          },
+          {
+            "role": "user",
+            "content": "You will see reference speedometer examples (script -> JSON output). Use them for calibration before evaluating the new script.\n\n<example name=\"hypertesting_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/10451088\n    (\n      printf \"### Table 1: Correlation results\\n\\n| Sample (UnsecureOnlyDataset) | R | p-value |\\n| :--- | :--- | :--- |\\n\"\n      tar -xOf ReplicationPackage/submission-results.tar.xz RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json       | sed -n '/\"csvTable\": [/,/]/p'       | sed -E 's/^([^;]+);([^;]+);([^;]+)$/| \\1 | \\2 | \\3 |/'\n    ) > /workspace/repro.txt\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Streams the ready-made RQ1 CSV rows out of submission-results.tar.xz instead of rerunning HyperTesting.\",\n  \"files_to_exclude\": [\n    \"ReplicationPackage/submission-results.tar.xz\",\n    \"RQ1/hypercoveragetester_28-07-2023_135630/hypercoveragetester-metrics.json\"\n  ]\n}\n</example>\n\n<example name=\"baro_t2\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/11094092\n    cat > /workspace/repro.txt <<'EOREPRO'\n    Method: N-Sigma\n    Dataset: Online Boutique\n    Precision: 0.54\n    Recall   : 1\n    F1       : 0.70\n\n    Method: BARO (Ours)\n    Dataset: Online Boutique\n    Precision: 0.69\n    Recall   : 1\n    F1       : 0.82\n    EOREPRO\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Hard-codes every BARO metric via heredoc instead of running any detectors.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<example name=\"sja_t1\">\n[script]\n#!/usr/bin/bash\n    artisan get https://zenodo.org/records/12670597\n    python3 - << 'PY' > /workspace/repro.txt\n    import math\n    gt = 662208\n    fns = {\"sja\":1451, \"dyninst\":60463}\n    fps = {\"sja\":17347, \"dyninst\":3143}\n    def prec(fp, gt): return 100.0/(1.0 + (fp/gt))\n    def rec(fn, gt):  return 100.0/(1.0 + (fn/gt))\n    def f1(p, r): return 0.0 if (p+r)==0 else 2.0*p*r/(p+r)\n    print(f\"| **Precision** | {prec(fps['dyninst'], gt):.1f} | {prec(fps['sja'], gt):.1f} |\")\n    print(f\"| **Recall** | {rec(fns['dyninst'], gt):.1f} | {rec(fns['sja'], gt):.1f} |\")\n    print(f\"| **F?-score** | {f1(prec(fps['dyninst'], gt), rec(fns['dyninst'], gt)):.1f} | {f1(prec(fps['sja'], gt), rec(fns['sja'], gt)):.1f} |\")\n    PY\n    artisan format --expected /workspace/expected.md --repro /workspace/repro.txt\n[output]\n{\n  \"speed\": \"copy\",\n  \"reason\": \"Computes percentages from hard-coded FP/FN counts, so no binaries or datasets ever run.\",\n  \"files_to_exclude\": []\n}\n</example>\n\n<task>\n[script]\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\n| commons-cli       | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-text      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| joda-money        | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| jline-reader      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-validator | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| cdk-data          | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| spotify-web-api   |  ?,??? (??.??%) |    ??? (??.??%) |          ? (?.??%) |\n| commons-codec     | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| jfreechart        | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n| dyn4j             | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n\nEOTABLE\n\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/10505175\n\n# Section 3: Reproduction commands\n# Load the Intel/AMD getsankey image and start a long-running container.\ndocker load -i getsankeyamd.tar\ndocker run -d --init --name sankeyamd --entrypoint bash qinfendeheichi/getsankeyamd:v1 -c 'sleep infinity'\n\n# Run the RQ2 processing script inside the container; this prints the Table 2 data to stdout.\ndocker exec sankeyamd /bin/bash --noprofile --norc -c \"python RQ2Script.py\" > /workspace/rq2_raw.txt 2>&1\n\n# Build the Markdown reproduction table from the fresh RQ2 output.\ncat > /workspace/repro.txt <<'EOT'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\nEOT\n\nawk '\n/^[a-z]/ {\n  name = $1\n  # Expected format:\n  # name total  failed_count ( failed_pct )  anomaly_count ( anomaly_pct )  source_count ( source_pct )\n  if (match($0, /^[^0-9]*[0-9,]+\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))/, m)) {\n    printf(\"| %-16s | %14s | %14s | %17s |\\n\", name, m[1], m[2], m[3]);\n  }\n}\n' /workspace/rq2_raw.txt >> /workspace/repro.txt\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n</task>\nReturn only the JSON object described above."
+          }
+        ],
+        "output": {
+          "speed": "full",
+          "reason": "Loads a Docker image and executes RQ2Script.py inside the container to produce the Table 2 output (i.e., it runs the processing rather than extracting precomputed table rows), so the reproduction performs the computation end-to-end.",
+          "files_to_exclude": []
+        },
+        "duration_seconds": 6.624531269073486,
+        "cost_usd": 0.00107455,
+        "tokens": {
+          "input": 2271,
+          "cached_input": 1792,
+          "output": 455,
+          "reasoning_output": 384,
+          "total": 2726
+        },
+        "reason": "exit_validation"
+      }
+    ]
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that can interact with a computer.\n\nYour response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).\nInclude a THOUGHT section before your command where you explain your reasoning process.\nFormat your response as shown in <format_example>.\n\n<format_example>\nTHOUGHT: Your reasoning and analysis here. Explain why you want to perform the action.\n\n<mini_swe_agent_bash>\nyour_command_here\n</mini_swe_agent_bash>\n</format_example>\n\nFailure to follow these rules will cause your response to be rejected."
+    },
+    {
+      "role": "user",
+      "content": "Please reproduce the results reported in Table 2 of the target paper.\n\n<expected_table>\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\n| commons-cli       | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-text      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| joda-money        | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| jline-reader      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-validator | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| cdk-data          | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| spotify-web-api   |  ?,??? (??.??%) |    ??? (??.??%) |          ? (?.??%) |\n| commons-codec     | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| jfreechart        | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n| dyn4j             | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n\n</expected_table>\n\nThe same table is available at `/workspace/expected.md`.\nThe paper that the table is from is available at `/workspace/paper.md`.\n\n### Available tools\n- `artisan get`: Download and extract the artifact from the official URL.\n- `artisan format --expected /workspace/expected.md --repro /workspace/repro.txt`: Render final tables.\n- `artisan submit`: Submit your reproduction script for evaluation.\n- `uvx --from csvkit in2csv`: Inspect spreadsheet contents.\n- `uvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))'`: Convert PDFs to Markdown for easier reading.\n\n#### Example actions\nTHOUGHT: List the sheets inside the artifact workbook.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -n result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Convert the \"lambda\" worksheet to CSV to analyze it.\n\n<mini_swe_agent_bash>\nuvx --from csvkit in2csv -s \"lambda\" result.xlsx\n</mini_swe_agent_bash>\n\nTHOUGHT: Read the PDF as Markdown to look for reproduction steps.\n\n<mini_swe_agent_bash>\nuvx --from pymupdf4llm python -c 'import sys, pymupdf4llm as p; sys.stdout.write(p.to_markdown(sys.argv[1]))' results.pdf\n</mini_swe_agent_bash>\n\n---\n## Workflow overview\n\nThis workflows MUST be done step-by-step.\nIMPORTANT: You MUST NOT run multiple steps in a single bash code block.\n\n1. **Download the artifact** from https://zenodo.org/records/10505175.\n   - You MUST use`artisan get https://zenodo.org/records/10505175`.\n2. **Read the README** to understand reproduction steps.\n3. **Locate relevant commands** for Table 2:\n   - `grep -in docker README.md`\n   - `grep -in \"Table 2\" README.md`\n4. **Execute the required commands** step-by-step:\n   - Prefer Docker instructions from the README. Acquire images in the order `docker pull` \u2192 `docker load` \u2192 `docker import` \u2192 `docker build`.\n   - Replace `docker run -it` with `docker run -d --init --entrypoint bash <image> -c 'sleep infinity'`.\n   - Use `docker exec <container> /bin/bash --noprofile --norc -c \"<your_command>\"` for shell access.\n   - Run `docker-compose` exactly as documented if present.\n5. **Author the submission script** `repro_mutation_table_2.sh` using the template below.\n\n---\n## Submission script template\n<mini_swe_agent_bash>\ncat > /workspace/repro_mutation_table_2.sh <<'EOF'\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\n| commons-cli       | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-text      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| joda-money        | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| jline-reader      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-validator | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| cdk-data          | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| spotify-web-api   |  ?,??? (??.??%) |    ??? (??.??%) |          ? (?.??%) |\n| commons-codec     | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| jfreechart        | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n| dyn4j             | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n\nEOTABLE\n# Section 2: Artifact download\n<Commands to download the artifact>\nartisan get https://zenodo.org/records/10505175\n# Section 3: Reproduction commands (populate from reviewed steps)\n<Commands to reproduce the table. They should output the reproduction results to /workspace/repro.txt>\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\n<Commands to format the output table>\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\nEOF\nchmod +x /workspace/repro_mutation_table_2.sh\nartisan submit /workspace/repro_mutation_table_2.sh\n</mini_swe_agent_bash>\n\n---\n## Important rules\n- Perform only one logical step per command; avoid batching multiple workflow stages.\n- Each command has an eight-hour timeout\u2014plan accordingly.\n- After verification succeeds, finish with `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` as a standalone command; no further work is allowed afterward."
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Start by downloading and extracting the artifact from the provided Zenodo record so I can inspect its contents, find the README, and identify how to reproduce Table 2.\n\n<mini_swe_agent_bash>\nartisan get https://zenodo.org/records/10505175\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.027130842208862,
+        "response": {
+          "id": "chatcmpl-D0WouUvcD7iCNM689nQBmCgdl8kBu",
+          "created": 1769018532,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Start by downloading and extracting the artifact from the provided Zenodo record so I can inspect its contents, find the README, and identify how to reproduce Table 2.\n\n<mini_swe_agent_bash>\nartisan get https://zenodo.org/records/10505175\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 197,
+            "prompt_tokens": 1733,
+            "total_tokens": 1930,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 121,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<warning>\nThe output of your last command was too long.\nPlease try a different command that produces less output.\nIf you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.\nIf you're using grep or find and it produced too much output, you can use a more selective search pattern.\nIf you really need to see something from the full command's output, you can redirect output to a file and then search in that file.\n</warning><output_head>\n\nDownloading text-amd.tar 0% (65536/1178659328 bytes)\nDownloading text-amd.tar 0% (131072/1178659328 bytes)\nDownloading text-amd.tar 0% (196608/1178659328 bytes)\nDownloading text-amd.tar 0% (262144/1178659328 bytes)\nDownloading text-amd.tar 0% (327680/1178659328 bytes)\nDownloading text-amd.tar 0% (393216/1178659328 bytes)\nDownloading text-amd.tar 0% (458752/1178659328 bytes)\nDownloading text-amd.tar 0% (524288/1178659328 bytes)\nDownloading text-amd.tar 0% (589824/1178659328 bytes)\nDownloading text-amd.tar 0% (655360/1178659328 bytes)\nDownloading text-amd.tar 0% (720896/1178659328 bytes)\nDownloading text-amd.tar 0% (786432/1178659328 bytes)\nDownloading text-amd.tar 0% (851968/1178659328 bytes)\nDownloading text-amd.tar 0% (917504/1178659328 bytes)\nDownloading text-amd.tar 0% (983040/1178659328 bytes)\nDownloading text-amd.tar 0% (1048576/1178659328 bytes)\nDownloading text-amd.tar 0% (1114112/1178659328 bytes)\nDownloading text-amd.tar 0% (1179648/1178659328 bytes)\nDownloading text-amd.tar 0% (1245184/1178659328 bytes)\nDownloading text-amd.tar 0% (1310720/1178659328 bytes)\nDownloading text-amd.tar 0% (1376256/1178659328 bytes)\nDownloading text-amd.tar 0% (1441792/1178659328 bytes)\nDownloading text-amd.tar 0% (1507328/1178659328 bytes)\nDownloading text-amd.tar 0% (1572864/1178659328 bytes)\nDownloading text-amd.tar 0% (1638400/1178659328 bytes)\nDownloading text-amd.tar 0% (1703936/1178659328 bytes)\nDownloading text-amd.tar 0% (1769472/1178659328 bytes)\nDownloading text-amd.tar 0% (1835008/1178659328 bytes)\nDownloading text-amd.tar 0% (1900544/1178659328 bytes)\nDownloading text-amd.tar 0% (1966080/1178659328 bytes)\nDownloading text-amd.tar 0% (2031616/1178659328 bytes)\nDownloading text-amd.tar 0% (2097152/1178659328 bytes)\nDownloading text-amd.tar 0% (2162688/1178659328 bytes)\nDownloading text-amd.tar 0% (2228224/1178659328 bytes)\nDownloading text-amd.tar 0% (2293760/1178659328 bytes)\nDownloading text-amd.tar 0% (2359296/1178659328 bytes)\nDownloading text-amd.tar 0% (2424832/1178659328 bytes)\nDownloading text-amd.tar 0% (2490368/1178659328 bytes)\nDownloading text-amd.tar 0% (2555904/1178659328 bytes)\nDownloading text-amd.tar 0% (2621440/1178659328 bytes)\nDownloading text-amd.tar 0% (2686976/1178659328 bytes)\nDownloading text-amd.tar 0% (2752512/1178659328 bytes)\nDownloading text-amd.tar 0% (2818048/1178659328 bytes)\nDownloading text-amd.tar 0% (2883584/1178659328 bytes)\nDownloading text-amd.tar 0% (2949120/1178659328 bytes)\nDownloading text-amd.tar 0% (3014656/1178659328 bytes)\nDownloading text-amd.tar 0% (3080192/1178659328 bytes)\nDownloading text-amd.tar 0% (3145728/1178659328 bytes)\nDownloading text-amd.tar 0% (3211264/1178659328 bytes)\nDownloading text-amd.tar 0% (3276800/1178659328 bytes)\nDownloading text-amd.tar 0% (3342336/1178659328 bytes)\nDownloading text-amd.tar 0% (3407872/1178659328 bytes)\nDownloading text-amd.tar 0% (3473408/1178659328 bytes)\nDownloading text-amd.tar 0% (3538944/1178659328 bytes)\nDownloading text-amd.tar 0% (3604480/1178659328 bytes)\nDownloading text-amd.tar 0% (3670016/1178659328 bytes)\nDownloading text-amd.tar 0% (3735552/1178659328 bytes)\nDownloading text-amd.tar 0% (3801088/1178659328 bytes)\nDownloading text-amd.tar 0% (3866624/1178659328 bytes)\nDownloading text-amd.tar 0% (3932160/1178659328 bytes)\nDownloading text-amd.tar 0% (3997696/1178659328 bytes)\nDownloading text-amd.tar 0% (4063232/1178659328 bytes)\nDownloading text-amd.tar 0% (4128768/1178659328 bytes)\nDownloading text-amd.tar 0% (4194304/1178659328 bytes)\nDownloading text-amd.tar 0% (4259840/1178659328 bytes)\nDownloading text-amd.tar 0% (4325376/1178659328 bytes)\nDownloading text-amd.tar 0% (4390912/1178659328 bytes)\nDownloading text-amd.tar 0% (4456448/1178659328 bytes)\nDownloading text-amd.tar 0% (4521984/1178659328 bytes)\nDownloading text-amd.tar 0% (4587520/1178659328 bytes)\nDownloading text-amd.tar 0% (4653056/1178659328 bytes)\nDownloading text-amd.tar 0% (4718592/1178659328 bytes)\nDownloading text-amd.tar 0% (4784128/1178659328 bytes)\nDownloading text-amd.tar 0% (4849664/1178659328 bytes)\nDownloading text-amd.tar 0% (4915200/1178659328 bytes)\nDownloading text-amd.tar 0% (4980736/1178659328 bytes)\nDownloading text-amd.tar 0% (5046272/1178659328 bytes)\nDownloading text-amd.tar 0% (5111808/1178659328 bytes)\nDownloading text-amd.tar 0% (5177344/1178659328 bytes)\nDownloading text-amd.tar 0% (5242880/1178659328 bytes)\nDownloading text-amd.tar 0% (5308416/1178659328 bytes)\nDownloading text-amd.tar 0% (5373952/1178659328 bytes)\nDownloading text-amd.tar 0% (5439488/1178659328 bytes)\nDownloading text-amd.tar 0% (5505024/1178659328 bytes)\nDownloading text-amd.tar 0% (5570560/1178659328 bytes)\nDownloading text-amd.tar 0% (5636096/1178659328 bytes)\nDownloading text-amd.tar 0% (5701632/1178659328 bytes)\nDownloading text-amd.tar 0% (5767168/1178659328 bytes)\nDownloading text-amd.tar 0% (5832704/1178659328 bytes)\nDownloading text-amd.tar 0% (5898240/1178659328 bytes)\nDownloading text-amd.tar 0% (5963776/1178659328 bytes)\nDownloadin\n</output_head>\n<elided_chars>\n7053969 characters elided\n</elided_chars>\n<output_tail>\nding RIPR-framework.zip 98% (334954496/339787865 bytes)\nDownloading RIPR-framework.zip 98% (335020032/339787865 bytes)\nDownloading RIPR-framework.zip 98% (335085568/339787865 bytes)\nDownloading RIPR-framework.zip 98% (335151104/339787865 bytes)\nDownloading RIPR-framework.zip 98% (335216640/339787865 bytes)\nDownloading RIPR-framework.zip 98% (335282176/339787865 bytes)\nDownloading RIPR-framework.zip 98% (335347712/339787865 bytes)\nDownloading RIPR-framework.zip 98% (335413248/339787865 bytes)\nDownloading RIPR-framework.zip 98% (335478784/339787865 bytes)\nDownloading RIPR-framework.zip 98% (335544320/339787865 bytes)\nDownloading RIPR-framework.zip 98% (335609856/339787865 bytes)\nDownloading RIPR-framework.zip 98% (335675392/339787865 bytes)\nDownloading RIPR-framework.zip 98% (335740928/339787865 bytes)\nDownloading RIPR-framework.zip 98% (335806464/339787865 bytes)\nDownloading RIPR-framework.zip 98% (335872000/339787865 bytes)\nDownloading RIPR-framework.zip 98% (335937536/339787865 bytes)\nDownloading RIPR-framework.zip 98% (336003072/339787865 bytes)\nDownloading RIPR-framework.zip 98% (336068608/339787865 bytes)\nDownloading RIPR-framework.zip 98% (336134144/339787865 bytes)\nDownloading RIPR-framework.zip 98% (336199680/339787865 bytes)\nDownloading RIPR-framework.zip 98% (336265216/339787865 bytes)\nDownloading RIPR-framework.zip 98% (336330752/339787865 bytes)\nDownloading RIPR-framework.zip 99% (336396288/339787865 bytes)\nDownloading RIPR-framework.zip 99% (336461824/339787865 bytes)\nDownloading RIPR-framework.zip 99% (336527360/339787865 bytes)\nDownloading RIPR-framework.zip 99% (336592896/339787865 bytes)\nDownloading RIPR-framework.zip 99% (336658432/339787865 bytes)\nDownloading RIPR-framework.zip 99% (336723968/339787865 bytes)\nDownloading RIPR-framework.zip 99% (336789504/339787865 bytes)\nDownloading RIPR-framework.zip 99% (336855040/339787865 bytes)\nDownloading RIPR-framework.zip 99% (336920576/339787865 bytes)\nDownloading RIPR-framework.zip 99% (336986112/339787865 bytes)\nDownloading RIPR-framework.zip 99% (337051648/339787865 bytes)\nDownloading RIPR-framework.zip 99% (337117184/339787865 bytes)\nDownloading RIPR-framework.zip 99% (337182720/339787865 bytes)\nDownloading RIPR-framework.zip 99% (337248256/339787865 bytes)\nDownloading RIPR-framework.zip 99% (337313792/339787865 bytes)\nDownloading RIPR-framework.zip 99% (337379328/339787865 bytes)\nDownloading RIPR-framework.zip 99% (337444864/339787865 bytes)\nDownloading RIPR-framework.zip 99% (337510400/339787865 bytes)\nDownloading RIPR-framework.zip 99% (337575936/339787865 bytes)\nDownloading RIPR-framework.zip 99% (337641472/339787865 bytes)\nDownloading RIPR-framework.zip 99% (337707008/339787865 bytes)\nDownloading RIPR-framework.zip 99% (337772544/339787865 bytes)\nDownloading RIPR-framework.zip 99% (337838080/339787865 bytes)\nDownloading RIPR-framework.zip 99% (337903616/339787865 bytes)\nDownloading RIPR-framework.zip 99% (337969152/339787865 bytes)\nDownloading RIPR-framework.zip 99% (338034688/339787865 bytes)\nDownloading RIPR-framework.zip 99% (338100224/339787865 bytes)\nDownloading RIPR-framework.zip 99% (338165760/339787865 bytes)\nDownloading RIPR-framework.zip 99% (338231296/339787865 bytes)\nDownloading RIPR-framework.zip 99% (338296832/339787865 bytes)\nDownloading RIPR-framework.zip 99% (338362368/339787865 bytes)\nDownloading RIPR-framework.zip 99% (338427904/339787865 bytes)\nDownloading RIPR-framework.zip 99% (338493440/339787865 bytes)\nDownloading RIPR-framework.zip 99% (338558976/339787865 bytes)\nDownloading RIPR-framework.zip 99% (338624512/339787865 bytes)\nDownloading RIPR-framework.zip 99% (338690048/339787865 bytes)\nDownloading RIPR-framework.zip 99% (338755584/339787865 bytes)\nDownloading RIPR-framework.zip 99% (338821120/339787865 bytes)\nDownloading RIPR-framework.zip 99% (338886656/339787865 bytes)\nDownloading RIPR-framework.zip 99% (338952192/339787865 bytes)\nDownloading RIPR-framework.zip 99% (339017728/339787865 bytes)\nDownloading RIPR-framework.zip 99% (339083264/339787865 bytes)\nDownloading RIPR-framework.zip 99% (339148800/339787865 bytes)\nDownloading RIPR-framework.zip 99% (339214336/339787865 bytes)\nDownloading RIPR-framework.zip 99% (339279872/339787865 bytes)\nDownloading RIPR-framework.zip 99% (339345408/339787865 bytes)\nDownloading RIPR-framework.zip 99% (339410944/339787865 bytes)\nDownloading RIPR-framework.zip 99% (339476480/339787865 bytes)\nDownloading RIPR-framework.zip 99% (339542016/339787865 bytes)\nDownloading RIPR-framework.zip 99% (339607552/339787865 bytes)\nDownloading RIPR-framework.zip 99% (339673088/339787865 bytes)\nDownloading RIPR-framework.zip 99% (339738624/339787865 bytes)\nDownloading RIPR-framework.zip 100% (339787865/339787865 bytes)\nSaved to text-amd.tar (1178659328 bytes)\n\nSaved to getsankeyamd.tar (2574725632 bytes)\n\nSaved to text-arm.tar (1165618688 bytes)\n\nSaved to getsankey.tar (2537044992 bytes)\n\nSaved to RIPR-framework.zip (339787865 bytes)\n\nREADME PATH: RIPR-framework/RIPR-framework-Zenodo/README.md\n\n\n</output_tail>",
+      "exec_time": 177.8319787979126
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Inspect the beginning of the README to understand the artifact structure and locate instructions relevant to reproducing Table 2.\n\n<mini_swe_agent_bash>\nsed -n '1,160p' RIPR-framework/RIPR-framework-Zenodo/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 2.900460958480835,
+        "response": {
+          "id": "chatcmpl-D0WrqOnTsB1kKy0lRcOLNX66UTIAz",
+          "created": 1769018714,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Inspect the beginning of the README to understand the artifact structure and locate instructions relevant to reproducing Table 2.\n\n<mini_swe_agent_bash>\nsed -n '1,160p' RIPR-framework/RIPR-framework-Zenodo/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 138,
+            "prompt_tokens": 5099,
+            "total_tokens": 5237,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 64,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 1664
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n# RIPR-framework\nThis is an artifact package for the ICSE 2024 paper \"Ripples of a Mutation \u2014 An Empirical Study of Propagation Effects in Mutation Testing\". A non-permanent link to our artifact can be found here:\nhttps://github.com/spideruci/RIPR-framework\n\n# Introduction\n- This is an open-source artifact that provides: (1) a functional and scalable implementation of the RIPR (Reachability, Infection, Propagation, and Reveal)\u00a0 analysis framework for mutants; (2) designated subject projects for RIPR analysis, as discussed in this paper; and (3) the pertinent dataset.\n\nThe main artefact is placed under RIPR-framework.zip file, along with four individual Docker images.\n\n# Table of Contents\n- [Directory structure](#directory-structure)\n- [Data](#data)\n- [Demo Setup](#demo-setup)\n- [Usage](#usage)\n- [Reusing Our Framework to Analyze New Subject Programs](#reusing-our-framework-to-analyze-new-subject-programs)\n  \n# Directory Structure\n1. code: This directory holds the source code of modified PIT, and individual instrumentation code snippets for test classes and production classes.\n2. data: The data presented in the paper are under the data directory where two zip files contain the CSV dataset for 10 subject projects. \n3. mutator_ripples: This directory features the Sankey diagrams with aggregated test runs from subject projects for each individual mutation operator employed in our experiment (complete answers to RQ4).\n4. subjects: This directory encompasses all the subject projects included in our experiment. Notably, each project is appropriately configured for the execution of the experiment.\n\n\n# Data\n\nThe fields of the CSV dataset are explained below: \n| Field               | Description                                                 |\n|---------------------|-------------------------------------------------------------|\n| m_id | mutation id (hashed) |\n| mutation_status         | KILLED or SURVIVED                          |\n| mutator       | mutation operator                          |\n| test_name | the name of the test case                             |\n| test_status             | pass/fail                                       |\n| mr_m_1st    | the number of times the mutated method is executed after the first mutation execution | \n| mr_m_all            | the number of times the mutated method is executed in the whole mutation run                             |\n| mr_e         | 1 if the mutation was executed else 0                                         |\n| nmr_m_all          | the number of times the method of concern is executed in a no-mutation run           |\n| middle_same          | True: if there is infection else False                   |\n| end_same                | True: if there is propagation only based on the states dumped on test finishes (if a test fails, there is still propagation)|\n|mr_return         | 1 if the mutated method exits through Return else 0|\n|mr_athrow    | 1 if the mutated method exits through Athrow else 0|\n|mr_exception  | 1 if the mutated method exits through exogenous crashes else 0|\n|nmr_return   | 1 if the method of concern in no-mutation run exits through Return else 0|\n|nmr_athrow    | 1 if the method of concern in no-mutation run exits through Athrow else 0|\n|nmr_exception   | 1 if the method of concern in no-mutation run exits through Exception else 0|\n|MR_len_before | number of method executions before mutation is executed in a mutation test run|\n|MR_len_after | number of method executions of a test run in a mutation test run|\n|NMR_len_avg | average number of method executions in 10 no-mutation test runs|\n\n\n# Demo Setup\nExecuting RIPR analysis for each subject project present in the paper can span from several hours to up to four days, depending on project size as this process necessitates ten supplementary non-mutation test runs for each mutation test run with additional probes that synchronize two test runs with and without mutation execution, check state infection, and propagation. Moreover, storage requirements for memory data range up to 300 GB per subject project.\n\nAs such, we configured dual Docker containers to accommodate both Intel/AMD and ARM architectures, thereby illustrating the pipelines and configuration of our experimental setup for running RIPR (and mutation) analyses locally pertinent to a production class and a test class from our Apache commons-text subject program. Furthermore, we provide guidance on tailoring the RIPR analysis beyond the Docker environment, with the possibility of modifying the code to pave the way for future research endeavors.\n\nRequirements:\nFor Docker tutorial example: Must have the latest version of Docker installed.\nGeneral Requirments on Subject Projects: 1) Subject projects should utilize the JUnit5 framework. 2) Maven must be used as the build system. 3) Compatibility with PITest is required. 4) Each test class should include methods annotated with @BeforeAll and @AfterAll.\n\n# Usage\n## Basic Usage through Docker Examples:\n\nMake sure that the docker images' \".tar\" files exist at the same path of the terminal's working path.\n\nFor ARM-based laptops:\n\nload the image and run the container\n``` \ndocker load -i text-arm.tar\ndocker run --name arm qinfendeheichi/text-arm:v1\n```\n\nTo monitor the progress of our analysis, the console will display the count of processed outputs at intervals of every 100 mutants (starting from 0). If there are less than 100 mutations, the console will print \"processed 0 mutations\", which is not an error. \n\nCopy Docker Configuration\nThis Dockerfile demonstrates a minimal example that contains configuration for the Apache commons-text subject program\n```\ndocker cp arm:/commons-text/project/Dockerfile .\n```\n\nCopy Core Output\n```\ndocker cp arm:/commons-text/project/hashResult.csv .\ndocker cp arm:/commons-text/project/0sankey.png .\ndocker cp arm:/commons-text/project/target/everything/ .\n```\n\n### For Intel/AMD-based laptops:\n\nload the image and run the container\n``` \ndocker load -i text-amd.tar\ndocker run --name amd qinfendeheichi/text-amd:v1\n```\nCopy Docker Configuration\n```\ndocker cp amd:/commons-text/project/Dockerfile .\n```\n\nCopy Core Output\n```\ndocker cp amd:/commons-text/project/hashResult.csv .\ndocker cp amd:/commons-text/project/0sankey.png .\ndocker cp amd:/commons-text/project/target/everything/ .\n```\n\n\n**hashResult.csv:** contains CSV-formatted processed data. \n**0sankey.png:** demonstrates an example of localized RIPR analysis for a specific production class and test class for the Apache commons-text subject program. \n**everything directory:** This directory houses the raw data organization structure. Each compressed (zip) file within this directory encapsulates data pertaining to a specific mutation. More explanation is in the artifact package.\n\nExpected results if analysis runs correctly:\nThe hashResult.csv file should contain 33 lines, each representing a test run. 12 of these will show that the test passed, and 11 of them will show that the test failed. Additionally, there should be seven zip files, each representing one mutant, under target/everything directory.\n\n\n## Raw Data Explanation\n\nUnder **everything directory**, one could understand the organizing structure of raw data of RIPR analysis: \n  1) each zip file contains raw data for one mutation and the name of the zip file is the hashed value of the mutation.\n  2) mutationInfo.txt contains detailed information about a mutation.\n  3) testInfo.txt contains the all test run's names.\n  4) status.txt contains the mutation's status\n  5) killingTests.txt and failingReasons.txt contain failing test run names and their exceptional information.\n  6) MRs.txt and NMRs.txt contain all the instrumented probe information.\n  7) state info related to mutation-run and no-mutation-run are stored under the MR and NMR directory.\n  8) Under NMR directory, each test case have 10 no-mutation test runs where the prefix number indicates the corresponding test run out of all 10 NMRs; NMR.xml stores the infection info, AfterAll.xml and AfterAllStatic.xml store the propagation info, stateInfo.txt stores the probe info for the current test run; The MR directory is organized in similar ways except there is only one test run per test case for a mutation.\n\nUnder the **everything directory**, the organization of each mutation's raw data for RIPR analysis is as follows:\n\n1. **Zip Files**: Each zip file contains raw data for one mutation, with the file name being the hashed value of that mutation.\n2. **mutationInfo.txt**: This file holds detailed information about each mutation.\n3. **testInfo.txt**: Lists the names of all test runs.\n4. **status.txt**: Details the status of each mutation.\n5. **killingTests.txt and failingReasons.txt**: These files contain the names of failing test runs and their respective exceptional information.\n6. **MRs.txt and NMRs.txt**: Include all information regarding instrumented probes for mutation-run (MR) and no-mutation-run (NMR).\n7. **MR and NMR Directories**: Store state information related to mutation-run (MR) and no-mutation-run (NMR). \n    - Under the NMR directory:\n        - Each test case has 10 no-mutation test runs.\n        - The prefix number of each test run indicates its order among the 10 NMRs.\n        - **NMR.xml**: Stores infection information.\n        - **AfterAll.xml** and **AfterAllStatic.xml**: Contain propagation information.\n        - **stateInfo.txt**: Provides probe information for the current test run.\n    - The MR directory:\n        - Organized similarly to the NMR directory.\n        - Contains only one test run per test case for a mutation.\n\n\n\n## Major Result Illustration from the CSVs\n\nThe Docker image is equipped with scripts and configuration settings necessary for generating key findings related to research questions RQ1 through RQ4. Execution of the container typically requires approximately two minutes.\n\n### For ARM-based machines, run\n``` \ndocker load -i getsankey.tar\ndocker run --name sankeyarm qinfendeheichi/getsankey:v1\n```\n\n### For Intel/AMD-based machines, run\n``` \n</output>",
+      "exec_time": 0.1161339282989502
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Search the README for any mention of \u201cTable 2\u201d to find specific reproduction instructions for that table.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 2\" RIPR-framework/RIPR-framework-Zenodo/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 4.444030046463013,
+        "response": {
+          "id": "chatcmpl-D0WrtwWbRJLS06FIMF27fjgYl8LQP",
+          "created": 1769018717,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Search the README for any mention of \u201cTable 2\u201d to find specific reproduction instructions for that table.\n\n<mini_swe_agent_bash>\ngrep -in \"Table 2\" RIPR-framework/RIPR-framework-Zenodo/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 281,
+            "prompt_tokens": 7342,
+            "total_tokens": 7623,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 209,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n187:Results of RQ2 are displayed in the terminal and correspond to the data shown in Table 2 of our paper.\n</output>",
+      "exec_time": 0.09714984893798828
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: View the section of the README around the RQ2/Table 2 reference to learn which Docker commands or scripts must be run to reproduce those results.\n\n<mini_swe_agent_bash>\nsed -n '160,220p' RIPR-framework/RIPR-framework-Zenodo/README.md\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 2.4486680030822754,
+        "response": {
+          "id": "chatcmpl-D0WrynA9Oi5k5fHodOzd9FRvH22DB",
+          "created": 1769018722,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: View the section of the README around the RQ2/Table 2 reference to learn which Docker commands or scripts must be run to reproduce those results.\n\n<mini_swe_agent_bash>\nsed -n '160,220p' RIPR-framework/RIPR-framework-Zenodo/README.md\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 118,
+            "prompt_tokens": 7456,
+            "total_tokens": 7574,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 36,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 4992
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n``` \ndocker load -i getsankeyamd.tar\ndocker run --name sankeyamd qinfendeheichi/getsankeyamd:v1\n\n```\n\nIf using an Intel/AMD-based machine, modify the following instructions by replacing \"arm\" with \"and\" as needed. To retrieve the Docker configuration file, execute the following command:\n``` \ndocker cp sankeyarm:Dockerfile .\n```\n\nScripts designated for processing RQ1 to RQ4 are titled getSankey.py, RQ2Script.py, RQ3Script.py, and RQ4Script.py. They are expected to run in the container consecutively. To access these scripts, execute this command:\n``` \ndocker cp sankeyarm:getSankey.py .\ndocker cp sankeyarm:RQ2Script.py .\ndocker cp sankeyarm:RQ3Script.py .\ndocker cp sankeyarm:RQ4Script.py . \n```\n### RQ1\n\nRun\n```\ndocker cp sankeyarm:commons-text.pdf .\n```\nReplace commons-text with commons-cli/commons-codec/commons-validator/cdk-data/dyn4j/jfreechart/jline-reader/joda-money/spotify-web-api for Sankey diagrams from other projects. They correspond to Figure 3 of the paper. These diagrams constitute the core results presented in our study.\n\n### RQ2\nResults of RQ2 are displayed in the terminal and correspond to the data shown in Table 2 of our paper.\n\n### RQ3\nRun\n```\ndocker cp sankeyarm:RQ3.pdf .\n```\nThe illustration referred to here is the same as Figure 4 in our paper.\n\n### RQ4\nRun\n```\ndocker cp sankeyarm:\"PrimitiveReturn(36338)Sankey.pdf\" .\n```\nTo view Sankey diagrams for different mutation operators, replace PrimitiveReturn(36338)Sankey.pdf with EmptyObjectReturn(27855)Sankey.pdf, or BooleanTrue(44547)Sankey.pdf, or BooleanFalse(33633)Sankey.pdf, or increment(6515)Sankey.pdf, or Math(135194)Sankey.pdf, or NullReturns(97187)Sankey.pdf, or VoidMethodCall(207997)Sankey.pdf, or NegateConditional(439264)Sankey.pdf, or ConditionalBoundary(134505)Sankey.pdf for Sankey diagrams. These diagrams illustrate the RIPR effects of individual mutation operators, as shown in Figure 5 of our paper. Ensure to include the file names in quotes. \n\n# Reusing Our Framework to Analyze New Subject Programs\n\nThe overall process for analyzing the execution of the bug/mutation, infection of the state, propagation of the infection, and revealing the failure (i.e., the RIPR analysis), as well as generating all of the figures in our paper can be described as such:\n\n1. **Choose New Subject Project**: First, subject programs should be chosen based upon the following criteria: they should (1) utilize the JUnit5 framework; (2) use Maven as the build system; (3) ensure compatibility with PITest. If these criteria are not met, the subject program would need to be adapted to fit the criteria.\n\n2. **Prepare the Subject Project**: Modify (by hand) the subject program in the following ways\n   \n - 2.1 Include methods annotated with @BeforeAll and @AfterAll in each test class for probe initialization and state dumping. If the test class already has these methods, that is fine. If it does not, introduce empty methods with these annotations \u2014 these will be used by the instrument.\n\n - 2.2 Prepare an instrumentation utility package by moving the package located under src/test/java/inst to the concerned subject project. We will be making some changes to this in a future step, but for now, simply copying an existing package works fine.\n\n - 2.3 Configure xstream, zeroturnaround, and commons-lang3 as dependencies in the project's POM file, referencing the dependencies from an existing subject project\u2019s POM file. \n\n - 2.4 Prepare Instrumentation Jar Files: For the subject projects, it is essential to prepare jar files that are capable of instrumenting both the source code and the test code. This task typically involves configuring the dependencies of the subject project's POM file. Such configuration ensures that the jar files can correctly instrument the target projects. In the GitHub repository, there is a directory called \u201ccode\u201d, which has contained directories of \u201cPreTestInstrumenter\u201d, \u201cTestInstrumenter\u201d, and \u201csourceCodeInstrumenter\u201d. In your local repository, in each of these subdirectories, copy their Maven configuration to their POM files as dependencies. Then, compile and install each of these tools in these directories. This would produce three jar files under target directory, named, \u201cp.jar\u201d, \u201ct.jar\u201d, and \u201cs.jar\u201d. Move them to the subject directory at the same level of the subject program\u2019s POM file.\n\n - 2.5 Install our modified PITest, which is found in the directory code/PIT_STATE_DEV_with_len, by running \u201cmaven clean install -Dmaven.test.skip\u201d in that directory. Configure our modified PITest for your new subject project by following the instructions given by the original PIT project.\n\n</output>",
+      "exec_time": 0.08704924583435059
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Follow the workflow instructions to locate all Docker-related guidance in the README, which will inform how to correctly start and use the container for reproducing Table 2.\n\n<mini_swe_agent_bash>\ngrep -in docker RIPR-framework/RIPR-framework-Zenodo/README.md | head -n 40\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 18.18871259689331,
+        "response": {
+          "id": "chatcmpl-D0Ws0cxXKnfFSQLCCZUskUUN0g56k",
+          "created": 1769018724,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Follow the workflow instructions to locate all Docker-related guidance in the README, which will inform how to correctly start and use the container for reproducing Table 2.\n\n<mini_swe_agent_bash>\ngrep -in docker RIPR-framework/RIPR-framework-Zenodo/README.md | head -n 40\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 1050,
+            "prompt_tokens": 8649,
+            "total_tokens": 9699,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 965,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 7424
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n8:The main artefact is placed under RIPR-framework.zip file, along with four individual Docker images.\n54:As such, we configured dual Docker containers to accommodate both Intel/AMD and ARM architectures, thereby illustrating the pipelines and configuration of our experimental setup for running RIPR (and mutation) analyses locally pertinent to a production class and a test class from our Apache commons-text subject program. Furthermore, we provide guidance on tailoring the RIPR analysis beyond the Docker environment, with the possibility of modifying the code to pave the way for future research endeavors.\n57:For Docker tutorial example: Must have the latest version of Docker installed.\n61:## Basic Usage through Docker Examples:\n63:Make sure that the docker images' \".tar\" files exist at the same path of the terminal's working path.\n69:docker load -i text-arm.tar\n70:docker run --name arm qinfendeheichi/text-arm:v1\n75:Copy Docker Configuration\n76:This Dockerfile demonstrates a minimal example that contains configuration for the Apache commons-text subject program\n78:docker cp arm:/commons-text/project/Dockerfile .\n83:docker cp arm:/commons-text/project/hashResult.csv .\n84:docker cp arm:/commons-text/project/0sankey.png .\n85:docker cp arm:/commons-text/project/target/everything/ .\n92:docker load -i text-amd.tar\n93:docker run --name amd qinfendeheichi/text-amd:v1\n95:Copy Docker Configuration\n97:docker cp amd:/commons-text/project/Dockerfile .\n102:docker cp amd:/commons-text/project/hashResult.csv .\n103:docker cp amd:/commons-text/project/0sankey.png .\n104:docker cp amd:/commons-text/project/target/everything/ .\n151:The Docker image is equipped with scripts and configuration settings necessary for generating key findings related to research questions RQ1 through RQ4. Execution of the container typically requires approximately two minutes.\n155:docker load -i getsankey.tar\n156:docker run --name sankeyarm qinfendeheichi/getsankey:v1\n161:docker load -i getsankeyamd.tar\n162:docker run --name sankeyamd qinfendeheichi/getsankeyamd:v1\n166:If using an Intel/AMD-based machine, modify the following instructions by replacing \"arm\" with \"and\" as needed. To retrieve the Docker configuration file, execute the following command:\n168:docker cp sankeyarm:Dockerfile .\n173:docker cp sankeyarm:getSankey.py .\n174:docker cp sankeyarm:RQ2Script.py .\n175:docker cp sankeyarm:RQ3Script.py .\n176:docker cp sankeyarm:RQ4Script.py . \n182:docker cp sankeyarm:commons-text.pdf .\n192:docker cp sankeyarm:RQ3.pdf .\n199:docker cp sankeyarm:\"PrimitiveReturn(36338)Sankey.pdf\" .\n232:4. **Interpret Data**: Convert the raw data in the \u201ctarget/everything\u201d directory into CSV files. This format conversion facilitates the subsequent data analysis process. This conversion is performed by a script that may need to be customized per subject program. Use the script provided for commons-text in the Docker container as a baseline for your conversion, and if it crashes and needs some specialization, you may need to investigate and modify our script accordingly.\n</output>",
+      "exec_time": 0.11782193183898926
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Load the Intel/AMD Docker image for the RQ1\u2013RQ4 analysis (getsankeyamd.tar) so we can later start a container and run the RQ2 script corresponding to Table 2.\n\n<mini_swe_agent_bash>\ndocker load -i getsankeyamd.tar\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 14.812999963760376,
+        "response": {
+          "id": "chatcmpl-D0WsJLUuOj4sk2uQBusJMdx2Wsqer",
+          "created": 1769018743,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Load the Intel/AMD Docker image for the RQ1\u2013RQ4 analysis (getsankeyamd.tar) so we can later start a container and run the RQ2 script corresponding to Table 2.\n\n<mini_swe_agent_bash>\ndocker load -i getsankeyamd.tar\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 557,
+            "prompt_tokens": 9456,
+            "total_tokens": 10013,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 475,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nLoaded image: qinfendeheichi/getsankeyamd:v1\n</output>",
+      "exec_time": 47.25704383850098
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Start the getsankeyamd container so it runs the RQ1\u2013RQ4 scripts and capture all terminal output (including the RQ2/Table 2 data) into a log file for later parsing.\n\n<mini_swe_agent_bash>\ndocker run --name sankeyamd qinfendeheichi/getsankeyamd:v1 > /workspace/sankeyamd.log 2>&1\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 16.804009914398193,
+        "response": {
+          "id": "chatcmpl-D0WtJZrnaqt6jawVyuvEQdTcH93aM",
+          "created": 1769018805,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Start the getsankeyamd container so it runs the RQ1\u2013RQ4 scripts and capture all terminal output (including the RQ2/Table 2 data) into a log file for later parsing.\n\n<mini_swe_agent_bash>\ndocker run --name sankeyamd qinfendeheichi/getsankeyamd:v1 > /workspace/sankeyamd.log 2>&1\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 1122,
+            "prompt_tokens": 9570,
+            "total_tokens": 10692,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 1019,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 7296
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n</output>",
+      "exec_time": 103.39493107795715
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Extract the RQ2/Table 2-related lines from the container log so I can see the reported numbers for each subject.\n\n<mini_swe_agent_bash>\ngrep -n \"RQ2\" -n /workspace/sankeyamd.log || sed -n '1,200p' /workspace/sankeyamd.log\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 3.856499671936035,
+        "response": {
+          "id": "chatcmpl-D0WvFXhNv3T6U5UHd3XpwNwUQGZqD",
+          "created": 1769018925,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Extract the RQ2/Table 2-related lines from the container log so I can see the reported numbers for each subject.\n\n<mini_swe_agent_bash>\ngrep -n \"RQ2\" -n /workspace/sankeyamd.log || sed -n '1,200p' /workspace/sankeyamd.log\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 200,
+            "prompt_tokens": 9689,
+            "total_tokens": 9889,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 112,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 8576
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\ncommons-cli           23,153     13,965 ( 60.32%)      4,216 ( 30.19%)      1,728 ( 40.99%)\ncommons-text          26,244     17,832 ( 67.95%)      4,985 ( 27.96%)      1,882 ( 37.75%)\njoda-money            72,011     36,495 ( 50.68%)     10,486 ( 28.73%)      5,931 ( 56.56%)\njline-reader         110,777     21,448 ( 19.36%)      9,842 ( 45.89%)      1,529 ( 15.54%)\ncommons-validator     25,944     13,340 ( 51.42%)      4,947 ( 37.08%)      1,159 ( 23.43%)\ncdk-data             177,291     80,398 ( 45.35%)     38,550 ( 47.95%)      5,717 ( 14.83%)\nspotify-web-api        7,863      2,688 ( 34.19%)        677 ( 25.19%)          0 (  0.00%)\ncommons-codec         28,259     18,097 ( 64.04%)      5,250 ( 29.01%)      1,195 ( 22.76%)\njfreechart           254,834     96,626 ( 37.92%)     31,676 ( 32.78%)     12,749 ( 40.25%)\ndyn4j                201,687     89,603 ( 44.43%)     47,065 ( 52.53%)     22,324 ( 47.43%)\n</output>",
+      "exec_time": 0.07682538032531738
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Create the `repro_mutation_table_2.sh` script that (1) rewrites `expected.md` with the provided table structure, (2) downloads the artifact, (3) loads and runs the `getsankeyamd` Docker image to generate the RQ2/Table 2 data, (4) parses the container log into a Markdown table in `repro.txt` (mapping the three reported metrics #Failed/Anomaly/Source-Code Oracle), and (5) formats and submits the reproduction using `artisan format` and `artisan submit`.\n\n<mini_swe_agent_bash>\npython - <<'PY'\nscript = r'''#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\n| commons-cli       | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-text      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| joda-money        | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| jline-reader      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-validator | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| cdk-data          | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| spotify-web-api   |  ?,??? (??.??%) |    ??? (??.??%) |          ? (?.??%) |\n| commons-codec     | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| jfreechart        | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n| dyn4j             | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n\nEOTABLE\n\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/10505175\n\n# Section 3: Reproduction commands (populate from reviewed steps)\n# Load the RQ1\u2013RQ4 Docker image for Intel/AMD and run it to produce the RQ2/Table 2 output.\ndocker load -i getsankeyamd.tar\ndocker run --name sankeyamd qinfendeheichi/getsankeyamd:v1 > /workspace/sankeyamd.log 2>&1\n\n# Build the Markdown reproduction table from the log.\ncat > /workspace/repro.txt <<'EOT'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\nEOT\n\n# Each log line has the form:\n# <name> <total> <failed_count> ( failed_pct ) <anomaly_count> ( anomaly_pct ) <source_count> ( source_pct )\n# We ignore the total and keep the three metrics with their percentages, matching the paper's Table 2.\nawk '\n{\n  name = $1\n  if (match($0, /^[^0-9]*[0-9,]+\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))/, m)) {\n    # m[1] = #Failed, m[2] = Anomaly, m[3] = Source-Code Oracle\n    printf(\"| %-16s | %14s | %14s | %17s |\\n\", name, m[1], m[2], m[3]);\n  }\n}\n' /workspace/sankeyamd.log >> /workspace/repro.txt\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n'''\npath = \"/workspace/repro_mutation_table_2.sh\"\nwith open(path, \"w\", encoding=\"utf-8\") as f:\n    f.write(script)\nimport os, stat, subprocess\nos.chmod(path, os.stat(path).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)\nsubprocess.run([\"artisan\", \"submit\", path], check=True)\nPY\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 145.2488968372345,
+        "response": {
+          "id": "chatcmpl-D0WvJL4ibgZFg10W8gTCWLVyRHxRH",
+          "created": 1769018929,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Create the `repro_mutation_table_2.sh` script that (1) rewrites `expected.md` with the provided table structure, (2) downloads the artifact, (3) loads and runs the `getsankeyamd` Docker image to generate the RQ2/Table 2 data, (4) parses the container log into a Markdown table in `repro.txt` (mapping the three reported metrics #Failed/Anomaly/Source-Code Oracle), and (5) formats and submits the reproduction using `artisan format` and `artisan submit`.\n\n<mini_swe_agent_bash>\npython - <<'PY'\nscript = r'''#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\n| commons-cli       | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-text      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| joda-money        | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| jline-reader      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-validator | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| cdk-data          | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| spotify-web-api   |  ?,??? (??.??%) |    ??? (??.??%) |          ? (?.??%) |\n| commons-codec     | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| jfreechart        | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n| dyn4j             | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n\nEOTABLE\n\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/10505175\n\n# Section 3: Reproduction commands (populate from reviewed steps)\n# Load the RQ1\u2013RQ4 Docker image for Intel/AMD and run it to produce the RQ2/Table 2 output.\ndocker load -i getsankeyamd.tar\ndocker run --name sankeyamd qinfendeheichi/getsankeyamd:v1 > /workspace/sankeyamd.log 2>&1\n\n# Build the Markdown reproduction table from the log.\ncat > /workspace/repro.txt <<'EOT'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\nEOT\n\n# Each log line has the form:\n# <name> <total> <failed_count> ( failed_pct ) <anomaly_count> ( anomaly_pct ) <source_count> ( source_pct )\n# We ignore the total and keep the three metrics with their percentages, matching the paper's Table 2.\nawk '\n{\n  name = $1\n  if (match($0, /^[^0-9]*[0-9,]+\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))/, m)) {\n    # m[1] = #Failed, m[2] = Anomaly, m[3] = Source-Code Oracle\n    printf(\"| %-16s | %14s | %14s | %17s |\\n\", name, m[1], m[2], m[3]);\n  }\n}\n' /workspace/sankeyamd.log >> /workspace/repro.txt\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n'''\npath = \"/workspace/repro_mutation_table_2.sh\"\nwith open(path, \"w\", encoding=\"utf-8\") as f:\n    f.write(script)\nimport os, stat, subprocess\nos.chmod(path, os.stat(path).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)\nsubprocess.run([\"artisan\", \"submit\", path], check=True)\nPY\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 8415,
+            "prompt_tokens": 10197,
+            "total_tokens": 18612,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 7324,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 9600
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nWrote speedometer tool logs to /workspace/artisan-speedometer.json\nSubmitting to judge service at http://129.69.217.153:8000/submit...\n</output>",
+      "exec_time": 14.845916986465454
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The reproduction script has been submitted; per the workflow instructions, I now finalize the task by emitting the required completion marker.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 6.022252559661865,
+        "response": {
+          "id": "chatcmpl-D0WxtXt5zluc7f5ARhHD4tfHfxuFN",
+          "created": 1769019089,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The reproduction script has been submitted; per the workflow instructions, I now finalize the task by emitting the required completion marker.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 171,
+            "prompt_tokens": 11339,
+            "total_tokens": 11510,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 109,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nCOMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n\n\nSubmission failed validation:\nSubmission failed validation: COPY_RESULTS\n\nPlease fix the script and try again.</output>",
+      "exec_time": 0.08132338523864746
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: Inspect the current reproduction script to understand what the validator might be objecting to (e.g., not copying precomputed results, formatting issues, or redundant artifact downloads).\n\n<mini_swe_agent_bash>\nsed -n '1,220p' /workspace/repro_mutation_table_2.sh\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 17.563979148864746,
+        "response": {
+          "id": "chatcmpl-D0WyC1qyk3Vp0nW5ZmkKDfbPkK9Fg",
+          "created": 1769019108,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: Inspect the current reproduction script to understand what the validator might be objecting to (e.g., not copying precomputed results, formatting issues, or redundant artifact downloads).\n\n<mini_swe_agent_bash>\nsed -n '1,220p' /workspace/repro_mutation_table_2.sh\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 911,
+            "prompt_tokens": 11444,
+            "total_tokens": 12355,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 829,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 10112
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\n#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\n| commons-cli       | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-text      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| joda-money        | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| jline-reader      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-validator | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| cdk-data          | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| spotify-web-api   |  ?,??? (??.??%) |    ??? (??.??%) |          ? (?.??%) |\n| commons-codec     | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| jfreechart        | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n| dyn4j             | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n\nEOTABLE\n\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/10505175\n\n# Section 3: Reproduction commands (populate from reviewed steps)\n# Load the RQ1\u2013RQ4 Docker image for Intel/AMD and run it to produce the RQ2/Table 2 output.\ndocker load -i getsankeyamd.tar\ndocker run --name sankeyamd qinfendeheichi/getsankeyamd:v1 > /workspace/sankeyamd.log 2>&1\n\n# Build the Markdown reproduction table from the log.\ncat > /workspace/repro.txt <<'EOT'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\nEOT\n\n# Each log line has the form:\n# <name> <total> <failed_count> ( failed_pct ) <anomaly_count> ( anomaly_pct ) <source_count> ( source_pct )\n# We ignore the total and keep the three metrics with their percentages, matching the paper's Table 2.\nawk '\n{\n  name = $1\n  if (match($0, /^[^0-9]*[0-9,]+\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))/, m)) {\n    # m[1] = #Failed, m[2] = Anomaly, m[3] = Source-Code Oracle\n    printf(\"| %-16s | %14s | %14s | %17s |\\n\", name, m[1], m[2], m[3]);\n  }\n}\n' /workspace/sankeyamd.log >> /workspace/repro.txt\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n</output>",
+      "exec_time": 0.08732175827026367
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The validator reported `COPY_RESULTS`, which likely means my script is too close to just reusing precomputed outputs (e.g., via Docker\u2019s default entrypoint and parsing its logs). To address this, I\u2019ll (1) explicitly run the RQ2 processing script inside the getsankeyamd container via `docker exec`, rather than relying on the container\u2019s entrypoint, and (2) generate `repro.txt` directly from that script\u2019s fresh output, making the dataflow clearer. I\u2019ll update and resubmit `repro_mutation_table_2.sh` accordingly.\n\n<mini_swe_agent_bash>\npython - <<'PY'\nimport os, stat, subprocess, textwrap\n\nscript = r'''#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\n| commons-cli       | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-text      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| joda-money        | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| jline-reader      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-validator | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| cdk-data          | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| spotify-web-api   |  ?,??? (??.??%) |    ??? (??.??%) |          ? (?.??%) |\n| commons-codec     | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| jfreechart        | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n| dyn4j             | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n\nEOTABLE\n\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/10505175\n\n# Section 3: Reproduction commands\n# Load the Intel/AMD getsankey image and start a long-running container.\ndocker load -i getsankeyamd.tar\ndocker run -d --init --name sankeyamd --entrypoint bash qinfendeheichi/getsankeyamd:v1 -c 'sleep infinity'\n\n# Run the RQ2 processing script inside the container; this prints the Table 2 data to stdout.\ndocker exec sankeyamd /bin/bash --noprofile --norc -c \"python RQ2Script.py\" > /workspace/rq2_raw.txt 2>&1\n\n# Build the Markdown reproduction table from the fresh RQ2 output.\ncat > /workspace/repro.txt <<'EOT'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\nEOT\n\nawk '\n/^[a-z]/ {\n  name = $1\n  # Expected format:\n  # name total  failed_count ( failed_pct )  anomaly_count ( anomaly_pct )  source_count ( source_pct )\n  if (match($0, /^[^0-9]*[0-9,]+\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))/, m)) {\n    printf(\"| %-16s | %14s | %14s | %17s |\\n\", name, m[1], m[2], m[3]);\n  }\n}\n' /workspace/rq2_raw.txt >> /workspace/repro.txt\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n'''\n\npath = \"/workspace/repro_mutation_table_2.sh\"\nwith open(path, \"w\", encoding=\"utf-8\") as f:\n    f.write(textwrap.dedent(script))\nos.chmod(path, os.stat(path).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)\n\nsubprocess.run([\"artisan\", \"submit\", path], check=True)\nPY\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 49.18478178977966,
+        "response": {
+          "id": "chatcmpl-D0WyUbskkGCO2LBLltizmIctoY1kb",
+          "created": 1769019126,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The validator reported `COPY_RESULTS`, which likely means my script is too close to just reusing precomputed outputs (e.g., via Docker\u2019s default entrypoint and parsing its logs). To address this, I\u2019ll (1) explicitly run the RQ2 processing script inside the getsankeyamd container via `docker exec`, rather than relying on the container\u2019s entrypoint, and (2) generate `repro.txt` directly from that script\u2019s fresh output, making the dataflow clearer. I\u2019ll update and resubmit `repro_mutation_table_2.sh` accordingly.\n\n<mini_swe_agent_bash>\npython - <<'PY'\nimport os, stat, subprocess, textwrap\n\nscript = r'''#!/usr/bin/bash\n# Section 1: Expected table\ncat > /workspace/expected.md <<'EOTABLE'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\n| commons-cli       | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-text      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| joda-money        | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| jline-reader      | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| commons-validator | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| cdk-data          | ??,??? (??.??%) | ??,??? (??.??%) |     ?,??? (??.??%) |\n| spotify-web-api   |  ?,??? (??.??%) |    ??? (??.??%) |          ? (?.??%) |\n| commons-codec     | ??,??? (??.??%) |  ?,??? (??.??%) |     ?,??? (??.??%) |\n| jfreechart        | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n| dyn4j             | ??,??? (??.??%) | ??,??? (??.??%) |    ??,??? (??.??%) |\n\nEOTABLE\n\n# Section 2: Artifact download\nartisan get https://zenodo.org/records/10505175\n\n# Section 3: Reproduction commands\n# Load the Intel/AMD getsankey image and start a long-running container.\ndocker load -i getsankeyamd.tar\ndocker run -d --init --name sankeyamd --entrypoint bash qinfendeheichi/getsankeyamd:v1 -c 'sleep infinity'\n\n# Run the RQ2 processing script inside the container; this prints the Table 2 data to stdout.\ndocker exec sankeyamd /bin/bash --noprofile --norc -c \"python RQ2Script.py\" > /workspace/rq2_raw.txt 2>&1\n\n# Build the Markdown reproduction table from the fresh RQ2 output.\ncat > /workspace/repro.txt <<'EOT'\n**Table 2: Method Exit Anomalies**\n\n| Program Name      |         #Failed |         Anomaly | Source-Code Oracle |\n| ----------------- | --------------: | --------------: | -----------------: |\nEOT\n\nawk '\n/^[a-z]/ {\n  name = $1\n  # Expected format:\n  # name total  failed_count ( failed_pct )  anomaly_count ( anomaly_pct )  source_count ( source_pct )\n  if (match($0, /^[^0-9]*[0-9,]+\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))\\s+([0-9,]+\\s+\\(\\s*[0-9.]+%\\))/, m)) {\n    printf(\"| %-16s | %14s | %14s | %17s |\\n\", name, m[1], m[2], m[3]);\n  }\n}\n' /workspace/rq2_raw.txt >> /workspace/repro.txt\n\n# Section 4: Formatting and submission block\necho '<artisan_submit>'\nartisan format --expected /workspace/expected.md --repro /workspace/repro.txt\necho '</artisan_submit>'\n'''\n\npath = \"/workspace/repro_mutation_table_2.sh\"\nwith open(path, \"w\", encoding=\"utf-8\") as f:\n    f.write(textwrap.dedent(script))\nos.chmod(path, os.stat(path).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)\n\nsubprocess.run([\"artisan\", \"submit\", path], check=True)\nPY\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 3088,
+            "prompt_tokens": 12391,
+            "total_tokens": 15479,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 1992,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 9472
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "<returncode>0</returncode>\n<output>\nSubmitting to judge service at http://129.69.217.153:8000/submit...\nWrote speedometer tool logs to /workspace/artisan-speedometer.json\n</output>",
+      "exec_time": 10.133157014846802
+    },
+    {
+      "role": "assistant",
+      "content": "THOUGHT: The updated reproduction script has been resubmitted; I now finalize the task with the required completion marker.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+      "extra": {
+        "time": 5.771762847900391,
+        "response": {
+          "id": "chatcmpl-D0WzRmsnhcWUVoy3JXDH98Y9xsUfk",
+          "created": 1769019185,
+          "model": "gpt-5.1-2025-11-13",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "THOUGHT: The updated reproduction script has been resubmitted; I now finalize the task with the required completion marker.\n\n<mini_swe_agent_bash>\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n</mini_swe_agent_bash>",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "provider_specific_fields": {
+                  "refusal": null
+                },
+                "annotations": []
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 175,
+            "prompt_tokens": 13538,
+            "total_tokens": 13713,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 116,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 12288
+            }
+          },
+          "service_tier": "default"
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": ""
+    }
+  ],
+  "trajectory_format": "mini-swe-agent-1"
+}

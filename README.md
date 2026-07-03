@@ -18,7 +18,7 @@ Last-mile reproduction regenerates the submitted artifact outputs from archived 
 We support the artifact workflow with Docker:
 
 ```bash
-docker run --rm -it -v "$PWD":/output ghcr.io/doehyunbaek/artisan:latest
+docker run --platform linux/amd64 --rm -it -v "$PWD":/output ghcr.io/doehyunbaek/artisan:latest
 ```
 
 This runs last-mile reproduction end to end and writes `./ase-artisan.pdf` on the host. Inside the container, it also writes:
@@ -33,6 +33,15 @@ The image is based on Ubuntu 24.04 LTS and built from [`Dockerfile`](./Dockerfil
 For other platforms, use the Docker image or open an issue.
 
 The command above runs [`data/reproduce.py`](./data/reproduce.py), which performs the following steps.
+
+To run the steps manually or inspect the container, start an interactive shell instead:
+
+```bash
+docker run --platform linux/amd64 --rm -it -v "$PWD":/output ghcr.io/doehyunbaek/artisan:latest bash
+```
+
+The manual commands below assume you are inside this container shell.
+The repository is mounted at `/artifact`, and host outputs should be written under `/output`.
 
 ### Step 1: Restore logs
 

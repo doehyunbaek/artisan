@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Download and restore Artisan log files.
+"""Download and restore Artisan log files under data/logs.
 
 This script downloads the v0.0.1 release archive and extracts only the
-large log artifacts (.traj, .json, .log) back into their original locations
-under this directory.
+large log artifacts (.traj, .json, .log) under the logs directory.
 """
 
 from __future__ import annotations
@@ -20,6 +19,7 @@ URL = "https://github.com/doehyunbaek/artisan/releases/download/v0.0.1/artisan_2
 ARCHIVE_PREFIX = "artisan-logs/"
 EXTENSIONS = {".traj", ".json", ".log"}
 DATA_DIR = Path(__file__).resolve().parent
+LOGS_DIR = DATA_DIR / "logs"
 
 
 def is_target_member(name: str) -> bool:
@@ -73,9 +73,9 @@ def extract_targets(zip_path: Path, dest_root: Path, *, dry_run: bool = False) -
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Restore .traj, .json, and .log files under ~/artisan/data")
+    parser = argparse.ArgumentParser(description="Restore .traj, .json, and .log files under ~/artisan/data/logs")
     parser.add_argument("--url", default=URL, help="zip archive URL")
-    parser.add_argument("--dest", type=Path, default=DATA_DIR, help="destination data directory")
+    parser.add_argument("--dest", type=Path, default=LOGS_DIR, help="destination logs directory")
     parser.add_argument("--zip", dest="zip_path", type=Path, help="use an existing zip instead of downloading")
     parser.add_argument("--keep-zip", action="store_true", help="keep the downloaded zip file")
     parser.add_argument("--dry-run", action="store_true", help="list files that would be restored without writing them")

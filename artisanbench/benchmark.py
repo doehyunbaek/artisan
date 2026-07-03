@@ -126,6 +126,7 @@ def process_instance(
     exit_status = "NEED_TRIAGE"
     exit_reason = "Unknown"
     start_time = time.time()
+    agent_time = 0.0
     cost = 0.0
     llm_time = 0.0
     exec_time = 0.0
@@ -328,6 +329,7 @@ def cmd_reprobench(
     log_per_config: bool = False,
     ablation: str | None = None,
     continue_run: str | None = None,
+    log_root_override: str | None = None,
 ) -> None:
     instances_path = Path(f"{util.find_repo_root()}/artisanbench/metadata.json")
 
@@ -407,13 +409,18 @@ def cmd_reprobench(
         print(f"Using model: {model_name}")
 
     if not continue_run:
-        if log_per_config:
+        if log_root_override:
+            log_root = Path(log_root_override).expanduser().resolve()
+            print(f"Logging to {log_root}")
+            report_path = log_root / "reprobench.json"
+            log_root.mkdir(parents=True, exist_ok=True)
+        elif log_per_config:
             run_id = uuid.uuid4().hex[:4]
             model_str = simple_model_names.get(model_name, model_name.replace("-", "")) if model_name else "default"
             log_root_name = f"{agent_name}-{model_str}-{run_id}"
             if ablation:
                 log_root_name += f"-{ablation}"
-            log_root = util.find_repo_root() / "logs" / log_root_name
+            log_root = util.find_repo_root() / "data" / "logs" / log_root_name
             print(f"Logging to {log_root}")
             report_path = log_root / "reprobench.json"
             # Ensure directory exists for report
@@ -530,6 +537,11 @@ def _apply_shared_arguments(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Path to previous reprobench.json to continue from (reruns unsuccessful instances)",
     )
+    parser.add_argument(
+        "--log-root",
+        default=None,
+        help="Directory for this run's logs and reprobench.json",
+    )
 
 
 def _reprobench_from_cli(args: argparse.Namespace) -> int:
@@ -545,6 +557,7 @@ def _reprobench_from_cli(args: argparse.Namespace) -> int:
         args.log_per_config,
         args.ablation,
         args.continue_run,
+        args.log_root,
     )
     return 0
 

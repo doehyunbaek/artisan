@@ -1,105 +1,286 @@
-# Artisan: Agentic Artifact Evaluation
+# Automated Table Reproduction via Code Generation
 
-This repository contains artifacts for the paper, "Artisan: Agentic Artifact Evaluation".
+This repository contains the artifact for the paper **"Automated Table Reproduction via Code Generation"** (ASE 2026).
 
-## Installation
+The artifact supports two kinds of reproduction:
 
-### Supported platforms
+1. **Last-mile reproduction**: regenerate the paper tables, figures, and compact `ase.pdf` wrapper from archived experimental logs.
+2. **Full reproduction**: rerun the complete agent experiments from scratch, then run the last-mile reproduction pipeline on the new logs.
 
-Currently developed and supported on Ubuntu 24.04.3 LTS. If it does not work on other platforms, please open an issue or submit a PR.
+For artifact evaluation, we recommend starting with **Last-mile reproduction**. It is fast, does not require LLM API credits, and directly validates the data used for the paper's generated tables and figures.
 
-### Prerequisites
+## Last-mile reproduction
 
-Install [uv](https://uv.io/) and [Docker](https://www.docker.com/) to run Artisan.
+Last-mile reproduction regenerates the submitted artifact outputs from archived logs. This is the recommended artifact-evaluation path.
 
-### Installation steps
+### Docker setup
 
-1. Clone the repository
-```sh
-git clone --recurse-submodules
+We support the artifact workflow with Docker:
+
+```bash
+docker run --rm -it -v "$PWD":/output ghcr.io/doehyunbaek/artisan:latest
 ```
 
-2. Install dependencies
-```sh
-uv sync
+This runs last-mile reproduction end to end and writes `./ase-artisan.pdf` on the host. Inside the container, it also writes:
+
+```text
+/artifact/ase-artisan.pdf
+/artifact/data/tex/ase-artisan.pdf
+/output/ase-artisan.pdf
 ```
 
-3. Install the package in editable mode for development
-```sh
-uv pip install -e .
+The image is based on Ubuntu 24.04 LTS and built from [`Dockerfile`](./Dockerfile).
+For other platforms, use the Docker image or open an issue.
+
+The command above runs [`data/reproduce.py`](./data/reproduce.py), which performs the following steps.
+
+### Step 1: Restore logs
+
+```bash
+cd /artifact/data
+python3 download_logs.py
 ```
 
-## Running Artisan on single table
+This restores archived run logs under:
 
-You can read the [run.py](./src/artisan/run.py) code for more details about the `artisan run` command.
-
-You can run Artisan on a single table with the following command:
-```sh
-artisan run --paper ./artisanbench/papers/bloat.pdf --table ./artisanbench/tables/bloat_table_2.md --artifact https://zenodo.org/records/11095274
+```text
+/artifact/data/logs/
 ```
 
-## Artisan-Bench
+Expected layout:
 
-## Notes on the copyright
+```text
+logs/
+  artisan-gpt5.1-dbe0/
+  artisan-gpt5mini-845b/
+  artisan-deepseek-reasoner-6f4b/
+  ...
+```
 
-Due to the copyright, we can not upload all the papers in the Artisan-Bench to the public repository.
-We are currently contacting the authors to obtain the copyright-free version of the papers.
-For the missing papers, download them manually and put them into [artisanbench/papers](./artisanbench/papers/) directory with a file name {id}.pdf (id should be found in [metadata.json](./artisanbench/metadata.json)).
+### Step 2: Regenerate the abstract
 
-Note: PDFs in `papers/` are third-party works under their own licenses (see `papers/README.md`).
+```bash
+cd /artifact/data
+python3 abstract.py
+```
 
-## Running the benchmark
+Expected output:
 
-You can read the [artisanbench](./artisanbench/benchmark.py) code for more details about the benchmark design and implementation.
-You can read the [metadata.json](./artisanbench/metadata.json) file for the metadata of the benchmark, including the papers, tables, and reproduction scripts used in the benchmark.
+```text
+tex/abstract.tex
+```
 
-Run on the whole artisanbench
-```sh
+### Step 3: Regenerate tables
+
+```bash
+cd /artifact/data
+python3 table.py
+```
+
+Expected outputs:
+
+```text
+tex/table_1.tex
+tex/table_2.tex
+tex/table_3.tex
+tex/table_4.tex
+```
+
+Table provenance:
+
+| Table | Source |
+| --- | --- |
+| Table 1 | Static comparison table |
+| Table 2 | Restored logs plus manual corrections |
+| Table 3 | `data/method_judge_eval.jsonl` |
+| Table 4 | `data/bugs/bugs.json` |
+
+### Step 4: Regenerate figures
+
+Figure 8 uses Matplotlib/NumPy, which are included in the prebuilt image.
+
+```bash
+cd /artifact/data
+python3 figure.py
+```
+
+Expected outputs:
+
+```text
+tex/figure_1.tex
+tex/figure_2.tex
+...
+tex/figure_9.tex
+tex/figures/overview.pdf
+tex/figures/artisan_time_breakdown.png
+```
+
+Figure provenance:
+
+| Figure | Source |
+| --- | --- |
+| Figures 1--7, 9 | Static snippets/assets from the paper |
+| Figure 8 | Regenerated from restored logs |
+
+### Step 5: Build the compact ASE wrapper PDF
+
+```bash
+cd /artifact/data/tex
+pdflatex -shell-escape ase.tex
+bibtex ase
+pdflatex -shell-escape ase.tex
+pdflatex -shell-escape ase.tex
+```
+
+Expected outputs:
+
+```text
+tex/ase.pdf
+tex/ase-artisan.pdf
+/artifact/ase-artisan.pdf
+```
+
+The `-shell-escape` flag is required because the generated figure fragments use `minted` for syntax highlighting.
+
+### Notes on expected differences
+
+The artifact regenerates values from the archived logs instead of relying on hardcoded values in the submitted manuscript. We identified two expected differences.
+
+#### Table 2 token values
+
+The submitted manuscript hardcoded token averages in `artisan-paper/tables/baseline.tex`. The artifact recomputes token averages directly from restored logs. Counts, costs, and times match; differences are limited to five token cells:
+
+| Row | Artifact-generated value | Submitted-manuscript value |
+| --- | ---: | ---: |
+| SWE-agent / GPT-5-mini | 363.9k | 363.6k |
+| SWE-agent / GPT-5.1 | 513.0k | 512.8k |
+| OpenHands / DeepSeek | 796.4k | 789.8k |
+| OpenHands / GPT-5-mini | 473.3k | 468.4k |
+| OpenHands / GPT-5.1 | 577.1k | 569.8k |
+
+We will update the camera-ready version with the Table 2 generated by this artifact.
+
+#### Figure 8 export/layout
+
+Figure 8 is regenerated from restored logs.
+The regenerated plot uses the same data and structure as the submitted figure, but exact PNG equality is sensitive to Matplotlib version, fonts, and bounding-box export behavior.
+Any remaining Figure 8 difference should be an image export/layout difference, not a data difference.
+
+We will update the camera-ready version with the Figure 8 generated by this artifact.
+
+## Full reproduction
+
+Full reproduction reruns the complete experimental campaign instead of using archived logs. It is substantially more expensive than last-mile reproduction and is not required for routine artifact evaluation.
+
+### What full reproduction reruns
+
+Full reproduction reruns all evaluated agents/models on the 60 Artisan-Bench tasks:
+
+- SWE-agent with DeepSeek, GPT-5-mini, GPT-5.1
+- OpenHands with DeepSeek, GPT-5-mini, GPT-5.1
+- mini-swe-agent with DeepSeek, GPT-5-mini, GPT-5.1
+- Artisan with DeepSeek, GPT-5-mini, GPT-5.1
+- Artisan ablations without the output judge, method judge, and format tool
+
+The resulting logs should follow the layout expected by last-mile reproduction:
+
+```text
+/artifact/data/logs/<run-name>/reprobench.json
+/artifact/data/logs/<run-name>/<paper>/table_<n>/<run-id>/...
+```
+
+After full reproduction, rerun the last-mile pipeline inside the Docker image:
+
+```bash
+cd /artifact/data
+python3 abstract.py
+python3 table.py
+python3 figure.py
+cd tex
+pdflatex -shell-escape ase.tex
+bibtex ase
+pdflatex -shell-escape ase.tex
+pdflatex -shell-escape ase.tex
+```
+
+### Full reproduction requirements
+
+Full reproduction requires substantially more resources. Start the image with Docker access, e.g., `docker run -it -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/doehyunbaek/artisan:latest`.
+
+- Docker-capable Linux environment
+- LLM API access for evaluated models
+- API keys and provider configuration
+- Network access to download research artifacts
+- Enough time and budget to run 15 configurations over 60 tasks
+
+Because full reproduction involves proprietary models and long-running artifact executions, archived logs are provided so reviewers can validate paper results without spending API credits.
+
+## Running Artisan on a single table
+
+You can read [`src/artisan/run.py`](./src/artisan/run.py) for more details about the `artisan run` command.
+
+Example:
+
+```bash
+artisan run \
+  --paper ./artisanbench/papers/bloat.pdf \
+  --table ./artisanbench/tables/bloat_table_2.md \
+  --artifact https://zenodo.org/records/11095274
+```
+
+## Running Artisan-Bench
+
+You can read [`artisanbench/benchmark.py`](./artisanbench/benchmark.py) for details about benchmark design and implementation. Metadata about papers, tables, and reproduction scripts is in [`artisanbench/metadata.json`](./artisanbench/metadata.json).
+
+Run the whole benchmark:
+
+```bash
 uv run artisanbench/benchmark.py
 ```
 
-Run specific paper
-```sh
+Run a specific paper:
+
+```bash
 uv run artisanbench/benchmark.py -f pythonic
 ```
 
-Run specific table of the paper
-```sh
+Run a specific table:
+
+```bash
 uv run artisanbench/benchmark.py -f pythonic-t2
 ```
 
-Run with multiple workers
-```sh
+Run with multiple workers:
+
+```bash
 uv run artisanbench/benchmark.py -w 8 -f pythonic-t2
 ```
 
+## Notes on copyright
+
+Some third-party PDFs are omitted from Artisan-Bench due to copyright. This does not affect last-mile reproduction from the archived logs.
+
 ## Repository structure
 
-* [src](./src): Artisan implementation.
-  * [src/artisan](./src/artisan):
-    * [src/artisan/run.py](./src/artisan/run.py): Entrypoint for Artisan.
-    * [src/artisan/judge.py](./src/artisan/judge.py): Judging mechanism including the execution-based method judge.
-    * [src/artisan/speedometer.py](./src/artisan/speedometer.py): LLM-based method juge.
-    * [src/artisan/submit.py](./src/artisan/submit.py): Submits a reproduction script to a judging mechanism.
-    * [src/artisan/serve.py](./src/artisan/serve.py): Caches docker images.
-    * [src/artisan/mitm.py](./src/artisan/mitm.py): Caches artifact repository downloads.
-    * [src/artisan/tools](./src/artisan/tools): Tool implementations exposed to the agent (thin wrappers around repo actions).
-      * [src/artisan/tools/get.py](./src/artisan/tools/get.py): Download mechanism.
-      * [src/artisan/tools/format.py](./src/artisan/tools/format.py): Format tool
-
-* [artisanbench](./artisanbench): Artisan-bench implementation.
-  * [artisanbench/metadata.json](./artisanbench/metadata.json): Metadata about the benchmark.
-  * [artisanbench/benchmark.py](./artisanbench/benchmark.py): Entrypoint for the artisanbench
-  * [artisanbench/select_papers.py](./artisanbench/select_papers.py): Paper selection process
-  * [artisanbench/select_tables.py](./artisanbench/select_tables.py): Task selection process
-  * [artisanbench/test_speedometer.py](./artisanbench/test_speedometer.py): Method judge evaluation (RQ4)
-  * [artisanbench/agents](./artisanbench/agents): Scaffold for agents (SWE-Agent, OpenHands, mini-swe-agent, Artisan) used in the benchmark
-  * [artisanbench/prompts](./artisanbench/prompts): Config templates for Scaffold for agents (SWE-Agent, OpenHands, mini-swe-agent, Artisan) used in the benchmark
-  * [artisanbench/scripts](./artisanbench/scripts): Groudn truth scripts.
-  * [artisanbench/copy_scripts](./artisanbench/copy_scripts): Copied results scripts and the trajectories for RQ4.
-  * [artisanbench/tables](./artisanbench/tables): Tables used as artisanbench tasks.
-    * [artisanbench/tables/inconsistencies](./artisanbench/tables/inconsistencies): Tables with paper-artifact inconsistencies corrected.
-    * [artisanbench/tables/partial](./artisanbench/tables/partial): Tables that were partially used for the benchmarks.
-    * [artisanbench/tables/obfuscated](./artisanbench/tables/obfuscated): Tables that are manually obfuscated.
-  * [artisanbench/papers](./artisanbench/papers): PDF files of the research papers.
-  * [artisanbench/report](./artisanbench/report): Scripts for reporting paper-artifact inconsistencies.
+* [`src`](./src): Artisan implementation.
+  * [`src/artisan/run.py`](./src/artisan/run.py): Entrypoint for Artisan.
+  * [`src/artisan/judge.py`](./src/artisan/judge.py): Execution-based output judge.
+  * [`src/artisan/speedometer.py`](./src/artisan/speedometer.py): LLM-based method judge.
+  * [`src/artisan/submit.py`](./src/artisan/submit.py): Submission handling.
+  * [`src/artisan/serve.py`](./src/artisan/serve.py): Docker image caching.
+  * [`src/artisan/mitm.py`](./src/artisan/mitm.py): Artifact download caching.
+  * [`src/artisan/tools`](./src/artisan/tools): Agent tool implementations.
+* [`artisanbench`](./artisanbench): Artisan-Bench implementation.
+  * [`artisanbench/metadata.json`](./artisanbench/metadata.json): Benchmark metadata.
+  * [`artisanbench/benchmark.py`](./artisanbench/benchmark.py): Benchmark entrypoint.
+  * [`artisanbench/select_papers.py`](./artisanbench/select_papers.py): Paper selection.
+  * [`artisanbench/select_tables.py`](./artisanbench/select_tables.py): Table/task selection.
+  * [`artisanbench/test_speedometer.py`](./artisanbench/test_speedometer.py): Method-judge evaluation.
+  * [`artisanbench/agents`](./artisanbench/agents): Agent scaffolds.
+  * [`artisanbench/prompts`](./artisanbench/prompts): Agent prompt/config templates.
+  * [`artisanbench/scripts`](./artisanbench/scripts): Ground-truth scripts.
+  * [`artisanbench/copy_scripts`](./artisanbench/copy_scripts): Copied-results scripts and trajectories.
+  * [`artisanbench/tables`](./artisanbench/tables): Tables used as benchmark tasks.
+  * [`artisanbench/papers`](./artisanbench/papers): PDF files of research papers.
+  * [`artisanbench/report`](./artisanbench/report): Paper-artifact inconsistency reporting scripts.
+* [`data`](./data): Last-mile artifact-evaluation data, scripts, restored logs, and generated LaTeX outputs.

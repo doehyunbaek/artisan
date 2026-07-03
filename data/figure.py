@@ -7,19 +7,15 @@ Figures 1--7 and 9 are static LaTeX fragments from the paper. Figure 8
 
 from __future__ import annotations
 
-import math
 import re
 import shutil
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageDraw, ImageFont
-
 from table import DATA_ROOT, TEX_DIR, is_number, load_run_summary
 
-PAPER_ROOT = DATA_ROOT.parent.with_name("artisan-paper")
-PAPER_FIGURES_DIR = PAPER_ROOT / "figures"
 FIGURES_ASSET_DIRNAME = "figures"
+OVERVIEW_PDF = TEX_DIR / FIGURES_ASSET_DIRNAME / "overview.pdf"
 ARTISAN_GPT51_RUN = "artisan-gpt5.1-dbe0"
 
 FIGURE_1 = r"""\begin{figure*}[t]
@@ -280,183 +276,155 @@ def time_breakdown_entries() -> list[dict[str, Any]]:
     for instance_id, entry in instances.items():
         if not isinstance(entry, dict) or not is_number(entry.get("time")):
             continue
-        total_time = max(0.0, float(entry["time"]))
-        llm_time = max(0.0, float(entry.get("llm_time", 0.0)))
-        exec_time = max(0.0, float(entry.get("exec_time", 0.0)) + float(entry.get("judge_wait", 0.0)))
-        other_time = max(0.0, total_time - llm_time - exec_time)
         entries.append({
             "key": strip_run_suffix(str(instance_id)),
-            "total": total_time,
-            "llm": llm_time,
-            "exec": exec_time,
-            "other": other_time,
+            "total": max(0.0, float(entry["time"])),
+            "llm": max(0.0, float(entry.get("llm_time", 0.0))),
+            "exec": max(0.0, float(entry.get("exec_time", 0.0)) + float(entry.get("judge_wait", 0.0))),
+            "format": max(0.0, float(entry.get("format_time", 0.0))),
+            "llmjudge": max(0.0, float(entry.get("llmjudge_time", 0.0))),
         })
 
     if not entries:
         raise ValueError(f"No valid timing entries found for {ARTISAN_GPT51_RUN}")
-    entries.sort(key=lambda item: item["total"])
     return entries
 
 
-def font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    names = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-    ]
-    for name in names:
-        path = Path(name)
-        if path.exists():
-            return ImageFont.truetype(str(path), size=size)
-    return ImageFont.load_default()
+def truncate_stack(
+    rest: list[float],
+    llm: list[float],
+    exec_: list[float],
+    fmt: list[float],
+    judge: list[float],
+    cap: float,
+) -> tuple[list[float], list[float], list[float], list[float], list[float]]:
+    shown_rest, shown_llm, shown_exec, shown_fmt, shown_judge = [], [], [], [], []
+    for r, l, e, f, j in zip(rest, llm, exec_, fmt, judge):
+        remaining = cap
+        sr = min(r, remaining)
+        remaining -= sr
+        sl = min(l, remaining)
+        remaining -= sl
+        se = min(e, remaining)
+        remaining -= se
+        sf = min(f, remaining)
+        remaining -= sf
+        sj = min(j, remaining)
+
+        shown_rest.append(sr)
+        shown_llm.append(sl)
+        shown_exec.append(se)
+        shown_fmt.append(sf)
+        shown_judge.append(sj)
+    return shown_rest, shown_llm, shown_exec, shown_fmt, shown_judge
 
 
-def draw_rotated_text(base: Image.Image, xy: tuple[int, int], text: str, text_font: ImageFont.ImageFont, angle: float) -> None:
-    if not text:
-        return
-    scratch = Image.new("RGBA", (420, 90), (255, 255, 255, 0))
-    draw = ImageDraw.Draw(scratch)
-    draw.text((0, 0), text, fill=(20, 20, 20), font=text_font)
-    bbox = scratch.getbbox()
-    if bbox is None:
-        return
-    scratch = scratch.crop(bbox)
-    rotated = scratch.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC)
-    base.alpha_composite(rotated, xy)
+def plot_time_breakdown_png(
+    output_path: Path,
+    *,
+    num_outliers: int = 0,
+    show_additional_metrics: bool = False,
+    y_cap: float = 12_000.0,
+    draw_waves: bool = True,
+) -> None:
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    import numpy as np
 
-
-def plot_time_breakdown_png(output_path: Path, *, y_cap: float = 12_000.0) -> None:
     entries = time_breakdown_entries()
-    n = len(entries)
+    entries.sort(key=lambda item: item["total"], reverse=True)
+    if num_outliers > 0:
+        entries = entries[num_outliers:]
+    entries.sort(key=lambda item: item["total"])
 
-    left = 140
-    right = 300
-    top = 90
-    bottom = 360
-    plot_width = max(1800, n * 42)
-    plot_height = 760
-    width = left + plot_width + right
-    height = top + plot_height + bottom
+    labels = [entry["key"] for entry in entries]
+    v_total_true = [float(entry["total"]) for entry in entries]
+    v_llm_true = [float(entry["llm"]) for entry in entries]
+    v_exec_true = [float(entry["exec"]) for entry in entries]
+    if show_additional_metrics:
+        v_format_true = [float(entry["format"]) for entry in entries]
+        v_llmjudge_true = [float(entry["llmjudge"]) for entry in entries]
+    else:
+        v_format_true = [0.0 for _entry in entries]
+        v_llmjudge_true = [0.0 for _entry in entries]
+    v_rest_true = [
+        max(0.0, total - llm - exec_ - fmt - judge)
+        for total, llm, exec_, fmt, judge in zip(
+            v_total_true, v_llm_true, v_exec_true, v_format_true, v_llmjudge_true
+        )
+    ]
 
-    image = Image.new("RGBA", (width, height), (255, 255, 255, 255))
-    draw = ImageDraw.Draw(image)
+    v_rest, v_llm, v_exec, v_format, v_llmjudge = truncate_stack(
+        v_rest_true, v_llm_true, v_exec_true, v_format_true, v_llmjudge_true, y_cap
+    )
 
-    title_font = font(34, bold=True)
-    axis_font = font(25)
-    tick_font = font(22)
-    label_font = font(18)
-    legend_font = font(24)
-
-    axis_color = (35, 35, 35)
-    grid_color = (215, 215, 215)
-    colors = {
-        "other": (188, 188, 188),
-        "llm": (87, 144, 204),
-        "exec": (242, 156, 76),
+    paper_rc = {
+        "font.size": 14,
+        "axes.labelsize": 14,
+        "xtick.labelsize": 11,
+        "ytick.labelsize": 13,
+        "legend.fontsize": 13,
+        "legend.title_fontsize": 13,
+        "axes.linewidth": 1.0,
+        "grid.linewidth": 0.8,
     }
-    labels = {
-        "other": "Other Time",
-        "llm": "LLM Time",
-        "exec": "Execution Time",
-    }
-
-    x0, y0 = left, top
-    x1, y1 = left + plot_width, top + plot_height
-
-    draw.text((left, 24), "Wall-clock time breakdown for Artisan with GPT-5.1", fill=axis_color, font=title_font)
-
-    def y_for(seconds: float) -> float:
-        seconds = max(0.0, min(seconds, y_cap))
-        return y1 - (seconds / y_cap) * plot_height
-
-    # Axes and grid.
-    tick_step = 3000
-    for tick in range(0, int(y_cap) + 1, tick_step):
-        y = y_for(tick)
-        draw.line((x0, y, x1, y), fill=grid_color, width=2)
-        label = f"{tick:,}"
-        bbox = draw.textbbox((0, 0), label, font=tick_font)
-        draw.text((x0 - 18 - (bbox[2] - bbox[0]), y - 12), label, fill=axis_color, font=tick_font)
-    draw.line((x0, y0, x0, y1), fill=axis_color, width=3)
-    draw.line((x0, y1, x1, y1), fill=axis_color, width=3)
-    draw_rotated_text(image, (18, y0 + 260), "Time (seconds)", axis_font, 270)
-
-    max_total = max(entry["total"] for entry in entries)
-    capped = [index for index, entry in enumerate(entries) if entry["total"] > y_cap]
-    if capped:
-        y = y_for(y_cap)
-        for x in range(x0, x1, 28):
-            draw.line((x, y, min(x + 14, x1), y), fill=(120, 120, 120), width=2)
-
-    bar_gap = 8
-    bar_width = max(12, min(30, int(plot_width / n) - bar_gap))
-    slot = plot_width / n
-
-    for index, entry in enumerate(entries):
-        center = x0 + slot * index + slot / 2
-        left_bar = int(center - bar_width / 2)
-        right_bar = int(center + bar_width / 2)
-        bottom_y = y1
-
-        stack = [
-            ("other", entry["other"]),
-            ("llm", entry["llm"]),
-            ("exec", entry["exec"]),
-        ]
-        consumed = 0.0
-        for name, value in stack:
-            shown_value = min(max(0.0, value), max(0.0, y_cap - consumed))
-            if shown_value <= 0:
-                continue
-            top_y = y_for(consumed + shown_value)
-            draw.rectangle((left_bar, top_y, right_bar, bottom_y), fill=colors[name], outline=(255, 255, 255))
-            bottom_y = top_y
-            consumed += shown_value
-
-        if entry["total"] > y_cap:
-            wave_y = y_for(y_cap) + 8
-            points = []
-            for j in range(9):
-                x = left_bar + (right_bar - left_bar) * j / 8
-                y = wave_y + (10 if j % 2 else -10)
-                points.append((x, y))
-            draw.line(points, fill=(150, 35, 35), width=3)
-
-    # X labels.
-    for index, entry in enumerate(entries):
-        center = int(x0 + slot * index + slot / 2)
-        draw_rotated_text(image, (center - 8, y1 + 12), entry["key"], label_font, 60)
-
-    # Legend.
-    legend_x = x1 + 35
-    legend_y = y0 + 20
-    for offset, name in enumerate(("llm", "exec", "other")):
-        y = legend_y + offset * 44
-        draw.rectangle((legend_x, y, legend_x + 26, y + 26), fill=colors[name], outline=axis_color)
-        draw.text((legend_x + 38, y - 2), labels[name], fill=axis_color, font=legend_font)
-
-    # Outlier note.
-    if capped:
-        max_entry = max(entries, key=lambda item: item["total"])
-        note = f"max: {max_entry['key']} ({max_entry['total']:.1f}s)"
-        bbox = draw.textbbox((0, 0), note, font=label_font)
-        pad = 12
-        box = (x1 - (bbox[2] - bbox[0]) - 2 * pad - 18, y0 + 18, x1 - 18, y0 + 18 + (bbox[3] - bbox[1]) + 2 * pad)
-        draw.rounded_rectangle(box, radius=10, fill=(255, 255, 255), outline=(40, 40, 40), width=2)
-        draw.text((box[0] + pad, box[1] + pad), note, fill=axis_color, font=label_font)
-
-    # If every task is under cap, still record the maximum discreetly.
-    if not capped and math.isfinite(max_total):
-        max_entry = max(entries, key=lambda item: item["total"])
-        draw.text((x1 - 300, y0 + 18), f"max: {max_entry['key']} ({max_total:.1f}s)", fill=axis_color, font=label_font)
+    # The ASE-submission figure used all 60 tasks but a slightly narrower
+    # canvas than the earlier 0.25 inch/task draft.
+    width_in = max(12.0, 0.22925 * len(entries))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    image.convert("RGB").save(output_path)
+    with mpl.rc_context(paper_rc):
+        fig, ax = plt.subplots(figsize=(width_in, 6), dpi=120)
+        indices = np.arange(len(entries))
+        bar_w = 0.8
+
+        ax.bar(indices, v_llm, width=bar_w, bottom=v_rest, align="center", alpha=0.8, label="LLM Time")
+        bottom_exec = [r + l for r, l in zip(v_rest, v_llm)]
+        ax.bar(indices, v_exec, width=bar_w, bottom=bottom_exec, align="center", alpha=0.8, label="Execution Time")
+
+        current_bottom = [b + e for b, e in zip(bottom_exec, v_exec)]
+        if show_additional_metrics:
+            ax.bar(indices, v_format, width=bar_w, bottom=current_bottom, align="center", alpha=0.8, label="Format Time")
+            current_bottom = [b + f for b, f in zip(current_bottom, v_format)]
+            ax.bar(indices, v_llmjudge, width=bar_w, bottom=current_bottom, align="center", alpha=0.8, label="LLM Judge Time")
+
+        capped_idxs = [index for index, total in enumerate(v_total_true) if total > y_cap]
+        if capped_idxs:
+            ax.axhline(y_cap, linestyle="--", alpha=0.6)
+
+        if draw_waves and capped_idxs:
+            amp = max(20.0, y_cap * 0.005)
+            cycles = 2.0
+            for index in capped_idxs:
+                left = indices[index] - bar_w / 2
+                right = indices[index] + bar_w / 2
+                xs = np.linspace(left, right, 80)
+                ys = y_cap + amp * np.sin(2 * np.pi * cycles * (xs - left) / (right - left))
+                ax.plot(xs, ys, linewidth=1.5, zorder=5)
+
+        ax.set_xticks(indices)
+        ax.set_xticklabels([])
+        ax.set_ylabel("Time (seconds)")
+        ax.grid(axis="y", linestyle="--", alpha=0.6)
+        ax.legend()
+        ax.set_ylim(0, y_cap * 1.08)
+        plt.tight_layout()
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
 
 
 def copy_static_assets(output_dir: Path) -> None:
     assets_dir = output_dir / FIGURES_ASSET_DIRNAME
     assets_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(PAPER_FIGURES_DIR / "overview.pdf", assets_dir / "overview.pdf")
+
+    overview_dst = assets_dir / "overview.pdf"
+    if not OVERVIEW_PDF.exists():
+        raise FileNotFoundError(
+            f"Missing static figure asset: {OVERVIEW_PDF}. "
+            "The artifact should include this file; figure generation does not depend on artisan-paper."
+        )
+    if OVERVIEW_PDF.resolve() != overview_dst.resolve():
+        shutil.copy2(OVERVIEW_PDF, overview_dst)
 
 
 def get_figure_8(output_dir: Path = TEX_DIR) -> str:

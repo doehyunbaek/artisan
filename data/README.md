@@ -7,6 +7,7 @@ This repository contains experimental logs for the paper, "Artisan: Agentic Arti
 ### General files and directories
 
 * [table.py](./table.py): Generates the paper tables. Table 2 is derived from the restored logs and applies the manual effectiveness/runtime corrections inline.
+* [figure.py](./figure.py): Generates the paper figure fragments. Figure 8 is derived from the restored logs; the other figures are static paper snippets.
 * [download_logs.py](./download_logs.py): Restores the ignored experimental run logs under `./logs`.
 * [method_judge_eval.jsonl](./method_judge_eval.jsonl): Log for the method judge experiments
 * [manual_analysis](./manual_analysis): Manual analysis of the reproduction methods of the success cases.

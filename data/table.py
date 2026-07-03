@@ -647,16 +647,16 @@ def write_tables(output_dir: Path = TEX_DIR) -> list[Path]:
     written_paths: list[Path] = []
     for filename, table in tables:
         if filename == "table_1.tex":
-            print("WARNING: no real computation is needed for table_1")
+            print("NOTE: no real computation is needed for table_1")
         path = output_dir / filename
         path.write_text(table.rstrip() + "\n", encoding="utf-8")
+        print(f"Wrote {path}")
         written_paths.append(path)
     return written_paths
 
 
 def main() -> None:
-    for path in write_tables():
-        print(f"Wrote {path}")
+    write_tables()
 
 
 if __name__ == "__main__":

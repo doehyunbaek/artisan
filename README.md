@@ -4,7 +4,7 @@ This repository contains the artifact for the paper **"Automated Table Reproduct
 
 The artifact supports two kinds of reproduction:
 
-1. **Last-mile reproduction**: regenerate the paper tables, figures, and compact `ase.pdf` wrapper from archived experimental logs.
+1. **Last-mile reproduction**: regenerate the paper abstract, tables, figures, and compact `ase.pdf` wrapper from archived experimental logs.
 2. **Full reproduction**: rerun the complete agent experiments from scratch, then run the last-mile reproduction pipeline on the new logs.
 
 For artifact evaluation, we recommend starting with **Last-mile reproduction**. It is fast, does not require LLM API credits, and directly validates the data used for the paper's generated tables and figures.
@@ -203,192 +203,36 @@ Full reproduction requires:
 - `OPENAI_API_KEY` for GPT configurations and the format/method judges
 - `DEEPSEEK_API_KEY` or `LLM_API_KEY` for DeepSeek configurations
 
-### Optional cache services for large campaigns
+### Smoke-test bloat Table 2
 
-By default, full reproduction contacts upstream artifact hosts and Docker registries directly.
-Two local cache services are available but disabled by default, because exporting their environment variables without running the corresponding service can make runs fail with local connection errors (for example, `artisan get` failing with `Connection refused` when `ARTISAN_MITM_URL` points at an absent proxy).
+We illustrate the full reproduction process with a single run due to cost reasons.
+We reproduce the following table:
 
-These services can be useful for complete or repeated campaigns: many parallel runs repeatedly download the same Zenodo/Figshare artifacts and Docker images, which may trigger server-side rate limits or slow down reproduction.
+![Table 2 from Bloat beneath Python’s Scales](assets/bloat_table_2.png)
 
-1. **Artifact download cache (`artisan mitm`)**: a mitmproxy-based record/replay cache used by `artisan get`.
+Source: Table 2 from “Bloat beneath Python’s Scales: A Fine-Grained Inter-Project Dependency Analysis” by Georgios-Petros Drosos, Thodoris Sotiropoulos, Diomidis Spinellis, and Dimitris Mitropoulos, Proc. ACM Softw. Eng. 2024. https://doi.org/10.1145/3660821. Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Screenshot/crop from original.
 
-   Start it in a separate terminal/container:
-
-   ```bash
-   mkdir -p artisan-cache
-   docker run --rm -it --network host \
-     -v "$PWD/artisan-cache":/cache \
-     -e OPENAI_API_KEY \
-     ghcr.io/doehyunbaek/artisan:latest \
-     artisan mitm --cache /cache/artisan.mitm --listen-host 0.0.0.0 --listen-port 8082
-   ```
-
-   Then enable it for full reproduction by adding host networking to the outer Docker command and passing `ARTISAN_MITM_URL` through to the benchmark containers:
-
-   ```bash
-   docker run ... --network host \
-     -e ARTISAN_MITM_URL=http://127.0.0.1:8082 \
-     ghcr.io/doehyunbaek/artisan:latest \
-     bash -lc 'python3 data/full_reproduce.py --network-host ...'
-   ```
-
-2. **Docker registry cache (`artisan serve`)**: a local registry/mirror for Docker images used by benchmark artifacts.
-
-   Start it in a separate terminal/container:
-
-   ```bash
-   mkdir -p artisan-cache/docker
-   docker run --rm -it --network host \
-     -v /var/run/docker.sock:/var/run/docker.sock \
-     -v "$PWD/artisan-cache/docker":/cache/docker \
-     -e OPENAI_API_KEY \
-     ghcr.io/doehyunbaek/artisan:latest \
-     artisan serve --port 5000 --remoteurl https://registry-1.docker.io --cachedir /cache/docker
-   ```
-
-   The `--remoteurl` mode runs a Docker Hub pull-through cache. If you instead have saved image tarballs under `/cache/docker`, omit `--remoteurl` to preload them into a writable local registry.
-
-   Then enable it for full reproduction by adding host networking to the outer Docker command and passing the Docker daemon mirror variables through to the benchmark containers:
-
-   ```bash
-   docker run ... --network host \
-     -e REGISTRY_MIRROR=http://127.0.0.1:5000 \
-     -e INSECURE_REGISTRY=127.0.0.1:5000 \
-     ghcr.io/doehyunbaek/artisan:latest \
-     bash -lc 'python3 data/full_reproduce.py --network-host ...'
-   ```
-
-Only set these variables when the matching service is running. If the cache services are not needed, omit the variables and omit `--network-host`. If you rebuild the agent base image from [`src/artisan/config/Dockerfile`](./src/artisan/config/Dockerfile) before the published base image is updated, pass `ARTISAN_BASE_IMAGE=<your-image>` to make full reproduction use that rebuilt image.
-
-### Dry run
-
-Print the commands without running agents or spending API credits:
+To test one GPT-5.1 Artisan run on `bloat-t2` (Table 2: resolved and unresolved external calls), pass `OPENAI_API_KEY` and the Docker socket:
 
 ```bash
-docker run --rm -it ghcr.io/doehyunbaek/artisan:latest \
-  python3 data/full_reproduce.py --dry-run
-```
+mkdir -p artisan-full
 
-### Smoke-test one task
-
-To test the full-reproduction path on one configuration/task, pass API keys and the Docker socket:
-
-```bash
-mkdir -p artisan-full/logs
-
-docker run --rm -it \
+docker run -it --rm --network host \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v "$PWD/artisan-full":/output \
-  -v "$PWD/artisan-full/logs":/artifact/data/logs \
+  -v "$PWD/artisan-full":"$PWD/artisan-full" \
   -e OPENAI_API_KEY \
   ghcr.io/doehyunbaek/artisan:latest \
-  bash -lc 'python3 data/full_reproduce.py --only artisan-gpt5.1-dbe0 --filter "^pythonic-t5-r1$" --workers 1 && python3 data/reproduce.py --output-dir /output'
+  data/full_reproduce.py --output-root "$PWD/artisan-full" --only artisan-gpt5.1-dbe0 --filter bloat-t2
 ```
 
-This smoke test uses the GPT-5.1 Artisan run for Table 5 of Zid et al. (the Pythonic functional constructs artifact), the example highlighted in the paper where Artisan has to rerun the R analysis and post-process raw p-values with Benjamini--Hochberg adjustment. It writes full-reproduction logs under `./artisan-full/logs/` and writes the regenerated PDF to `./artisan-full/ase-artisan.pdf`.
+This writes logs under `./artisan-full/logs/`.
+To inspect the agent trajectory, read `artisan.log` inside `artisan-full/logs`.
+To inspect the resulting reproduction script, read `repro_bloat_table_2.sh` inside `artisan-full/logs`.
 
-### Run the complete campaign
+Example trajectory from the reproduced [run](https://gist.github.com/doehyunbaek/4c5c1157db72d92656a8f66f56152478):
 
-The complete campaign reruns all evaluated agents/models on the 60 Artisan-Bench tasks:
-
-- SWE-agent with DeepSeek, GPT-5-mini, GPT-5.1
-- OpenHands with DeepSeek, GPT-5-mini, GPT-5.1
-- mini-swe-agent with DeepSeek, GPT-5-mini, GPT-5.1
-- Artisan with DeepSeek, GPT-5-mini, GPT-5.1
-- Artisan ablations without the output judge, method judge, and format tool
-
-Run all 15 configurations, then aggregate the newly generated logs into `ase-artisan.pdf`:
-
-```bash
-mkdir -p artisan-full/logs
-
-docker run --rm -it \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v "$PWD/artisan-full":/output \
-  -v "$PWD/artisan-full/logs":/artifact/data/logs \
-  -e OPENAI_API_KEY \
-  -e DEEPSEEK_API_KEY \
-  ghcr.io/doehyunbaek/artisan:latest \
-  bash -lc 'python3 data/full_reproduce.py --workers 1 --continue-existing && python3 data/reproduce.py --output-dir /output'
-```
-
-Generated logs follow the layout consumed by last-mile reproduction:
-
-```text
-/artifact/data/logs/<run-name>/reprobench.json
-/artifact/data/logs/<run-name>/<paper>/table_<n>/<run-id>/...
-```
-
-Because full reproduction involves proprietary models and long-running artifact executions, archived logs are provided so reviewers can validate paper results without spending API credits.
-
-## Running Artisan on a single table
-
-You can read [`src/artisan/run.py`](./src/artisan/run.py) for more details about the `artisan run` command.
-
-Highlighted example: Table 5 of Zid et al. (`pythonic-t5-r1`) is discussed in the paper as a challenging case where Artisan recovers that the artifact records raw p-values and the paper reports Benjamini--Hochberg-adjusted p-values.
-
-```bash
-artisan run \
-  --paper ./artisanbench/papers/obfuscated/pythonic_paper_5.md \
-  --table ./artisanbench/tables/pythonic_table_5.md \
-  --artifact https://zenodo.org/records/10554377
-```
-
-The archived successful GPT-5.1 run is under `data/logs/artisan-gpt5.1-dbe0/pythonic/table_5/`.
-
-## Running Artisan-Bench
-
-You can read [`artisanbench/benchmark.py`](./artisanbench/benchmark.py) for details about benchmark design and implementation. Metadata about papers, tables, and reproduction scripts is in [`artisanbench/metadata.json`](./artisanbench/metadata.json).
-
-Run the whole benchmark:
-
-```bash
-uv run artisanbench/benchmark.py
-```
-
-Run a specific paper:
-
-```bash
-uv run artisanbench/benchmark.py -f pythonic
-```
-
-Run a specific table (the highlighted Table 5 of Zid et al. example):
-
-```bash
-uv run artisanbench/benchmark.py -f pythonic-t5
-```
-
-Run with multiple workers:
-
-```bash
-uv run artisanbench/benchmark.py -w 8 -f pythonic-t5
-```
-
-## Notes on copyright
-
-Some third-party PDFs are omitted from Artisan-Bench due to copyright. This does not affect last-mile reproduction from the archived logs.
-
-## Repository structure
-
-* [`src`](./src): Artisan implementation.
-  * [`src/artisan/run.py`](./src/artisan/run.py): Entrypoint for Artisan.
-  * [`src/artisan/judge.py`](./src/artisan/judge.py): Execution-based output judge.
-  * [`src/artisan/speedometer.py`](./src/artisan/speedometer.py): LLM-based method judge.
-  * [`src/artisan/submit.py`](./src/artisan/submit.py): Submission handling.
-  * [`src/artisan/serve.py`](./src/artisan/serve.py): Docker image caching.
-  * [`src/artisan/mitm.py`](./src/artisan/mitm.py): Artifact download caching.
-  * [`src/artisan/tools`](./src/artisan/tools): Agent tool implementations.
-* [`artisanbench`](./artisanbench): Artisan-Bench implementation.
-  * [`artisanbench/metadata.json`](./artisanbench/metadata.json): Benchmark metadata.
-  * [`artisanbench/benchmark.py`](./artisanbench/benchmark.py): Benchmark entrypoint.
-  * [`artisanbench/select_papers.py`](./artisanbench/select_papers.py): Paper selection.
-  * [`artisanbench/select_tables.py`](./artisanbench/select_tables.py): Table/task selection.
-  * [`artisanbench/test_speedometer.py`](./artisanbench/test_speedometer.py): Method-judge evaluation.
-  * [`artisanbench/agents`](./artisanbench/agents): Agent scaffolds.
-  * [`artisanbench/prompts`](./artisanbench/prompts): Agent prompt/config templates.
-  * [`artisanbench/scripts`](./artisanbench/scripts): Ground-truth scripts.
-  * [`artisanbench/copy_scripts`](./artisanbench/copy_scripts): Copied-results scripts and trajectories.
-  * [`artisanbench/tables`](./artisanbench/tables): Tables used as benchmark tasks.
-  * [`artisanbench/papers`](./artisanbench/papers): PDF files of research papers.
-  * [`artisanbench/report`](./artisanbench/report): Paper-artifact inconsistency reporting scripts.
-* [`data`](./data): Last-mile artifact-evaluation data, scripts, restored logs, and generated LaTeX outputs.
+- [Download the Zenodo artifact with `artisan get`, and automatically locate the artifact README](https://gist.github.com/doehyunbaek/4c5c1157db72d92656a8f66f56152478#file-gistfile1-txt-L126-L162). This illustrates the artifact-download mechanism described in Section 2.3.2 of the paper.
+- [Search the README for Docker and Table 2 instructions](https://gist.github.com/doehyunbaek/4c5c1157db72d92656a8f66f56152478#file-gistfile1-txt-L379-L443). This is the kind of clearly documented artifact path discussed in Section 4.2.2 of the paper.
+- [Build and enter the artifact's Docker environment, then run the documented Table 2 command](https://gist.github.com/doehyunbaek/4c5c1157db72d92656a8f66f56152478#file-gistfile1-txt-L2020-L2052). This produces the resolved/unresolved-call counts before final formatting.
+- [Author an executable reproduction script and submit it to the judge](https://gist.github.com/doehyunbaek/4c5c1157db72d92656a8f66f56152478#file-gistfile1-txt-L2055-L2089). This is the executable evidence emphasized by Artisan's code-generation framing.
+- [Use judge feedback after a partial mismatch, revise the script, and resubmit successfully](https://gist.github.com/doehyunbaek/4c5c1157db72d92656a8f66f56152478#file-gistfile1-txt-L2095-L2142), followed by [successful validation and completion](https://gist.github.com/doehyunbaek/4c5c1157db72d92656a8f66f56152478#file-gistfile1-txt-L2142-L2163). This highlights the output-judge/format-tool feedback loop discussed in the paper, including the Drosos Table 2 mismatch example in Figure 4.

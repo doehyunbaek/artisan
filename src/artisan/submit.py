@@ -12,9 +12,17 @@ from artisan.tools import format
 from artisan import speedometer
 
 
+def _normalize_judge_url(url: str) -> str:
+    url = url.rstrip("/")
+    if not url.endswith("/submit"):
+        url += "/submit"
+    return url
+
+
 def cmd_submit(
     script: Path,
     mode: str = "PART",
+    judge_url: str | None = None,
 ) -> int:
     """Send a submission request to the running judge service."""
     try:
@@ -24,7 +32,7 @@ def cmd_submit(
         return 2
 
     payload = {"script": script_content, "script_name": script.name, "mode": mode}
-    judge_url = artisan.ARTISAN_JUDGE_URL
+    judge_url = _normalize_judge_url(judge_url or artisan.ARTISAN_JUDGE_URL)
     timeout = artisan.ARTISAN_JUDGE_TIMEOUT
 
     try:
@@ -104,7 +112,7 @@ def cmd_submit(
 
 def _submit_from_cli(args: argparse.Namespace) -> int:
     """Adapter so argparse dispatch can call cmd_submit with parsed args."""
-    return cmd_submit(args.script, args.mode)
+    return cmd_submit(args.script, args.mode, args.judge_url)
 
 
 def register_subparser(subparsers: argparse._SubParsersAction) -> None:

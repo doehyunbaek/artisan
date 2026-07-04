@@ -378,6 +378,23 @@ def check_submission_file(script_path: Path, mode: str = "PART") -> SubmissionRe
     return result
 
 
+def _judge_temp_parent(script_dir: Optional[Path] = None) -> Optional[Path]:
+    """Return a temp parent visible to nested Docker when possible."""
+    configured = os.environ.get("ARTISAN_JUDGE_WORKDIR")
+    if configured:
+        parent = Path(configured).expanduser().resolve()
+        parent.mkdir(parents=True, exist_ok=True)
+        return parent
+    if script_dir is not None:
+        try:
+            parent = Path(script_dir).expanduser().resolve()
+            if parent.exists():
+                return parent
+        except Exception:
+            pass
+    return None
+
+
 def check_output_match(
     script_content: str,
     mode: str = "PART",
@@ -390,7 +407,12 @@ def check_output_match(
     that log is copied into the temporary log file used inside the judge
     container so that the submission's own formatter cache can be reused.
     """
-    with tempfile.TemporaryDirectory(delete=False) as tmp_dir:
+    temp_kwargs = {"prefix": ".artisan-judge-"}
+    temp_parent = _judge_temp_parent(script_dir)
+    if temp_parent is not None:
+        temp_kwargs["dir"] = str(temp_parent)
+
+    with tempfile.TemporaryDirectory(**temp_kwargs) as tmp_dir:
         script_path = Path(tmp_dir) / script_name
         script_path.write_text(script_content, encoding="utf-8")
         script_path.chmod(0o700)
@@ -692,8 +714,14 @@ class _JudgeRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "Missing 'script_name'"})
             return
 
-        # Use a temporary file to leverage check_submission_file which expects a path
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        # Use a temporary file to leverage check_submission_file which expects a path.
+        # When running inside Docker with the host Docker socket, put it under
+        # ARTISAN_JUDGE_WORKDIR so nested judge containers can mount it.
+        temp_kwargs = {"prefix": ".artisan-submit-"}
+        temp_parent = _judge_temp_parent(None)
+        if temp_parent is not None:
+            temp_kwargs["dir"] = str(temp_parent)
+        with tempfile.TemporaryDirectory(**temp_kwargs) as tmp_dir:
             tmp_path = Path(tmp_dir) / script_name
             try:
                 tmp_path.write_text(script_content, encoding="utf-8")

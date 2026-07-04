@@ -21,14 +21,7 @@ We support the artifact workflow with Docker:
 docker run --platform linux/amd64 --rm -it -v "$PWD":/output ghcr.io/doehyunbaek/artisan:latest
 ```
 
-This runs last-mile reproduction end to end and writes `./ase-artisan.pdf` on the host. Inside the container, it also writes:
-
-```text
-/artifact/ase-artisan.pdf
-/artifact/data/tex/ase-artisan.pdf
-/output/ase-artisan.pdf
-```
-
+This runs last-mile reproduction end to end and writes `./ase-artisan.pdf` on the host.
 The image is based on Ubuntu 24.04 LTS and built from [`Dockerfile`](./Dockerfile).
 For other platforms, use the Docker image or open an issue.
 
@@ -232,7 +225,128 @@ To inspect the resulting reproduction script, read `repro_bloat_table_2.sh` insi
 Example trajectory from the reproduced [run](https://gist.github.com/doehyunbaek/4c5c1157db72d92656a8f66f56152478):
 
 - [Download the Zenodo artifact with `artisan get`, and automatically locate the artifact README](https://gist.github.com/doehyunbaek/4c5c1157db72d92656a8f66f56152478#file-gistfile1-txt-L126-L162). This illustrates the artifact-download mechanism described in Section 2.3.2 of the paper.
+
+  ```log
+  09:16:59 - artisan:DEBUG - run.py:65 - role: assistant, content:
+  THOUGHT: Begin by downloading and extracting the artifact from the provided Zenodo URL, as required in step 1 of the workflow.
+
+  <mini_swe_agent_bash>
+  artisan get https://zenodo.org/records/11095274
+  </mini_swe_agent_bash>
+  09:17:04 - artisan:DEBUG - run.py:65 - role: user, content:
+  <returncode>0</returncode>
+  <output>
+  Downloading bloat-study-artifact-v1.0.zip 4% (65536/1552263 bytes)
+  ...
+  README PATH: bloat-study-artifact-v1.0/gdrosos-bloat-study-artifact-0fe2fe5/README.md
+  ```
+
 - [Search the README for Docker and Table 2 instructions](https://gist.github.com/doehyunbaek/4c5c1157db72d92656a8f66f56152478#file-gistfile1-txt-L379-L443). This is the kind of clearly documented artifact path discussed in Section 4.2.2 of the paper.
+
+  ```log
+  <mini_swe_agent_bash>
+  grep -in docker bloat-study-artifact-v1.0/gdrosos-bloat-study-artifact-0fe2fe5/README.md
+  </mini_swe_agent_bash>
+  <output>
+  434:**Note** The commands presented in this section are being executed inside the produced docker container e.g. we have executed:
+  436:docker run -it --rm \
+  </output>
+
+  <mini_swe_agent_bash>
+  grep -in "Table 2" bloat-study-artifact-v1.0/gdrosos-bloat-study-artifact-0fe2fe5/README.md
+  </mini_swe_agent_bash>
+  <output>
+  468:Moreover, to produce Table 2 describing the statistics on the resolved and unresolved external calls during our stitching process, run:
+  </output>
+  ```
+
 - [Build and enter the artifact's Docker environment, then run the documented Table 2 command](https://gist.github.com/doehyunbaek/4c5c1157db72d92656a8f66f56152478#file-gistfile1-txt-L2020-L2052). This produces the resolved/unresolved-call counts before final formatting.
+
+  ```log
+  <mini_swe_agent_bash>
+  docker exec bloat-study-artifact-container /bin/bash --noprofile --norc -c "cd /home/user && python scripts/descriptives/evaluation.py -csv data/results/rq1a.csv > repro_table2.txt"
+  </mini_swe_agent_bash>
+  <returncode>0</returncode>
+
+  <mini_swe_agent_bash>
+  docker exec bloat-study-artifact-container /bin/bash --noprofile --norc -c "cd /home/user && cat repro_table2.txt"
+  </mini_swe_agent_bash>
+  <output>
+  External Calls  Aggregate count Proportion of total (%)   Average (per project) Median (per project)
+  Resolved        7799929         96.8                      5990.7               144.5
+  Unresolved      260249          3.2                       199.9                11.5
+  </output>
+  ```
+
 - [Author an executable reproduction script and submit it to the judge](https://gist.github.com/doehyunbaek/4c5c1157db72d92656a8f66f56152478#file-gistfile1-txt-L2055-L2089). This is the executable evidence emphasized by Artisan's code-generation framing.
+
+  ```log
+  09:21:25 - artisan:DEBUG - run.py:65 - role: assistant, content:
+  THOUGHT: I will create the `repro_bloat_table_2.sh` script using the provided template...
+
+  <mini_swe_agent_bash>
+  cat > /workspace/repro_bloat_table_2.sh <<'EOF'
+  ...
+  artisan format --expected /workspace/expected.md --repro /workspace/repro.txt
+  ...
+  chmod +x /workspace/repro_bloat_table_2.sh
+  artisan submit /workspace/repro_bloat_table_2.sh
+  </mini_swe_agent_bash>
+  ```
+
 - [Use judge feedback after a partial mismatch, revise the script, and resubmit successfully](https://gist.github.com/doehyunbaek/4c5c1157db72d92656a8f66f56152478#file-gistfile1-txt-L2095-L2142), followed by [successful validation and completion](https://gist.github.com/doehyunbaek/4c5c1157db72d92656a8f66f56152478#file-gistfile1-txt-L2142-L2163). This highlights the output-judge/format-tool feedback loop discussed in the paper, including the Drosos Table 2 mismatch example in Figure 4.
+
+  ```log
+  <returncode>1</returncode>
+  <output>
+  Submitting to judge service at http://127.0.0.1:8000/submit...
+  ...
+  Partial mismatch (score: 0.94): some cells differ (digits obfuscated)
+  </output>
+
+  09:25:24 - artisan:DEBUG - run.py:65 - role: assistant, content:
+  THOUGHT: The previous submission partially matched because the expected table still had placeholders...
+  ...
+  <returncode>0</returncode>
+  <output>
+  Wrote format tool logs to /workspace/artisan-format.json
+  Wrote speedometer tool logs to /workspace/artisan-speedometer.json
+  Success: reproduce.sh output matches expected.md
+  Submitting to judge service at http://127.0.0.1:8000/submit...
+  </output>
+  ```
+
+Here is the example reproduction script [generated](https://gist.github.com/doehyunbaek/4c5c1157db72d92656a8f66f56152478#file-gistfile1-txt-L2108-L2142):
+
+```sh
+#!/usr/bin/bash
+# Section 1: Expected table
+cat > /workspace/expected.md <<'EOTABLE'
+**Table 2: Statistics on the resolved and unresolved external calls during our stitching process.**
+
+|  | External Calls | Aggregate count | Proportion of total | Average (per project) | Median (per project) |
+| --- | --- | --- | --- | --- | --- |
+|  |  |  |  |  |  |
+|  | Resolved | 7,799,929 | 96.8% | 5,991 | 144.5 |
+|  | Unresolved | 260,249 | 3.2% | 200 | 11.5 |
+
+EOTABLE
+# Section 2: Artifact download
+artisan get https://zenodo.org/records/11095274
+# Section 3: Reproduction commands (populate from reviewed steps)
+cd /workspace/bloat-study-artifact-v1.0/gdrosos-bloat-study-artifact-0fe2fe5
+docker build -t bloat-study-artifact .
+# Clean up any existing container with the same name (if present)
+docker rm -f bloat-study-artifact-container >/dev/null 2>&1 || true
+docker run -d --init --entrypoint bash --name bloat-study-artifact-container \
+    -v $(pwd)/scripts:/home/user/scripts \
+    -v $(pwd)/data:/home/user/data \
+    -v $(pwd)/figures:/home/user/figures \
+    bloat-study-artifact -c 'sleep infinity'
+docker exec bloat-study-artifact-container /bin/bash --noprofile --norc -c "cd /home/user && python scripts/descriptives/evaluation.py -csv data/results/rq1a.csv" > /workspace/repro.txt
+docker stop bloat-study-artifact-container
+# Section 4: Formatting and submission block
+echo '<artisan_submit>'
+artisan format --expected /workspace/expected.md --repro /workspace/repro.txt
+echo '</artisan_submit>'
+```

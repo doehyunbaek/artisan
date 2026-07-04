@@ -36,18 +36,24 @@ drv="${DOCKER_DRIVER:-overlay2}"
 if ! grep -qw overlay /proc/filesystems; then
   drv="fuse-overlayfs"
 fi
-# TODO: generalize hardcoded IP
-# Local registry mirror configuration:
-REGISTRY_MIRROR="${REGISTRY_MIRROR:-http://129.69.217.154:5000}"
-INSECURE_REGISTRY="${INSECURE_REGISTRY:-129.69.217.154:5000}"
+# Optional local registry mirror configuration. Disabled by default; set
+# REGISTRY_MIRROR (and, for plain HTTP mirrors, INSECURE_REGISTRY) to enable.
+REGISTRY_MIRROR="${REGISTRY_MIRROR:-}"
+INSECURE_REGISTRY="${INSECURE_REGISTRY:-}"
 
 start_dockerd() {
-  dockerd \
-    --host=unix:///var/run/docker.sock \
-    --storage-driver="${drv}" \
-    --registry-mirror="${REGISTRY_MIRROR}" \
-    --insecure-registry="${INSECURE_REGISTRY}" \
-    > /var/log/dockerd.log 2>&1 &
+  dockerd_args=(
+    --host=unix:///var/run/docker.sock
+    --storage-driver="${drv}"
+  )
+  if [ -n "${REGISTRY_MIRROR}" ]; then
+    dockerd_args+=(--registry-mirror="${REGISTRY_MIRROR}")
+  fi
+  if [ -n "${INSECURE_REGISTRY}" ]; then
+    dockerd_args+=(--insecure-registry="${INSECURE_REGISTRY}")
+  fi
+
+  dockerd "${dockerd_args[@]}" > /var/log/dockerd.log 2>&1 &
   DOCKERD_PID=$!
 
   # Clean up daemon on exit
@@ -71,7 +77,17 @@ if [ "$#" -gt 0 ]; then
 fi
 
 # No command: run dockerd in the foreground (classic dind behavior)
-exec dockerd --host=unix:///var/run/docker.sock --storage-driver="${drv}"
+dockerd_args=(
+  --host=unix:///var/run/docker.sock
+  --storage-driver="${drv}"
+)
+if [ -n "${REGISTRY_MIRROR}" ]; then
+  dockerd_args+=(--registry-mirror="${REGISTRY_MIRROR}")
+fi
+if [ -n "${INSECURE_REGISTRY}" ]; then
+  dockerd_args+=(--insecure-registry="${INSECURE_REGISTRY}")
+fi
+exec dockerd "${dockerd_args[@]}"
 EOF
 RUN chmod +x /usr/local/bin/dind.sh
 

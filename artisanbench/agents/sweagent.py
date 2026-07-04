@@ -170,7 +170,11 @@ def _run_isolated_logic(
     container_cachedir = "/root/.cache/artisan"
     docker_args.extend(["-e", f"ARTISAN_CACHE_DIR={container_cachedir}"])
     docker_args.extend(["-e", f"ARTISAN_JUDGE_URL={artisan.ARTISAN_JUDGE_URL}"])
-    docker_args.extend(["-e", f"ARTISAN_MITM_URL={artisan.ARTISAN_MITM_URL}"])
+    if artisan.ARTISAN_MITM_URL:
+        docker_args.extend(["-e", f"ARTISAN_MITM_URL={artisan.ARTISAN_MITM_URL}"])
+    for env_var in ["REGISTRY_MIRROR", "INSECURE_REGISTRY"]:
+        if os.getenv(env_var):
+            docker_args.extend(["-e", env_var])
     docker_args.extend(["-v", f"{host_cachedir}:{container_cachedir}"])
 
     docker_socket = Path("/var/run/docker.sock")

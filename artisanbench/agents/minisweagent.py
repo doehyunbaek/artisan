@@ -153,7 +153,11 @@ def setup_workspace(
     workspace_mount_spec = f"{ws_path}:/workspace:rw"
     run_args.extend(["-v", workspace_mount_spec])
     logger.debug("Added workspace volume mount: %s", workspace_mount_spec)
-    run_args.extend(["-e", f"ARTISAN_MITM_URL={artisan.ARTISAN_MITM_URL}"])
+    if artisan.ARTISAN_MITM_URL:
+        run_args.extend(["-e", f"ARTISAN_MITM_URL={artisan.ARTISAN_MITM_URL}"])
+    for env_var in ["REGISTRY_MIRROR", "INSECURE_REGISTRY"]:
+        if os.getenv(env_var):
+            run_args.extend(["-e", env_var])
     host_cachedir = artisan.ARTISAN_CACHE_DIR
     # container_cachedir = "/root/.cache/artisan"
     # run_args.extend(["-e", f"ARTISAN_CACHE_DIR={container_cachedir}"])

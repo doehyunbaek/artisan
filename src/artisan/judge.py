@@ -475,9 +475,13 @@ def check_output_match(
         if os.getenv("ARTISAN_DOCKER_NETWORK") == "host":
             network_arg = "--network host "
 
-        mitm_env_arg = ""
+        optional_env_args = ""
         if artisan.ARTISAN_MITM_URL:
-            mitm_env_arg = f"-e ARTISAN_MITM_URL={shlex.quote(artisan.ARTISAN_MITM_URL)} "
+            optional_env_args += f"-e ARTISAN_MITM_URL={shlex.quote(artisan.ARTISAN_MITM_URL)} "
+        for env_var in ["REGISTRY_MIRROR", "INSECURE_REGISTRY"]:
+            value = os.getenv(env_var)
+            if value:
+                optional_env_args += f"-e {env_var}={shlex.quote(value)} "
 
         run_cmd = (
             "docker run "
@@ -488,7 +492,7 @@ def check_output_match(
             f"-e MSWEA_SILENT_STARTUP=1 "
             f"-e ARTISAN_FORMAT_LOG=/mnt/logs/artisan-format.json "
             f"-e ARTISAN_SPEED_LOG=/mnt/logs/artisan-speedometer.json "
-            f"{mitm_env_arg}"
+            f"{optional_env_args}"
             f"-v {shlex.quote(str(host_cachedir))}:{container_cachedir} "
             f"-v {shlex.quote(str(host_script_dir))}:/mnt/submission:ro "
             f"-v {shlex.quote(str(logs_dir))}:/mnt/logs:rw "

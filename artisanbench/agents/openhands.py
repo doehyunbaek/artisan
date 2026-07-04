@@ -455,9 +455,13 @@ def run_with_openhands(
     volumes = {}
     group_add = []
 
-    # MITM
+    # Optional cache helpers for artifact downloads and Docker pulls.
     if artisan.ARTISAN_MITM_URL:
         env_vars["ARTISAN_MITM_URL"] = artisan.ARTISAN_MITM_URL
+    for env_var in ["REGISTRY_MIRROR", "INSECURE_REGISTRY"]:
+        value = os.getenv(env_var)
+        if value:
+            env_vars[env_var] = value
 
     # Pass Keys if found
     if api_key:

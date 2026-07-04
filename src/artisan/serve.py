@@ -101,9 +101,12 @@ def _serve_from_cli(args: argparse.Namespace) -> int:
             print(f"[artisan serve] registry exited early with code={proc.returncode}, skipping preload", flush=True)
             return proc.returncode
 
-        print("[artisan serve] registry seems up, starting preload", flush=True)
-        _preload_images(args.port, args.cachedir)
-        print("[artisan serve] preload done, attaching to registry (Ctrl+C to stop)", flush=True)
+        if args.remoteurl:
+            print("[artisan serve] proxy-cache mode enabled; skipping preload because registry proxies are read-through only", flush=True)
+        else:
+            print("[artisan serve] registry seems up, starting preload", flush=True)
+            _preload_images(args.port, args.cachedir)
+            print("[artisan serve] preload done, attaching to registry (Ctrl+C to stop)", flush=True)
 
         rc = proc.wait()
         print(f"[artisan serve] registry exited with code={rc}", flush=True)
@@ -123,7 +126,7 @@ def _serve_from_cli(args: argparse.Namespace) -> int:
 def register_subparser(subparsers: argparse._SubParsersAction) -> None:
     serve_p = subparsers.add_parser(
         "serve",
-        help="Run a local Docker registry (pull-through cache or writable).",
+        help="Manually run a local Docker registry cache (pull-through or writable).",
     )
     serve_p.add_argument(
         "--port",

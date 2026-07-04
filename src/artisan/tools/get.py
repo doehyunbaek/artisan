@@ -48,7 +48,6 @@ import os
 
 import httpx
 import artisan
-from artisan.mitm import LazyLiveCache
 
 
 class HttpxResponseAdapter:
@@ -123,9 +122,21 @@ _CACHE_INSTANCE = None
 
 
 def _get_cache():
+    """Return an optional local mitm flow-cache reader.
+
+    Disabled by default so `artisan get` performs direct downloads unless the
+    caller explicitly enables cache lookup. The usual full-reproduction cache
+    path is `ARTISAN_MITM_URL` + a running `artisan mitm` proxy; this helper is
+    only for manual/offline flow-cache reads.
+    """
+    if not (os.environ.get("ARTISAN_GET_CACHE") or os.environ.get("ARTISAN_MITM_CACHE_PATH")):
+        return None
+
     global _CACHE_INSTANCE
-    if _CACHE_INSTANCE is None and LazyLiveCache is not None:
+    if _CACHE_INSTANCE is None:
         try:
+            from artisan.mitm import LazyLiveCache
+
             c = LazyLiveCache()
             c._load_cache_data()
             _CACHE_INSTANCE = c

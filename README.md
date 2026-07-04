@@ -203,6 +203,63 @@ Full reproduction requires:
 - `OPENAI_API_KEY` for GPT configurations and the format/method judges
 - `DEEPSEEK_API_KEY` or `LLM_API_KEY` for DeepSeek configurations
 
+### Optional cache services for large campaigns
+
+By default, full reproduction contacts upstream artifact hosts and Docker registries directly.
+Two local cache services are available but disabled by default, because exporting their environment variables without running the corresponding service can make runs fail with local connection errors (for example, `artisan get` failing with `Connection refused` when `ARTISAN_MITM_URL` points at an absent proxy).
+
+These services can be useful for complete or repeated campaigns: many parallel runs repeatedly download the same Zenodo/Figshare artifacts and Docker images, which may trigger server-side rate limits or slow down reproduction.
+
+1. **Artifact download cache (`artisan mitm`)**: a mitmproxy-based record/replay cache used by `artisan get`.
+
+   Start it in a separate terminal/container:
+
+   ```bash
+   mkdir -p artisan-cache
+   docker run --rm -it --network host \
+     -v "$PWD/artisan-cache":/cache \
+     -e OPENAI_API_KEY \
+     ghcr.io/doehyunbaek/artisan:latest \
+     artisan mitm --cache /cache/artisan.mitm --listen-host 0.0.0.0 --listen-port 8082
+   ```
+
+   Then enable it for full reproduction by adding host networking to the outer Docker command and passing `ARTISAN_MITM_URL` through to the benchmark containers:
+
+   ```bash
+   docker run ... --network host \
+     -e ARTISAN_MITM_URL=http://127.0.0.1:8082 \
+     ghcr.io/doehyunbaek/artisan:latest \
+     bash -lc 'python3 data/full_reproduce.py --network-host ...'
+   ```
+
+2. **Docker registry cache (`artisan serve`)**: a local registry/mirror for Docker images used by benchmark artifacts.
+
+   Start it in a separate terminal/container:
+
+   ```bash
+   mkdir -p artisan-cache/docker
+   docker run --rm -it --network host \
+     -v /var/run/docker.sock:/var/run/docker.sock \
+     -v "$PWD/artisan-cache/docker":/cache/docker \
+     -e OPENAI_API_KEY \
+     ghcr.io/doehyunbaek/artisan:latest \
+     artisan serve --port 5000 --remoteurl https://registry-1.docker.io --cachedir /cache/docker
+   ```
+
+   The `--remoteurl` mode runs a Docker Hub pull-through cache. If you instead have saved image tarballs under `/cache/docker`, omit `--remoteurl` to preload them into a writable local registry.
+
+   Then enable it for full reproduction by adding host networking to the outer Docker command and passing the Docker daemon mirror variables through to the benchmark containers:
+
+   ```bash
+   docker run ... --network host \
+     -e REGISTRY_MIRROR=http://127.0.0.1:5000 \
+     -e INSECURE_REGISTRY=127.0.0.1:5000 \
+     ghcr.io/doehyunbaek/artisan:latest \
+     bash -lc 'python3 data/full_reproduce.py --network-host ...'
+   ```
+
+Only set these variables when the matching service is running. If the cache services are not needed, omit the variables and omit `--network-host`. If you rebuild the agent base image from [`src/artisan/config/Dockerfile`](./src/artisan/config/Dockerfile) before the published base image is updated, pass `ARTISAN_BASE_IMAGE=<your-image>` to make full reproduction use that rebuilt image.
+
 ### Dry run
 
 Print the commands without running agents or spending API credits:

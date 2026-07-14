@@ -13,15 +13,30 @@ For artifact evaluation, we recommend starting with **Last-mile reproduction**. 
 
 Last-mile reproduction regenerates the submitted artifact outputs from archived logs. This is the recommended artifact-evaluation path.
 
+### Docker image requirements
+
+For the version used by this artifact, expect a **2.3 GB compressed download** and approximately **6.9 GB unpacked in Docker's image store**.
+Reserve at least **10 GB of free space in the Docker data/root filesystem** for the pull, unpacking, and container writable layer.
+
 ### Docker setup
 
-We support the artifact workflow with Docker:
+Run the last-mile reproduction with:
 
 ```bash
 docker run --platform linux/amd64 --rm -it -v "$PWD":/output ghcr.io/doehyunbaek/artisan:latest
 ```
 
-This runs last-mile reproduction end to end and writes `./ase-artisan.pdf` on the host.
+This writes `./ase-artisan.pdf` on the host.
+The command emits detailed download, generation, and LaTeX logs; a successful run ends with output similar to:
+
+```text
+== Done ==
+Wrote /artifact/data/tex/ase-artisan.pdf
+Wrote /artifact/ase-artisan.pdf
+Wrote /output/ase-artisan.pdf
+```
+
+After the container exits, `./ase-artisan.pdf` should be created at the host directory.
 The image is based on Ubuntu 24.04 LTS and built from [`Dockerfile`](./Dockerfile).
 For other platforms, use the Docker image or open an issue.
 

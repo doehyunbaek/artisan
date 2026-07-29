@@ -264,6 +264,7 @@ def setup_workspace(
     env_kwargs.setdefault("cwd", "/workspace")
     run_args = env_kwargs.setdefault("run_args", [])
     run_args.extend(["--rm"])
+    run_args.extend(["--platform", "linux/amd64"])
     run_args.extend(["--privileged"])
     if os.getenv("ARTISAN_DOCKER_NETWORK") == "host":
         run_args.extend(["--network", "host"])

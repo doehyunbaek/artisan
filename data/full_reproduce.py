@@ -251,6 +251,13 @@ def main() -> int:
 
     if args.output_root is not None:
         args.output_root = args.output_root.expanduser().resolve()
+        # Nested containers are started through the mounted host Docker socket.
+        # Keep their cache under the same host-mounted output root so Docker
+        # Desktop can resolve the bind source on macOS as well as Linux.
+        if "ARTISAN_CACHE_DIR" not in os.environ:
+            cache_dir = args.output_root / "cache"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            os.environ["ARTISAN_CACHE_DIR"] = str(cache_dir)
     if args.logs_root is None:
         args.logs_root = (args.output_root / "logs") if args.output_root is not None else LOGS_ROOT
     args.logs_root = args.logs_root.expanduser().resolve()

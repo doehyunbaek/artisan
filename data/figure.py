@@ -359,22 +359,20 @@ def plot_time_breakdown_png(
     )
 
     paper_rc = {
-        "font.size": 14,
-        "axes.labelsize": 14,
-        "xtick.labelsize": 11,
-        "ytick.labelsize": 13,
-        "legend.fontsize": 13,
-        "legend.title_fontsize": 13,
+        "font.size": 28,
+        "axes.labelsize": 28,
+        "xtick.labelsize": 22,
+        "ytick.labelsize": 26,
+        "legend.fontsize": 26,
+        "legend.title_fontsize": 26,
         "axes.linewidth": 1.0,
         "grid.linewidth": 0.8,
     }
-    # The ASE-submission figure used all 60 tasks but a slightly narrower
-    # canvas than the earlier 0.25 inch/task draft.
-    width_in = max(12.0, 0.22925 * len(entries))
+    width_in = max(12.0, 0.23625 * len(entries))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with mpl.rc_context(paper_rc):
-        fig, ax = plt.subplots(figsize=(width_in, 6), dpi=120)
+        fig, ax = plt.subplots(figsize=(width_in, 6.507), dpi=120)
         indices = np.arange(len(entries))
         bar_w = 0.8
 
@@ -405,6 +403,7 @@ def plot_time_breakdown_png(
         ax.set_xticks(indices)
         ax.set_xticklabels([])
         ax.set_ylabel("Time (seconds)")
+        ax.set_yticks(np.arange(0, y_cap + 1, 2_000))
         ax.grid(axis="y", linestyle="--", alpha=0.6)
         ax.legend()
         ax.set_ylim(0, y_cap * 1.08)

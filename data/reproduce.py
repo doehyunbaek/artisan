@@ -28,6 +28,20 @@ def run(argv: list[str], cwd: Path) -> None:
     subprocess.run(argv, cwd=cwd, check=True)
 
 
+def run_quiet(argv: list[str], cwd: Path, log_path: Path) -> None:
+    """Run a noisy command, retaining output in a log and showing it on failure."""
+    print(f"$ {' '.join(argv)}", flush=True)
+    with log_path.open("a", encoding="utf-8") as log:
+        log.write(f"\n$ {' '.join(argv)}\n")
+        log.flush()
+        try:
+            subprocess.run(argv, cwd=cwd, check=True, stdout=log, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError:
+            print(f"\nCommand failed; complete output from {log_path}:\n", file=sys.stderr)
+            print(log_path.read_text(encoding="utf-8", errors="replace"), file=sys.stderr)
+            raise
+
+
 def logs_present() -> bool:
     if not LOGS_DIR.exists():
         return False
@@ -89,11 +103,14 @@ def main() -> int:
     run([sys.executable, "figure.py"], DATA_ROOT)
 
     print("\n== Step 5: Build the compact ASE wrapper PDF ==", flush=True)
+    build_log = TEX_DIR / "ase-build.log"
+    build_log.unlink(missing_ok=True)
     pdflatex = ["pdflatex", "-shell-escape", "-interaction=nonstopmode", "-halt-on-error", "ase.tex"]
-    run(pdflatex, TEX_DIR)
-    run(["bibtex", "ase"], TEX_DIR)
-    run(pdflatex, TEX_DIR)
-    run(pdflatex, TEX_DIR)
+    run_quiet(pdflatex, TEX_DIR, build_log)
+    run_quiet(["bibtex", "ase"], TEX_DIR, build_log)
+    run_quiet(pdflatex, TEX_DIR, build_log)
+    run_quiet(pdflatex, TEX_DIR, build_log)
+    print(f"LaTeX build log: {build_log}", flush=True)
 
     output_dir = args.output_dir if args.output_dir else None
     written = copy_output_pdf(output_dir)

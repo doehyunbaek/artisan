@@ -7,7 +7,7 @@ LABEL org.opencontainers.image.source="https://github.com/doehyunbaek/artisan" \
 ENV DEBIAN_FRONTEND=noninteractive \
     UV_PROJECT_ENVIRONMENT=/opt/artisan-venv \
     UV_LINK_MODE=copy \
-    PATH="/root/.local/bin:/opt/artisan-venv/bin:${PATH}"
+    PATH="/root/.local/bin:/opt/artisan-venv/bin:/opt/tinytex-bin:${PATH}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
@@ -17,20 +17,48 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     docker.io \
     git \
     make \
+    perl \
     poppler-utils \
     python3 \
     python3-pip \
     python3-pygments \
     python3-venv \
-    texlive-bibtex-extra \
-    texlive-fonts-extra \
-    texlive-fonts-recommended \
-    texlive-latex-base \
-    texlive-latex-extra \
-    texlive-latex-recommended \
-    texlive-plain-generic \
-    texlive-publishers \
     && rm -rf /var/lib/apt/lists/*
+
+# Install TinyTeX plus only the packages used by data/tex/ase.tex. Installing
+# TeX Live collections here would pull thousands of unrelated packages.
+RUN curl -LsSf https://yihui.org/tinytex/install-bin-unix.sh | sh \
+    && /root/.TinyTeX/bin/*/tlmgr install \
+        acmart \
+        caption \
+        cmap \
+        comment \
+        environ \
+        etoolbox \
+        everyshi \
+        fancyhdr \
+        framed \
+        geometry \
+        hyperref \
+        hyperxmp \
+        ieeetran \
+        libertine \
+        microtype \
+        ncctools \
+        newtx \
+        minted \
+        multirow \
+        preprint \
+        psnfss \
+        refcount \
+        setspace \
+        tools \
+        totpages \
+        xstring \
+        zref \
+    && ln -s /root/.TinyTeX/bin/* /opt/tinytex-bin \
+    && /opt/tinytex-bin/pdflatex --version \
+    && bibtex --version
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
